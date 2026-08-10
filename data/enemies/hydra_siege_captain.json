@@ -2,15 +2,32 @@
   "id": "hydra_siege_captain",
   "name": "HYDRA Siege Captain",
   "power_grid": {
-    "strength": 4, "speed": 3, "agility": 3,
-    "stamina": 4, "durability": 4, "intelligence": 3
+    "strength": 4,
+    "speed": 3,
+    "agility": 3,
+    "stamina": 5,
+    "durability": 4,
+    "intelligence": 3
   },
   "abilities": [
-    {"id": "siege_hammer", "name": "Siege Hammer", "type": "basic",
-     "power": 14, "scales_with": "strength", "target": "single"},
-    {"id": "incendiary_rounds", "name": "Incendiary Rounds", "type": "special",
-     "power": 24, "cost": 10, "scales_with": "strength", "target": "single",
-     "applies_status": "burn"}
+    {
+      "id": "siege_hammer",
+      "name": "Siege Hammer",
+      "type": "basic",
+      "power": 14,
+      "scales_with": "strength",
+      "target": "single"
+    },
+    {
+      "id": "incendiary_rounds",
+      "name": "Incendiary Rounds",
+      "type": "special",
+      "power": 24,
+      "cost": 10,
+      "scales_with": "strength",
+      "target": "single",
+      "applies_status": "burn"
+    }
   ],
   "ai": "aggressive",
   "xp_reward": 120,

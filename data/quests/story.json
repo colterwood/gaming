@@ -1,0 +1,32 @@
+[
+  {"id": "ch1_shattered_shield", "chapter": 1, "name": "Shattered Shield",
+   "kind": "battle", "enemies": ["hydra_grunt", "hydra_grunt", "hydra_grunt"],
+   "desc": "HYDRA splinter cells hit the Tower district. Push them back."},
+
+  {"id": "ch1_case_safehouse", "chapter": 1, "name": "Case the Safehouse",
+   "kind": "hub_task", "energy": 15, "minutes": 90,
+   "desc": "Scott Lang is under house arrest. Scout the block and map patrol routes."},
+
+  {"id": "ch1_spoof_monitor", "chapter": 1, "name": "Spoof the Ankle Monitor",
+   "kind": "hub_task", "energy": 15, "minutes": 90,
+   "desc": "Build a signal spoofer so Lang's monitor never knows he left."},
+
+  {"id": "ch1_break_out_lang", "chapter": 1, "name": "Break Out Scott Lang",
+   "kind": "battle", "enemies": ["hydra_grunt", "hydra_enforcer"],
+   "recruit": "ant_man",
+   "desc": "HYDRA got to Lang first. Get him out — the Pym suit comes with him."},
+
+  {"id": "ch1_siege", "chapter": 1, "name": "Siege of the Tower",
+   "kind": "battle", "enemies": ["hydra_siege_captain", "hydra_grunt", "hydra_grunt"],
+   "boss": true, "flags": {"training_upgraded": true},
+   "desc": "A HYDRA Siege Captain leads an assault on the Tower itself."},
+
+  {"id": "ch2_cell_hunt", "chapter": 2, "name": "Cell Hunt",
+   "kind": "battle", "enemies": ["hydra_enforcer", "hydra_medic", "hydra_grunt"],
+   "desc": "Chase the surviving splinter cell through the docks."},
+
+  {"id": "ch2_crossbones", "chapter": 2, "name": "Crossbones",
+   "kind": "battle", "enemies": ["crossbones", "hydra_medic"],
+   "boss": true, "flags": {"ch2_complete": true},
+   "desc": "The man behind the splinter cells. He does not intend to be arrested."}
+]

@@ -2,19 +2,39 @@
   "id": "crossbones",
   "name": "Crossbones",
   "power_grid": {
-    "strength": 5, "speed": 3, "agility": 4,
-    "stamina": 5, "durability": 4, "intelligence": 3
+    "strength": 5,
+    "speed": 3,
+    "agility": 4,
+    "stamina": 6,
+    "durability": 5,
+    "intelligence": 3
   },
   "abilities": [
-    {"id": "gauntlet_smash", "name": "Gauntlet Smash", "type": "basic",
-     "power": 15, "scales_with": "strength", "target": "single"},
-    {"id": "concussive_charge", "name": "Concussive Charge", "type": "special",
-     "power": 26, "cost": 12, "scales_with": "strength", "target": "single",
-     "applies_status": "stun"}
+    {
+      "id": "gauntlet_smash",
+      "name": "Gauntlet Smash",
+      "type": "basic",
+      "power": 15,
+      "scales_with": "strength",
+      "target": "single"
+    },
+    {
+      "id": "concussive_charge",
+      "name": "Concussive Charge",
+      "type": "special",
+      "power": 26,
+      "cost": 12,
+      "scales_with": "strength",
+      "target": "single",
+      "applies_status": "stun"
+    }
   ],
   "ai": "aggressive",
   "xp_reward": 200,
   "credit_reward": 150,
   "boss": true,
-  "enrage": {"hp_threshold": 0.30, "damage_multiplier": 1.5}
+  "enrage": {
+    "hp_threshold": 0.3,
+    "damage_multiplier": 1.5
+  }
 }

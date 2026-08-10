@@ -68,8 +68,27 @@ class HubScene:
                              f"({config.TRAINING_ENERGY} EN, 90m, +{tier} XP)",
                              "kind": "train", "hero_id": hero_id})
             return acts
-        return [{"label": f"Story Mission: HYDRA Patrol ({config.MISSION_ENERGY} EN, 3h)",
-                 "kind": "mission"}]
+        from game.hub import story
+        quest = story.current_quest(state, self.content["story"])
+        acts = []
+        if quest is None:
+            acts.append({"label": "Chapters 1-2 complete! (more issues coming)",
+                         "kind": "noop", "disabled": True})
+        elif quest["kind"] == "battle":
+            tag = "BOSS — " if quest.get("boss") else "Mission — "
+            acts.append({"label": f"{tag}{quest['name']} ({config.MISSION_ENERGY} EN, 3h)",
+                         "kind": "story_battle", "quest": quest})
+        else:
+            acts.append({"label": f"Task — {quest['name']} ({quest['energy']} EN)",
+                         "kind": "story_task", "quest": quest})
+        if quest:
+            desc = quest["desc"]
+            acts.append({"label": desc[:70] + ("..." if len(desc) > 70 else ""),
+                         "kind": "noop", "disabled": True})
+        done = sum(1 for v in state.get("quests", {}).values() if v["status"] == "done")
+        acts.append({"label": f"Quest log: {done}/{len(self.content['story'])} complete",
+                     "kind": "noop", "disabled": True})
+        return acts
 
     def _gift_items(self, state):
         return [(iid, n) for iid, n in sorted(state["inventory"].items())
@@ -185,12 +204,17 @@ class HubScene:
                 return
             self.submenu_index = 0
             self.mode = "train_attr"
-        elif kind == "mission":
+        elif kind == "story_battle":
             result = activities.launch_mission(state)
             self.log(result["message"])
             if result.get("launch_battle"):
-                app.start_battle()
+                app.start_battle(enemy_ids=act["quest"]["enemies"], quest=act["quest"])
                 return
+        elif kind == "story_task":
+            from game.hub import story
+            self.log(story.do_hub_task(state, act["quest"])["message"])
+        elif kind == "noop":
+            return
         if activities.should_pass_out(state):
             self.log("You pass out...")
             app.go_to_sleep(passed_out=True)

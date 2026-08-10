@@ -266,6 +266,35 @@ def load_perks(data_dir=None):
     return perks
 
 
+def load_story(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "quests", "story.json")
+    story = _load_json(path)
+    if not isinstance(story, list):
+        raise DataError("story.json: top-level JSON must be a list")
+    seen = set()
+    for quest in story:
+        if not isinstance(quest, dict):
+            raise DataError("story.json: each quest must be an object")
+        qw = f"story.json quest '{quest.get('id', '?')}'"
+        _require(quest, "id", str, qw)
+        _require(quest, "chapter", int, qw)
+        _require(quest, "name", str, qw)
+        _require(quest, "desc", str, qw)
+        kind = _require(quest, "kind", str, qw)
+        if kind == "battle":
+            enemies = _require(quest, "enemies", list, qw)
+            if not enemies or not all(isinstance(e, str) for e in enemies):
+                raise DataError(f"{qw}: enemies must be a non-empty list of ids")
+        elif kind == "hub_task":
+            _require(quest, "energy", int, qw)
+        else:
+            raise DataError(f"{qw}: kind must be battle|hub_task, got '{kind}'")
+        if quest["id"] in seen:
+            raise DataError(f"{qw}: duplicate id")
+        seen.add(quest["id"])
+    return story
+
+
 def load_all(data_dir=None):
     """Load and cross-validate all game content."""
     characters = load_characters(data_dir)
@@ -287,6 +316,13 @@ def load_all(data_dir=None):
     for scene in bond_scenes:
         if scene["character"] not in characters:
             raise DataError(f"bond_scenes.json: character '{scene['character']}' not found")
+    story = load_story(data_dir)
+    for quest in story:
+        for enemy_id in quest.get("enemies", []):
+            if enemy_id not in enemies:
+                raise DataError(f"story.json '{quest['id']}': enemy '{enemy_id}' not found")
+        if quest.get("recruit") and quest["recruit"] not in characters:
+            raise DataError(f"story.json '{quest['id']}': recruit '{quest['recruit']}' not found")
     return {"characters": characters, "enemies": enemies, "items": items,
             "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir),
-            "bond_scenes": bond_scenes, "perks": load_perks(data_dir)}
+            "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story}

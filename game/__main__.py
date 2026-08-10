@@ -38,6 +38,7 @@ class App:
         return self.pause
 
     def new_game(self):
+        from game.hub import story
         from game.hub.tower import HubScene
         self.game_state = save.new_game_state()
         self.game_state["path"] = "avengers"
@@ -45,7 +46,8 @@ class App:
             if char["recruit"]["method"] == "starter":
                 self.game_state["roster"][char["id"]] = {
                     "trained_ranks": {}, "attribute_xp": {}, "perks": [],
-                    "gear": {}, "ult_charge": 0}
+                    "perk_choices": {}, "gear": {}, "ult_charge": 0}
+        story.init(self.game_state, self.content["story"])
         self.hub = HubScene(self.content)
 
     def load_game(self):
@@ -67,10 +69,12 @@ class App:
             self.hub.log(result["message"])
         self.machine.transition(GameState.SLEEP)
 
-    def start_battle(self, enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt")):
+    def start_battle(self, enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
+                     quest=None):
         from game.progression import attributes as attrs
         from game.social import bonds
         from game.ui.battle_scene import BattleScene
+        self.battle_quest = quest
         trained = perk_fx = synergy_crit = None
         hero_ids = ("iron_man", "captain_america")
         if self.game_state:
@@ -94,21 +98,29 @@ class App:
         self.machine.transition(GameState.BATTLE)
 
     def finish_battle(self, engine):
+        quest = getattr(self, "battle_quest", None)
         if self.game_state and engine.outcome == "win":
+            from game.hub import story
+            from game.progression import mastery
             from game.social import bonds
             rewards = engine.rewards()
             self.game_state["credits"] += rewards["credits"]
             self.game_state["unspent_xp"] += rewards["xp"]
             bonds.mission_bond(self.game_state, [h.id for h in engine.heroes])
-            from game.progression import mastery
             for hero in engine.heroes:
                 entry = self.game_state["roster"].get(hero.id)
                 if entry:
                     mastery.log_mastery_xp(entry, rewards["xp"])
             if self.hub:
                 self.hub.log(f"Mission complete: +{rewards['credits']} cr, +{rewards['xp']} XP")
+            if quest:
+                for msg in story.complete_battle_quest(self.game_state, quest, self.content):
+                    if self.hub:
+                        self.hub.log(msg)
+                story.init(self.game_state, self.content["story"])
         elif self.hub:
             self.hub.log("Mission failed. The team limps home.")
+        self.battle_quest = None
         self.battle = None
         self.machine.transition(GameState.HUB)
 
