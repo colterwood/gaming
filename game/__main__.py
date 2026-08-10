@@ -10,11 +10,11 @@ import os
 import pygame
 
 from game import config, data_loader
-from game.core.state_machine import StateMachine
+from game.core.state_machine import GameState, StateMachine
 
-# Scripted walk through every state: boot->title->path->hub->battle->hub->
-# pause->hub->sleep->hub, then quit.
-SMOKE_KEYS = ["return", "return", "return", "b", "return", "p", "escape", "s", "return"]
+# Scripted walk through every state: boot->title->path->hub->pause->hub->
+# sleep->hub->battle, then quit. Override with GAME_SMOKE_KEYS=comma,list.
+SMOKE_KEYS = ["return", "return", "return", "p", "escape", "s", "return", "b"]
 
 
 class App:
@@ -23,12 +23,30 @@ class App:
         self.content = data_loader.load_all()
         self.running = True
         self.fps = 0.0
+        self.battle = None
+
+    def start_battle(self, enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt")):
+        from game.ui.battle_scene import BattleScene
+        self.battle = BattleScene(self.content, enemy_ids=enemy_ids)
+        self.machine.transition(GameState.BATTLE)
+
+    def finish_battle(self, engine):
+        self.battle = None
+        self.machine.transition(GameState.HUB)
+
+    def update(self, dt):
+        if self.machine.state is GameState.BATTLE and self.battle:
+            self.battle.update(dt)
 
 
 def main():
     from game.ui import screens  # after pygame import, keeps logic modules pygame-free
 
     smoke = os.environ.get("GAME_SMOKE") == "1"
+    smoke_keys = SMOKE_KEYS
+    if os.environ.get("GAME_SMOKE_KEYS"):
+        smoke = True
+        smoke_keys = os.environ["GAME_SMOKE_KEYS"].split(",")
     shot_dir = os.environ.get("GAME_SMOKE_SHOT")
     if shot_dir:
         os.makedirs(shot_dir, exist_ok=True)
@@ -52,15 +70,16 @@ def main():
             if shot_dir:
                 pygame.image.save(screen, os.path.join(
                     shot_dir, f"smoke_{smoke_step:02d}_{app.machine.state.name.lower()}.png"))
-            if smoke_step < len(SMOKE_KEYS):
-                screens.handle_key(app, pygame.key.key_code(SMOKE_KEYS[smoke_step]))
+            if smoke_step < len(smoke_keys):
+                screens.handle_key(app, pygame.key.key_code(smoke_keys[smoke_step]))
                 smoke_step += 1
             else:
                 app.running = False
 
+        dt = clock.tick(config.FPS) / 1000.0
+        app.update(dt)
         screens.draw(screen, app)
         pygame.display.flip()
-        clock.tick(config.FPS)
         app.fps = clock.get_fps()
         frame += 1
 

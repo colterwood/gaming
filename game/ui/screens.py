@@ -36,13 +36,13 @@ def handle_key(app, key):
         app.machine.transition(GameState.HUB)
     elif state is GameState.HUB:
         if key == pygame.K_b:
-            app.machine.transition(GameState.BATTLE)
+            app.start_battle()
         elif key in (pygame.K_p, pygame.K_ESCAPE):
             app.machine.transition(GameState.PAUSE)
         elif key == pygame.K_s:
             app.machine.transition(GameState.SLEEP)
-    elif state is GameState.BATTLE and key == pygame.K_RETURN:
-        app.machine.transition(GameState.HUB)
+    elif state is GameState.BATTLE and app.battle:
+        app.battle.handle_key(app, key)
     elif state is GameState.PAUSE and key == pygame.K_ESCAPE:
         app.machine.transition(GameState.HUB)
     elif state is GameState.SLEEP and key == pygame.K_RETURN:
@@ -62,6 +62,12 @@ def _text(surface, txt, size, color, center=None, topleft=None):
 
 def draw(surface, app):
     state = app.machine.state
+
+    if state is GameState.BATTLE and app.battle:
+        app.battle.draw(surface)
+        _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
+        return
+
     surface.fill(NAVY)
     cx = config.WIDTH // 2
 
