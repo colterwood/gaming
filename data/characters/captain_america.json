@@ -1,0 +1,30 @@
+{
+  "id": "captain_america",
+  "name": "Captain America",
+  "path": "avengers",
+  "rarity": "legendary",
+  "power_grid": {
+    "strength": 4, "speed": 3, "agility": 6,
+    "stamina": 6, "durability": 3, "intelligence": 4
+  },
+  "abilities": [
+    {"id": "shield_strike", "name": "Shield Strike", "type": "basic",
+     "power": 12, "scales_with": "strength", "target": "single"},
+    {"id": "shield_throw", "name": "Shield Throw", "type": "special",
+     "power": 28, "cost": 10, "scales_with": "agility", "target": "single"},
+    {"id": "avengers_assemble", "name": "Avengers Assemble", "type": "ultimate",
+     "power": 50, "charge_required": 100, "scales_with": "strength", "target": "all"}
+  ],
+  "gifts": {
+    "loved": ["forties_memorabilia", "war_bonds_poster"],
+    "liked": ["sketchbook", "vintage_vinyl"],
+    "disliked": ["modern_slang_guide"],
+    "hated": ["hydra_propaganda"]
+  },
+  "birthday": {"issue": 1, "day": 20},
+  "synergies": [
+    {"with": "iron_man", "name": "Old Friends",
+     "effect": {"crit_bonus": 8}, "requires_bond_level": 6}
+  ],
+  "recruit": {"chapter": 0, "method": "starter"}
+}

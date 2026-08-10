@@ -1,0 +1,18 @@
+{
+  "id": "hydra_medic",
+  "name": "HYDRA Field Medic",
+  "power_grid": {
+    "strength": 1, "speed": 3, "agility": 2,
+    "stamina": 2, "durability": 1, "intelligence": 4
+  },
+  "abilities": [
+    {"id": "sidearm", "name": "Sidearm", "type": "basic",
+     "power": 8, "scales_with": "intelligence", "target": "single"},
+    {"id": "field_stim", "name": "Field Stim", "type": "special",
+     "power": 25, "cost": 8, "scales_with": "intelligence", "target": "single",
+     "effect": "heal"}
+  ],
+  "ai": "support",
+  "xp_reward": 25,
+  "credit_reward": 20
+}

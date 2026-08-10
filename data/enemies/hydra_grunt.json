@@ -1,0 +1,17 @@
+{
+  "id": "hydra_grunt",
+  "name": "HYDRA Grunt",
+  "power_grid": {
+    "strength": 2, "speed": 2, "agility": 2,
+    "stamina": 2, "durability": 2, "intelligence": 2
+  },
+  "abilities": [
+    {"id": "rifle_burst", "name": "Rifle Burst", "type": "basic",
+     "power": 10, "scales_with": "strength", "target": "single"},
+    {"id": "frag_grenade", "name": "Frag Grenade", "type": "special",
+     "power": 18, "cost": 8, "scales_with": "strength", "target": "all"}
+  ],
+  "ai": "aggressive",
+  "xp_reward": 20,
+  "credit_reward": 15
+}
