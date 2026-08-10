@@ -45,7 +45,7 @@ def training_session(state, content=None, hero_id=None, attribute=None):
     if gain["ranks_gained"]:
         message += f" — rank up! ({gain['effective_rank']}/{config.RANK_MAX})"
     if mastery.update_mastery(character["power_grid"], entry):
-        message += "  ★ MASTERED — the card goes foil!"
+        message += "  MASTERED — the card goes foil!"
     result.update(message=message, **gain)
     return result
 

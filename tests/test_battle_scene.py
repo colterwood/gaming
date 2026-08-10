@@ -30,12 +30,12 @@ def content():
 
 
 def test_back_to_back_turns_still_run_begin_turn(content):
-    # Cap (speed 3) vs Crossbones (speed 3).
-    # Round 1 rolls: Cap 1 (31), CB 6 (36) -> CB first, Cap last.
-    # Round 2 rolls: Cap 6 (36), CB 1 (31) -> Cap first again.
+    # Cap (speed 2) vs a grunt (speed 2).
+    # Round 1 rolls: Cap 1 (21), grunt 6 (26) -> grunt first, Cap last.
+    # Round 2 rolls: Cap 6 (26), grunt 1 (21) -> Cap first again.
     rng = ScriptedRng(randints=[1, 6, 6, 1])
     scene = BattleScene(content, hero_ids=("captain_america",),
-                        enemy_ids=("crossbones",), rng=rng)
+                        enemy_ids=("hydra_grunt",), rng=rng)
     cap = scene.engine.heroes[0]
     cap.statuses.update(burn=2, stun=1)
     hp_before = cap.hp

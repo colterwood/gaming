@@ -5,7 +5,8 @@ from game.combat import formulas
 
 # max_hp = 50 + stamina*20 + durability*10
 def test_max_hp_iron_man():
-    assert formulas.max_hp(5, 6) == 50 + 100 + 60 == 210
+    # Iron Man card grid: stamina 4, durability 5
+    assert formulas.max_hp(4, 5) == 50 + 80 + 50 == 180
 
 
 def test_max_hp_grunt():

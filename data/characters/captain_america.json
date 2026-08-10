@@ -4,8 +4,8 @@
   "path": "avengers",
   "rarity": "legendary",
   "power_grid": {
-    "strength": 4, "speed": 3, "agility": 6,
-    "stamina": 6, "durability": 3, "intelligence": 4
+    "strength": 2, "speed": 2, "agility": 5,
+    "stamina": 4, "durability": 2, "intelligence": 3
   },
   "abilities": [
     {"id": "shield_strike", "name": "Shield Strike", "type": "basic",

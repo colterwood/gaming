@@ -43,8 +43,11 @@ def handle_key(app, key):
         app.hub.handle_key(app, key)
     elif state is GameState.BATTLE and app.battle:
         app.battle.handle_key(app, key)
-    elif state is GameState.PAUSE and key == pygame.K_ESCAPE:
-        app.machine.transition(GameState.HUB)
+    elif state is GameState.PAUSE:
+        if app.game_state:
+            app.pause_scene().handle_key(app, key)
+        elif key == pygame.K_ESCAPE:
+            app.machine.transition(GameState.HUB)
     elif state is GameState.SLEEP and key == pygame.K_RETURN:
         app.machine.transition(GameState.HUB)
 
@@ -70,6 +73,9 @@ def draw(surface, app):
     if state is GameState.HUB and app.hub and app.game_state:
         app.hub.draw(surface, app)
         _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
+        return
+    if state is GameState.PAUSE and app.game_state:
+        app.pause_scene().draw(surface, app)
         return
 
     surface.fill(NAVY)

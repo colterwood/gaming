@@ -58,10 +58,13 @@ def test_real_data_loads():
     assert "double_espresso" in content["items"]
 
 
-def test_real_iron_man_matches_spec_schema():
+def test_real_iron_man_matches_card_grid():
+    # Card-authentic ratings transcribed from the 1991 Impel Series II scan
+    # (assets/reference/iron_man_13_back.jpg).
     chars = data_loader.load_characters()
     im = chars["iron_man"]
-    assert im["power_grid"]["intelligence"] == 7
+    assert im["power_grid"] == {"strength": 6, "speed": 6, "agility": 3,
+                                "stamina": 4, "durability": 5, "intelligence": 5}
     assert {a["type"] for a in im["abilities"]} == {"basic", "special", "ultimate"}
 
 

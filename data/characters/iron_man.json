@@ -4,8 +4,8 @@
   "path": "avengers",
   "rarity": "legendary",
   "power_grid": {
-    "strength": 6, "speed": 5, "agility": 3,
-    "stamina": 5, "durability": 6, "intelligence": 7
+    "strength": 6, "speed": 6, "agility": 3,
+    "stamina": 4, "durability": 5, "intelligence": 5
   },
   "abilities": [
     {"id": "repulsor_blast", "name": "Repulsor Blast", "type": "basic",

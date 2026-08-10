@@ -28,7 +28,14 @@ class App:
         self.fps = 0.0
         self.battle = None
         self.hub = None
+        self.pause = None
         self.game_state = None
+
+    def pause_scene(self):
+        if self.pause is None:
+            from game.ui.impel_card import ImpelCardScene
+            self.pause = ImpelCardScene(self.content)
+        return self.pause
 
     def new_game(self):
         from game.hub.tower import HubScene

@@ -56,8 +56,8 @@ def test_unique_enemy_instance_ids(content):
 
 
 def test_initiative_order_speed_times_ten_plus_roll(content):
-    # Iron Man speed 5, Cap speed 3, grunts speed 2.
-    # Rolls: IM 1 -> 51, Cap 6 -> 36, grunts 5,4,3 -> 25,24,23
+    # Iron Man speed 6, Cap speed 2, grunts speed 2.
+    # Rolls: IM 1 -> 61, Cap 6 -> 26, grunts 5,4,3 -> 25,24,23
     rng = ScriptedRng(randints=[1, 6, 5, 4, 3])
     engine = std_battle(content, rng=rng)
     assert [c.id for c in engine.round_order] == [
@@ -86,14 +86,14 @@ def test_special_costs_battle_energy(content):
     while engine.current() is not iron_man:
         drive(engine, lambda a, e: {"type": "defend"})
     engine.begin_turn()
-    start_energy = iron_man.energy          # 20 + 7*5 = 55
-    assert start_energy == 55
+    start_energy = iron_man.energy          # 20 + 5*5 = 45
+    assert start_energy == 45
     target = engine.living(engine.enemies)[0]
     events = engine.take_turn({"type": "ability", "ability_id": "unibeam",
                                "target_id": target.id})
     assert iron_man.energy == start_energy - 12
-    # Unibeam vs grunt: 30 + 7*5 - 2*2 = 61
-    assert any(e["kind"] == "damage" and e["amount"] == 61 for e in events)
+    # Unibeam vs grunt: 30 + 5*5 - 2*2 = 51
+    assert any(e["kind"] == "damage" and e["amount"] == 51 for e in events)
 
 
 def test_defend_halves_and_resets_next_turn(content):
@@ -107,7 +107,7 @@ def test_defend_halves_and_resets_next_turn(content):
     engine.begin_turn()
     events = engine.take_turn({"type": "ability", "ability_id": "rifle_burst",
                                "target_id": cap.id})
-    # Rifle burst vs Cap: 10 + 2*4 - 3*2 = 12 -> defended -> 6
+    # Rifle burst vs Cap: 9 + 2*4 - 2*2 = 13 -> defended -> 6
     assert any(e["kind"] == "damage" and e["amount"] == 6 for e in events)
     # Cap's own turn start clears the defend flag
     while engine.current() is not cap:
@@ -164,10 +164,10 @@ def test_ult_charges_and_fires(content):
     engine.begin_turn()
     events = engine.take_turn({"type": "ability", "ability_id": "house_party",
                                "target_id": None})
-    # House Party vs grunts: 55 + 7*5 - 4 = 86 each, all three hit
+    # House Party vs grunts: 55 + 5*5 - 4 = 76 each, all three hit
     damage_events = [e for e in events if e["kind"] == "damage"]
     assert len(damage_events) == 3
-    assert all(e["amount"] == 86 for e in damage_events)
+    assert all(e["amount"] == 76 for e in damage_events)
     assert iron_man.ult_charge == 0
 
 
@@ -179,7 +179,7 @@ def test_aggressive_ai_picks_highest_damage_at_lowest_hp(content):
     engine.round_order = [grunt]
     engine._turn_index = 0
     action = engine.enemy_action()
-    # Frag grenade (special, 18 + 2*5 = 28 base) beats rifle burst (10 + 8 = 18)
+    # Frag grenade (special, 13 + 2*5 = 23 base) beats rifle burst (9 + 8 = 17)
     assert action == {"type": "ability", "ability_id": "frag_grenade", "target_id": cap.id}
     grunt.energy = 0                        # can't afford the special anymore
     action = engine.enemy_action()
@@ -216,15 +216,15 @@ def test_crossbones_enrage_below_30pct(content):
     engine.begin_turn()
     events = engine.take_turn({"type": "ability", "ability_id": "gauntlet_smash",
                                "target_id": iron_man.id})
-    # 15 + 5*4 - 6*2 = 23 base, not enraged
-    assert any(e["kind"] == "damage" and e["amount"] == 23 for e in events)
+    # 15 + 5*4 - 5*2 = 25 base, not enraged
+    assert any(e["kind"] == "damage" and e["amount"] == 25 for e in events)
     crossbones.hp = int(crossbones.max_hp * 0.2)        # under 30% -> enrage
     engine.round_order = [crossbones]
     engine._turn_index = 0
     engine.begin_turn()
     events = engine.take_turn({"type": "ability", "ability_id": "gauntlet_smash",
                                "target_id": iron_man.id})
-    assert any(e["kind"] == "damage" and e["amount"] == int(23 * 1.5) for e in events)
+    assert any(e["kind"] == "damage" and e["amount"] == int(25 * 1.5) for e in events)
 
 
 def test_status_applies_on_hit(content):
@@ -256,7 +256,7 @@ def test_item_heals_and_consumes(content):
 
 
 def test_dodge_produces_no_damage(content):
-    # Cap agility 6 -> 18% dodge; scripted uniform 5.0 < 18 dodges
+    # Cap agility 5 -> 15% dodge; scripted uniform 5.0 < 15 dodges
     rng = ScriptedRng(uniforms=[5.0])
     engine = std_battle(content, rng=rng, enemy_ids=("hydra_grunt",))
     cap = engine.heroes[1]

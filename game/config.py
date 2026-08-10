@@ -96,15 +96,28 @@ AI_SUPPORT_HP_THRESHOLD = 0.50     # support: heal/buff ally below 50% HP
 SAVE_DIR = "saves"
 SAVE_SLOTS = 3
 
-# --- Impel card UI palette (§8) ---
-# Placeholder era-inspired values. Replace by sampling real 1991 card-back
-# scans dropped into assets/reference/ before/at M5.
+# --- General UI palette (era-inspired; hub/battle screens) ---
 PALETTE = {
     "cream": "#F2E6C9",
     "red": "#C8102E",
     "gold": "#FFC72C",
     "navy": "#1B1F3B",
     "ink": "#121212",
+}
+
+# --- Impel card UI palette (§8) ---
+# Sampled from real 1991 Impel Marvel Universe Series II card-back scans in
+# assets/reference/ (cap_54_back.jpg, iron_man_13_back.jpg, hulk_53_back.jpg).
+# The printed power-rating scale runs 0-7 -> RANK_MAX 7 segments per row.
+CARD_PALETTE = {
+    "cream": "#F0E8D8",         # card body / text panel
+    "paper": "#F8E8D8",         # power-grid paper behind unfilled bars
+    "yellow": "#F8D808",        # header banner + Real Name box
+    "blue": "#0A10C8",          # block-letter name blue
+    "bar_pink": "#E07098",      # printed power-rating bar fill
+    "red": "#E80000",           # Did You Know strip / accents
+    "ink": "#000000",           # text, POWER RATINGS band
+    "gold": "#FFC72C",          # trained-rank overlay (game addition, not on card)
 }
 CARD_MARGIN = 24
 CARD_HEADER_HEIGHT = 64

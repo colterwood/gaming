@@ -44,13 +44,13 @@ def test_xp_for_rank_thresholds():
 
 
 def test_rank_up_consumes_exact_xp(content):
-    cap = content["characters"]["captain_america"]     # strength base 4
+    cap = content["characters"]["captain_america"]     # strength base 2
     e = entry()
     result = attrs.add_training_xp(cap["power_grid"], e, "strength", 99)
     assert result["ranks_gained"] == [] and result["xp_banked"] == 99
     result = attrs.add_training_xp(cap["power_grid"], e, "strength", 1)
     assert result["ranks_gained"] == [1]
-    assert result["effective_rank"] == 5
+    assert result["effective_rank"] == 3
     assert result["xp_banked"] == 0
 
 
@@ -63,15 +63,16 @@ def test_multi_rank_overflow(content):
 
 
 def test_effective_rank_caps_at_7(content):
-    cap = content["characters"]["captain_america"]     # strength base 4
+    cap = content["characters"]["captain_america"]     # strength base 2
     e = entry()
-    attrs.add_training_xp(cap["power_grid"], e, "strength", 100 + 200 + 300)
+    attrs.add_training_xp(cap["power_grid"], e, "strength",
+                          100 + 200 + 300 + 400 + 500)  # trained 5 -> effective 7
     assert attrs.effective_rank(cap["power_grid"], e, "strength") == 7
     assert not attrs.can_train(cap["power_grid"], e, "strength")
     banked_before = e["attribute_xp"]["strength"]
-    result = attrs.add_training_xp(cap["power_grid"], e, "strength", 500)
+    result = attrs.add_training_xp(cap["power_grid"], e, "strength", 600)
     assert result["ranks_gained"] == []                # capped: XP banks, no rank
-    assert e["attribute_xp"]["strength"] == banked_before + 500
+    assert e["attribute_xp"]["strength"] == banked_before + 600
 
 
 # --- Perk tiers at trained ranks 3 and 6 ---
@@ -129,7 +130,8 @@ def test_training_session_grants_xp(content):
 
 def test_training_maxed_attribute_refused_without_cost(content):
     state = game_state(content)
-    state["roster"]["iron_man"]["trained_ranks"]["intelligence"] = 0   # base 7 already
+    # Iron Man int base 5 + trained 2 = effective 7 (maxed)
+    state["roster"]["iron_man"]["trained_ranks"]["intelligence"] = 2
     result = activities.training_session(state, content, "iron_man", "intelligence")
     assert not result["ok"]
     assert state["energy"] == 100                       # nothing spent
@@ -153,12 +155,12 @@ def test_trained_ranks_and_perk_change_battle_damage(content):
                                    "target_id": "hydra_grunt_1"})
         return next(e["amount"] for e in events if e["kind"] == "damage")
 
-    # Baseline: strength 4 -> 12 + 16 - 4 = 24
-    assert cap_hit({}, {}) == 24
-    # Trained +3 -> strength 7 -> 12 + 28 - 4 = 36
-    assert cap_hit({"strength": 3}, {}) == 36
-    # + Haymaker (+10% basic) -> int(36 * 1.1) = 39
-    assert cap_hit({"strength": 3}, {"basic_damage_pct": 10}) == 39
+    # Baseline: strength 2 -> 12 + 8 - 4 = 16
+    assert cap_hit({}, {}) == 16
+    # Trained +3 -> strength 5 -> 12 + 20 - 4 = 28
+    assert cap_hit({"strength": 3}, {}) == 28
+    # + Haymaker (+10% basic) -> int(28 * 1.1) = 30
+    assert cap_hit({"strength": 3}, {"basic_damage_pct": 10}) == 30
 
 
 def test_hp_energy_and_ult_perks(content):
