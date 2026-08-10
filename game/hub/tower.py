@@ -22,11 +22,13 @@ class HubScene:
         self.activity_index = 0
         self.messages = []
         self.tick_accum = 0.0
-        self.mode = "normal"        # normal | pick_gift | shop | scene
+        self.mode = "normal"        # normal | pick_gift | shop | scene | train_attr | perk_choice
         self.submenu_index = 0
         self.gift_hero_id = None
         self.scene = None
         self.scene_line = 0
+        self.train_hero_id = None
+        self.perk_ctx = None        # {"hero_id", "attribute", "tier", "options"}
 
     # --- activity lists per room ---
 
@@ -57,8 +59,15 @@ class HubScene:
                          "kind": "craft"})
             return acts
         if room == "Training Floor":
-            return [{"label": f"Training Session ({config.TRAINING_ENERGY} EN, 90m)",
-                     "kind": "training"}]
+            from game.progression import attributes as attrs
+            tier = attrs.session_xp(state, self.content["calendar"])
+            acts = []
+            for hero_id in sorted(state.get("roster", {})):
+                hero = self.content["characters"][hero_id]
+                acts.append({"label": f"Train {hero['name']} "
+                             f"({config.TRAINING_ENERGY} EN, 90m, +{tier} XP)",
+                             "kind": "train", "hero_id": hero_id})
+            return acts
         return [{"label": f"Story Mission: HYDRA Patrol ({config.MISSION_ENERGY} EN, 3h)",
                  "kind": "mission"}]
 
@@ -113,6 +122,12 @@ class HubScene:
         if self.mode == "shop":
             self._shop_key(app, key)
             return
+        if self.mode == "train_attr":
+            self._train_attr_key(app, key)
+            return
+        if self.mode == "perk_choice":
+            self._perk_choice_key(app, key)
+            return
         self._normal_key(app, key)
 
     def _normal_key(self, app, key):
@@ -164,8 +179,12 @@ class HubScene:
             self.log(activities.do_assignment(state, act["task"])["message"])
         elif kind == "craft":
             self.log(activities.craft(state)["message"])
-        elif kind == "training":
-            self.log(activities.training_session(state)["message"])
+        elif kind == "train":
+            self.train_hero_id = act["hero_id"]
+            if self._open_pending_perk(state, act["hero_id"]):
+                return
+            self.submenu_index = 0
+            self.mode = "train_attr"
         elif kind == "mission":
             result = activities.launch_mission(state)
             self.log(result["message"])
@@ -198,6 +217,80 @@ class HubScene:
             else:
                 self.log(result["message"])
             self.mode = "normal"
+
+    def _open_pending_perk(self, state, hero_id):
+        """If the hero has an unchosen §6.3 perk tier, open the modal for it."""
+        from game.progression import attributes as attrs
+        entry = state["roster"][hero_id]
+        for attribute in config.ATTRIBUTES:
+            tier = attrs.pending_perk_tier(entry, attribute)
+            if tier:
+                self.perk_ctx = {
+                    "hero_id": hero_id, "attribute": attribute, "tier": tier,
+                    "options": attrs.perk_options(attribute, tier, self.content["perks"])}
+                self.submenu_index = 0
+                self.mode = "perk_choice"
+                return True
+        return False
+
+    def _train_attr_labels(self, state):
+        from game.progression import attributes as attrs
+        hero = self.content["characters"][self.train_hero_id]
+        entry = state["roster"][self.train_hero_id]
+        labels = []
+        for attribute in config.ATTRIBUTES:
+            eff = attrs.effective_rank(hero["power_grid"], entry, attribute)
+            trained = entry.get("trained_ranks", {}).get(attribute, 0)
+            if not attrs.can_train(hero["power_grid"], entry, attribute):
+                labels.append(f"{attribute.title()}  {eff}/{config.RANK_MAX}  [MAX]")
+            else:
+                banked = entry.get("attribute_xp", {}).get(attribute, 0)
+                cost = attrs.xp_for_rank(trained + 1)
+                labels.append(f"{attribute.title()}  {eff}/{config.RANK_MAX}"
+                              f"  (+{trained} trained)  {banked}/{cost} XP")
+        return labels
+
+    def _train_attr_key(self, app, key):
+        state = app.game_state
+        if key == pygame.K_ESCAPE:
+            self.mode = "normal"
+            return
+        if key == pygame.K_UP:
+            self.submenu_index = (self.submenu_index - 1) % len(config.ATTRIBUTES)
+        elif key == pygame.K_DOWN:
+            self.submenu_index = (self.submenu_index + 1) % len(config.ATTRIBUTES)
+        elif key == pygame.K_RETURN:
+            attribute = config.ATTRIBUTES[self.submenu_index % len(config.ATTRIBUTES)]
+            result = activities.training_session(state, self.content,
+                                                 self.train_hero_id, attribute)
+            self.log(result["message"])
+            if result.get("perk_pending"):
+                self._open_pending_perk(state, self.train_hero_id)
+            elif activities.should_pass_out(state):
+                self.log("You pass out...")
+                self.mode = "normal"
+                app.go_to_sleep(passed_out=True)
+
+    def _perk_choice_key(self, app, key):
+        from game.progression import attributes as attrs
+        ctx = self.perk_ctx
+        options = ctx["options"]
+        if key == pygame.K_UP:
+            self.submenu_index = (self.submenu_index - 1) % len(options)
+        elif key == pygame.K_DOWN:
+            self.submenu_index = (self.submenu_index + 1) % len(options)
+        elif key == pygame.K_RETURN:
+            perk = options[self.submenu_index % len(options)]
+            entry = app.game_state["roster"][ctx["hero_id"]]
+            result = attrs.choose_perk(entry, ctx["attribute"], ctx["tier"],
+                                       perk["id"], self.content["perks"])
+            self.log(f"{perk['name']}: {perk['blurb']}" if result["ok"]
+                     else result["message"])
+            self.perk_ctx = None
+            # another tier may be pending (e.g. jumped 3 -> 6 in one session)
+            if not self._open_pending_perk(app.game_state, ctx["hero_id"]):
+                self.mode = "train_attr"
+        # no Esc: the §6.3 choice is part of the rank-up
 
     def _shop_key(self, app, key):
         state = app.game_state
@@ -277,6 +370,17 @@ class HubScene:
             tag = "  (EVENT SALE!)" if discount < 1.0 else ""
             self._draw_submenu(surface, f"Tower Shop — {state['credits']} cr{tag}",
                                [f"{i['name']} — {int(i['price'] * discount)} cr" for i in stock])
+        elif self.mode == "train_attr":
+            hero = self.content["characters"][self.train_hero_id]
+            self._draw_submenu(surface, f"Train {hero['name']} — pick an attribute",
+                               self._train_attr_labels(state))
+        elif self.mode == "perk_choice" and self.perk_ctx:
+            ctx = self.perk_ctx
+            hero = self.content["characters"][ctx["hero_id"]]
+            self._draw_submenu(
+                surface,
+                f"{hero['name']} — {ctx['attribute'].title()} rank {ctx['tier']} perk!",
+                [f"{p['name']} — {p['blurb']}" for p in ctx["options"]])
         elif self.mode == "scene" and self.scene:
             self._draw_scene(surface)
 

@@ -20,11 +20,33 @@ def _spend(state, energy_cost, minutes):
     return {"ok": True, "hit_day_end": hit_end}
 
 
-def training_session(state, hero_id=None, attribute=None):
-    """M2: costs only. M4 wires attribute XP onto this."""
+def training_session(state, content=None, hero_id=None, attribute=None):
+    """Spend a §6.1 training session; with a hero + attribute, grant §6.3
+    attribute XP (facility/event tier) and report rank-ups + pending perks."""
+    from game.progression import attributes as attrs
+    from game.progression import mastery
+
+    if content and hero_id and attribute:
+        character = content["characters"][hero_id]
+        entry = state["roster"][hero_id]
+        if not attrs.can_train(character["power_grid"], entry, attribute):
+            return {"ok": False, "message": f"{attribute.title()} is already at max."}
+
     result = _spend(state, config.TRAINING_ENERGY, config.TRAINING_MINUTES)
-    if result["ok"]:
+    if not result["ok"]:
+        return result
+    if not (content and hero_id and attribute):
         result["message"] = "Training session complete."
+        return result
+
+    xp = attrs.session_xp(state, content["calendar"])
+    gain = attrs.add_training_xp(character["power_grid"], entry, attribute, xp)
+    message = f"{character['name']} trains {attribute.title()}: +{xp} XP"
+    if gain["ranks_gained"]:
+        message += f" — rank up! ({gain['effective_rank']}/{config.RANK_MAX})"
+    if mastery.update_mastery(character["power_grid"], entry):
+        message += "  ★ MASTERED — the card goes foil!"
+    result.update(message=message, **gain)
     return result
 
 

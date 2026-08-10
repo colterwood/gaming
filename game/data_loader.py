@@ -234,6 +234,38 @@ def load_bond_scenes(data_dir=None):
     return scenes
 
 
+PERK_EFFECT_KEYS = ("basic_damage_pct", "special_damage_pct", "crit_bonus",
+                    "dodge_bonus", "max_hp_pct", "battle_energy_flat",
+                    "ult_turn_charge_bonus")
+
+
+def load_perks(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "perks.json")
+    perks = _load_json(path)
+    if not isinstance(perks, dict):
+        raise DataError("perks.json: top-level JSON must be an object")
+    seen = set()
+    for attr in config.ATTRIBUTES:
+        if attr not in perks:
+            raise DataError(f"perks.json: missing attribute '{attr}'")
+        for tier in config.PERK_CHOICE_RANKS:
+            options = perks[attr].get(str(tier))
+            if not isinstance(options, list) or len(options) != 2:
+                raise DataError(f"perks.json: {attr} tier {tier} needs exactly 2 options")
+            for perk in options:
+                pw = f"perks.json {attr}:{tier} perk '{perk.get('id', '?')}'"
+                _require(perk, "id", str, pw)
+                _require(perk, "name", str, pw)
+                effect = _require(perk, "effect", dict, pw)
+                for key in effect:
+                    if key not in PERK_EFFECT_KEYS:
+                        raise DataError(f"{pw}: unknown effect '{key}'")
+                if perk["id"] in seen:
+                    raise DataError(f"{pw}: duplicate id")
+                seen.add(perk["id"])
+    return perks
+
+
 def load_all(data_dir=None):
     """Load and cross-validate all game content."""
     characters = load_characters(data_dir)
@@ -257,4 +289,4 @@ def load_all(data_dir=None):
             raise DataError(f"bond_scenes.json: character '{scene['character']}' not found")
     return {"characters": characters, "enemies": enemies, "items": items,
             "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir),
-            "bond_scenes": bond_scenes}
+            "bond_scenes": bond_scenes, "perks": load_perks(data_dir)}

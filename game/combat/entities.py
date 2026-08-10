@@ -6,20 +6,24 @@ from game.combat import formulas
 
 
 class Combatant:
-    def __init__(self, data, trained_ranks=None, is_hero=False, instance_id=None, name=None):
+    def __init__(self, data, trained_ranks=None, is_hero=False, instance_id=None,
+                 name=None, perk_effects=None, synergy_crit=0):
         self.id = instance_id or data["id"]
         self.name = name or data["name"]
         self.data = data
         self.is_hero = is_hero
         self.trained_ranks = dict(trained_ranks or {})
-        self.max_hp = formulas.max_hp(self.rank("stamina"), self.rank("durability"))
+        self.perk_effects = dict(perk_effects or {})
+        hp_mult = 1 + self.perk_effects.get("max_hp_pct", 0) / 100
+        self.max_hp = int(formulas.max_hp(self.rank("stamina"), self.rank("durability")) * hp_mult)
         self.hp = self.max_hp
-        self.max_energy = formulas.battle_energy(self.rank("intelligence"))
+        self.max_energy = (formulas.battle_energy(self.rank("intelligence"))
+                           + self.perk_effects.get("battle_energy_flat", 0))
         self.energy = self.max_energy
         self.ult_charge = 0
         self.defending = False
         self.statuses = {}          # e.g. {"burn": 3, "stun": 1} -> turns remaining
-        self.perk_effects = {}      # filled by progression (M4)
+        self.crit_bonus = self.perk_effects.get("crit_bonus", 0) + synergy_crit
 
     def rank(self, attribute):
         """effective_rank = base grid rank + trained ranks, capped at RANK_MAX (§6.3)."""

@@ -136,7 +136,8 @@ class BattleEngine:
 
         if not fired_ultimate:
             actor.ult_charge = formulas.add_ult_charge(
-                actor.ult_charge, config.ULT_CHARGE_PER_TURN)
+                actor.ult_charge,
+                config.ULT_CHARGE_PER_TURN + actor.perk_effects.get("ult_turn_charge_bonus", 0))
 
         self._advance()
         return events
@@ -185,11 +186,14 @@ class BattleEngine:
             target = self._find(target_id)
             targets = [target] if target else []
 
+        damage_pct_key = ("basic_damage_pct" if ability["type"] == "basic"
+                          else "special_damage_pct")
         for target in targets:
             base = formulas.ability_damage(
                 ability["power"], actor.rank(ability["scales_with"]),
                 target.rank("durability"), ability["type"])
             base = int(base * self._enrage_multiplier(actor))
+            base = int(base * (1 + actor.perk_effects.get(damage_pct_key, 0) / 100))
             damage, dodged, crit = formulas.resolve_damage(
                 base_damage=base,
                 dodge_roll=self.rng.uniform(0, 100),
@@ -197,7 +201,8 @@ class BattleEngine:
                 crit_roll=self.rng.uniform(0, 100),
                 attacker_agility=actor.rank("agility"),
                 defending=target.defending,
-                crit_bonus=getattr(actor, "crit_bonus", 0))
+                crit_bonus=actor.crit_bonus,
+                dodge_bonus=target.perk_effects.get("dodge_bonus", 0))
             if dodged:
                 events.append({"kind": "dodge", "actor": actor.id, "target": target.id})
                 continue

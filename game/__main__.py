@@ -61,11 +61,28 @@ class App:
         self.machine.transition(GameState.SLEEP)
 
     def start_battle(self, enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt")):
+        from game.progression import attributes as attrs
+        from game.social import bonds
         from game.ui.battle_scene import BattleScene
-        trained = {hid: h.get("trained_ranks", {})
-                   for hid, h in self.game_state["roster"].items()} if self.game_state else None
+        trained = perk_fx = synergy_crit = None
+        hero_ids = ("iron_man", "captain_america")
+        if self.game_state:
+            roster = self.game_state["roster"]
+            hero_ids = tuple(sorted(roster))
+            trained = {hid: h.get("trained_ranks", {}) for hid, h in roster.items()}
+            perk_fx = {hid: attrs.perk_effects(h, self.content["perks"])
+                       for hid, h in roster.items()}
+            synergy_crit = {}
+            for hid in roster:
+                char = self.content["characters"][hid]
+                total = 0
+                for syn in char.get("synergies", []):
+                    if syn["with"] in roster and bonds.synergy_active(self.game_state, char, syn):
+                        total += syn["effect"].get("crit_bonus", 0)
+                synergy_crit[hid] = total
         self.battle = BattleScene(
-            self.content, enemy_ids=enemy_ids, trained=trained,
+            self.content, hero_ids=hero_ids, enemy_ids=enemy_ids, trained=trained,
+            perk_fx=perk_fx, synergy_crit=synergy_crit,
             inventory=self.game_state["inventory"] if self.game_state else None)
         self.machine.transition(GameState.BATTLE)
 
@@ -76,6 +93,11 @@ class App:
             self.game_state["credits"] += rewards["credits"]
             self.game_state["unspent_xp"] += rewards["xp"]
             bonds.mission_bond(self.game_state, [h.id for h in engine.heroes])
+            from game.progression import mastery
+            for hero in engine.heroes:
+                entry = self.game_state["roster"].get(hero.id)
+                if entry:
+                    mastery.log_mastery_xp(entry, rewards["xp"])
             if self.hub:
                 self.hub.log(f"Mission complete: +{rewards['credits']} cr, +{rewards['xp']} XP")
         elif self.hub:

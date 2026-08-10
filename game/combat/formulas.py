@@ -47,13 +47,14 @@ def apply_defend(damage):
 
 
 def resolve_damage(base_damage, dodge_roll, defender_agility, crit_roll,
-                   attacker_agility, defending, crit_bonus=0):
+                   attacker_agility, defending, crit_bonus=0, dodge_bonus=0):
     """Full §6.4 resolution pipeline. Rolls are percents in [0, 100).
 
     Order: dodge roll (after hit, before crit) -> crit -> defend.
+    crit_bonus/dodge_bonus are flat percent additions from perks/synergies.
     Returns (damage, dodged, crit).
     """
-    if dodge_roll < dodge_chance(defender_agility):
+    if dodge_roll < dodge_chance(defender_agility) + dodge_bonus:
         return 0, True, False
     damage = base_damage
     crit = crit_roll < crit_chance(attacker_agility) + crit_bonus

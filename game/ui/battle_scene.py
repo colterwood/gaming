@@ -15,10 +15,13 @@ POPUP_LIFETIME = 0.9
 class BattleScene:
     def __init__(self, content, hero_ids=("iron_man", "captain_america"),
                  enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
-                 inventory=None, trained=None, rng=None):
+                 inventory=None, trained=None, rng=None,
+                 perk_fx=None, synergy_crit=None):
         self.content = content
         heroes = [Combatant(content["characters"][h],
                             trained_ranks=(trained or {}).get(h),
+                            perk_effects=(perk_fx or {}).get(h),
+                            synergy_crit=(synergy_crit or {}).get(h, 0),
                             is_hero=True) for h in hero_ids]
         enemies = make_enemy_group([content["enemies"][e] for e in enemy_ids])
         self.engine = BattleEngine(
