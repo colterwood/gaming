@@ -1,0 +1,379 @@
+# Marvel: Roads to Secret Wars — POC Build Spec (v0.2)
+
+This is the working implementation spec. It lives in `/docs` of the repo and is the
+document Claude Code reads and builds from. The .docx GDD is the human-readable
+design reference; this file is the source of truth for code.
+
+---
+
+## 1. What We're Building (and Not Building)
+
+**POC scope:** Chapters 1–2 of the Avengers path only.
+
+- 2 starting heroes (Iron Man, Captain America), 1 recruitable hero (Ant-Man)
+- 1 hub (Avengers Tower, 3 rooms), working day/energy loop
+- Turn-based combat vs. HYDRA enemies, 2 boss fights
+- Bond system (talk, gifts, 1 bond event)
+- Attribute training for the six-stat power grid
+- Pause screen styled as a 1991 Impel Marvel card back
+- JSON save/load
+
+**Explicit non-goals for the POC:** other paths, world map travel, crafting depth,
+audio, animation polish, controller support, Battleworld. Do not build these.
+
+**Legal:** Marvel IP — portfolio/personal project only. Not for sale or distribution.
+
+---
+
+## 2. Stack
+
+- Python 3.11+
+- `pygame-ce` (community edition — actively maintained, drop-in pygame replacement)
+- `pytest` for logic tests
+- All game content in JSON data files; code never hardcodes character/item data
+- No other dependencies unless a milestone demands it
+
+Design rule: **keep game logic pure and rendering thin.** Combat math, bond math,
+XP math, and the day clock live in plain-Python modules with no pygame imports,
+so they're unit-testable. Pygame code only draws state and collects input.
+
+If this outgrows a POC, the migration path is Godot. The JSON data layer is
+designed to survive that port; the Python code is not, and that's fine.
+
+---
+
+## 3. Repo Layout
+
+```
+secret-wars-poc/
+├── CLAUDE.md                  # Claude Code project instructions (template in §10)
+├── docs/
+│   └── GAME_SPEC.md           # this file
+├── game/
+│   ├── __main__.py            # entry point: python -m game
+│   ├── config.py              # tunable constants (all numbers from this spec)
+│   ├── core/
+│   │   ├── state_machine.py   # game states + transitions
+│   │   ├── clock.py           # in-game time
+│   │   ├── energy.py          # daily energy
+│   │   ├── calendar.py        # issues/days/birthdays/events
+│   │   └── save.py            # JSON save/load
+│   ├── combat/
+│   │   ├── engine.py          # turn loop, action resolution
+│   │   ├── formulas.py        # pure math (damage, crit, dodge, initiative)
+│   │   ├── entities.py        # Combatant built from character JSON + trained ranks
+│   │   └── enemy_ai.py        # simple AI (see §7)
+│   ├── social/
+│   │   ├── bonds.py           # bond points, levels, weekly gift limits
+│   │   └── events.py          # bond-event triggering
+│   ├── progression/
+│   │   ├── attributes.py      # training XP, ranks, perk choices
+│   │   └── mastery.py         # stub for POC
+│   ├── hub/
+│   │   ├── tower.py           # hub scene + activity menu
+│   │   └── activities.py      # activity definitions/costs/effects
+│   ├── ui/
+│   │   ├── impel_card.py      # pause screen card renderer
+│   │   ├── binder.py          # 9-pocket collections page
+│   │   └── widgets.py         # bars, menus, text boxes
+│   └── data_loader.py         # JSON loading + schema validation
+├── data/
+│   ├── characters/            # one file per character
+│   ├── enemies/
+│   ├── items.json
+│   ├── quests/
+│   └── calendar.json
+├── assets/
+│   ├── reference/             # ← drop 2–3 Impel card-back scans here
+│   └── sprites/               # colored-rectangle placeholders are fine
+└── tests/
+```
+
+---
+
+## 4. Game States
+
+```
+BOOT → TITLE → PATH_SELECT → HUB ⇄ BATTLE
+                              HUB ⇄ PAUSE (Impel card UI)
+                              HUB → SLEEP → (next day) → HUB
+```
+
+`PATH_SELECT` shows five "issue #1 covers"; only Avengers is selectable in the POC
+(others greyed out). The state machine is the M0 deliverable — every later system
+plugs into it.
+
+---
+
+## 5. Data Schemas
+
+### 5.1 Character (`data/characters/iron_man.json`)
+
+```json
+{
+  "id": "iron_man",
+  "name": "Iron Man",
+  "path": "avengers",
+  "rarity": "legendary",
+  "power_grid": {
+    "strength": 6, "speed": 5, "agility": 3,
+    "stamina": 5, "durability": 6, "intelligence": 7
+  },
+  "abilities": [
+    {"id": "repulsor_blast", "name": "Repulsor Blast", "type": "basic",
+     "power": 12, "scales_with": "intelligence", "target": "single"},
+    {"id": "unibeam", "name": "Unibeam", "type": "special",
+     "power": 30, "cost": 12, "scales_with": "intelligence", "target": "single"},
+    {"id": "house_party", "name": "House Party Protocol", "type": "ultimate",
+     "power": 55, "charge_required": 100, "scales_with": "intelligence", "target": "all"}
+  ],
+  "gifts": {
+    "loved": ["rare_alloy", "double_espresso"],
+    "liked": ["tech_scrap", "vintage_vinyl"],
+    "disliked": ["magnets"],
+    "hated": ["paperwork"]
+  },
+  "birthday": {"issue": 2, "day": 14},
+  "synergies": [
+    {"with": "captain_america", "name": "Old Friends",
+     "effect": {"crit_bonus": 8}, "requires_bond_level": 6}
+  ],
+  "recruit": {"chapter": 1, "method": "story"}
+}
+```
+
+> Power-grid values above are placeholders. For card-authentic grids, transcribe
+> the printed ratings from the actual 1991 card backs and adjust. If the cards
+> use a bar length other than 7, change `RANK_MAX` in `config.py` to match —
+> everything else derives from it.
+
+### 5.2 Enemy (`data/enemies/hydra_grunt.json`)
+
+Same shape as character minus gifts/birthday/synergies, plus:
+`"ai": "aggressive" | "defensive" | "support"` and `"xp_reward"`, `"credit_reward"`.
+
+### 5.3 Item (`data/items.json` entries)
+
+```json
+{"id": "double_espresso", "name": "Double Espresso", "kind": "gift",
+ "price": 40, "sources": ["tower_cafe"]}
+```
+
+`kind`: `gift | consumable | weapon | armor | accessory | artifact | material`.
+Equipment adds `"slot"` and `"effects"` (flat stat mods only in POC).
+
+### 5.4 Save file
+
+One JSON per slot: current day/issue/time, energy, roster (per hero: trained
+ranks, attribute XP, chosen perks, equipped gear, ultimate charge), bond points +
+weekly gift counts per character, inventory, credits, story flags, quest states.
+Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
+
+---
+
+## 6. Core Numbers (all live in `config.py`)
+
+### 6.1 Clock & Energy
+
+| Constant | Value |
+|---|---|
+| Day span | 6:00 → 26:00 (2 AM) |
+| Tick | 10 in-game minutes per 7 real seconds (cosmetic in POC; activities also advance the clock in fixed jumps) |
+| Daily energy | 100 |
+| Training session | 25 energy, +90 min clock |
+| Combat mission | 40 energy, +3 h clock |
+| Craft action | 15 energy, +60 min |
+| Small task | 10–20 energy |
+| Talk / gift | 0 energy, +20 min |
+| Pass out (0 energy or 2 AM) | next day starts at 80 energy |
+
+### 6.2 Bonds
+
+| Action | Points |
+|---|---|
+| Daily talk | +15 (once/day/character) |
+| Same-party mission | +10 per mission |
+| Loved gift | +80 |
+| Liked gift | +45 |
+| Neutral gift | +20 |
+| Disliked gift | −20 |
+| Hated gift | −40 |
+| Birthday multiplier | ×8 |
+| Personal quest | +150 to +250 |
+
+- 250 points per Bond Level; 10 levels; 2,500 lifetime max.
+- Max 2 gifts per character per calendar week (weeks are 7-day rows of the
+  28-day Issue).
+- Level gates: 2 = bond scene, 4 = relationship recruit, 6 = synergy passive,
+  8 = exclusive gear quest, 10 = signature scene + costume.
+- POC content: Cap's Level-2 bond scene; Ant-Man recruit is quest-based (story),
+  Shang-Chi's bond-recruit is post-POC.
+
+### 6.3 Attributes & Training
+
+- Six attributes, ranks 1–7 (`RANK_MAX = 7`).
+- `effective_rank = base_grid_rank`, plus trained ranks stored separately and
+  added for combat math, capped at 7 total for POC simplicity.
+- Attribute XP to gain trained rank N: `100 × N` (100, 200, … 700).
+- Training XP per session: 40 (basic facility) / 80 (upgraded) / 120 (event).
+- Perk choice at trained ranks 3 and 6: two options per attribute, flat effects
+  in POC (e.g., Strength 3: `+10% basic damage` vs. `+1 knockback`). Define perk
+  tables in `data/perks.json`.
+- Mastery (all six at 7) is a stub in POC: detect it, show the foil treatment,
+  log Mastery XP, no perk shop yet.
+
+### 6.4 Combat Formulas (`combat/formulas.py` — pure functions, unit-tested)
+
+Let ranks be effective ranks 1–7.
+
+```
+max_hp        = 50 + stamina*20 + durability*10
+battle_energy = 20 + intelligence*5          (spent by Specials, refills each battle)
+initiative    = speed*10 + rand(1,6)          (recomputed each round)
+basic_damage  = ability.power + scaling_rank*4 - target.durability*2   (min 1)
+special_damage= ability.power + scaling_rank*5 - target.durability*2   (min 1)
+crit_chance   = agility*4  (percent; crit = damage × 1.5)
+dodge_chance  = agility*3  (percent; roll after hit roll, before crit)
+ultimate      = +20 charge per turn taken, +10 per hit received; fires at 100
+```
+
+Party size 4 (POC uses 2–3). Actions: Basic, Special, Item, Defend (halve
+incoming damage until next turn), Ultimate when charged. Status effects in POC:
+Burn (5 dmg/turn, 3 turns) and Stun (skip 1 turn) only.
+
+Boss 1 (Ch. 1): HYDRA Siege Captain + 2 grunts. Boss 2 (Ch. 2): Crossbones —
+enrages below 30% HP (+50% damage).
+
+### 6.5 Enemy AI (POC)
+
+- `aggressive`: highest-damage available action at lowest-HP target
+- `defensive`: Defend below 40% HP, else basic attack
+- `support`: heal/buff ally if one is below 50% HP, else basic attack
+
+---
+
+## 7. Hub & Day Loop (POC content)
+
+Avengers Tower rooms and activities:
+
+| Room | Activities |
+|---|---|
+| Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating fetch/fight tasks per day) |
+| Training Floor | Attribute training (pick hero + attribute); upgrades to tier 2 via story flag after Ch. 1 boss |
+| Ops Floor | Launch story missions, view quest log |
+
+Sleep sequence: fade out → advance calendar → reset energy/talk flags → weekly
+gift-counter reset on day 1/8/15/22 → autosave → fade in.
+
+Calendar POC content: Issue 1 (28 days), Cap's birthday on Issue 1 Day 20, one
+2-day mini-event ("S.H.I.E.L.D. Supply Drop": shop discount + bonus training XP).
+
+---
+
+## 8. Pause Screen — Impel Card UI (M5)
+
+Full-screen card back at 1280×720 internal resolution (scale to window).
+
+Layout zones (px, at 1280×720):
+
+- Outer card frame: 24 px margin, rounded corners, border trim
+- Tab strip (top, above the card): 7 tabs — Inventory, Attributes, Social,
+  Collections, Tasks, Map (greyed in POC), Options
+- Header banner inside card: 64 px tall, character name in block lettering
+- Portrait panel: upper-left, 300×340
+- Power grid: right column, six rows × 44 px; each row = label + 7 segment pips.
+  Base ranks in the primary bar color, trained ranks overlaid in gold, foil
+  shimmer effect when Mastered (static sparkle overlay is fine for POC)
+- Lower text panel: full width below portrait/grid, content swaps per tab
+- Footer: "No. {save_slot} — Issue {n}, Day {d}"
+
+Collections tab renders the roster as a 9-pocket binder page: filled pockets show
+mini card fronts; empty pockets show grey slots with silhouettes.
+
+**Palette:** placeholder era-inspired values until reference scans exist —
+cream `#F2E6C9`, red `#C8102E`, gold `#FFC72C`, navy `#1B1F3B`, ink `#121212`,
+plus a subtle halftone-dot texture. **Before building M5, drop 2–3 scans of real
+1991 card backs into `assets/reference/` and sample the actual colors, bar
+counts, and proportions from them.** Do not trust remembered colors — including
+these.
+
+---
+
+## 9. Milestones
+
+Work strictly in order. Each milestone ends with its acceptance criteria passing
+and a commit.
+
+**M0 — Scaffold.** Repo layout, `python -m game` opens a window, state machine
+with keyboard-switchable placeholder screens for every state, JSON loader reads
+`data/characters/*.json` with basic validation, empty save/load round-trips.
+*AC: window runs at 60 fps; states switch; `pytest` green on loader tests.*
+
+**M1 — Combat vertical slice.** Iron Man + Cap vs. 3 HYDRA grunts using §6.4
+formulas. Menu-driven actions, HP/energy bars, turn-order strip, damage popups,
+win/lose → back to HUB. All formulas unit-tested against hand-computed cases.
+*AC: full battle playable start to finish; formula tests cover crit, dodge, min
+damage, defend, ultimate charge.*
+
+**M2 — Day loop.** Tower scene with three rooms, clock HUD, energy bar,
+activities with §6.1 costs, sleep → next day, autosave. Missions launch M1
+battles from the Ops Floor.
+*AC: play three consecutive in-game days; energy and clock enforce limits;
+save/reload restores mid-run state.*
+
+**M3 — Bonds.** Talk/gift interactions with §6.2 math, weekly gift limits,
+bond-level display, Cap's Level-2 bond scene (simple dialogue boxes), same-party
+mission points.
+*AC: reach Cap Bond 2 through play; gift-week limit enforced across a week
+boundary; bond math unit-tested including birthday multiplier.*
+
+**M4 — Training & perks.** Training Floor grants attribute XP, trained ranks
+apply to combat math, perk choice modal at ranks 3 and 6, perks affect combat.
+*AC: train Cap's Strength to rank 3, pick a perk, and see the damage change in
+battle; XP thresholds unit-tested.*
+
+**M5 — Impel card pause screen.** §8 in full, replacing the placeholder pause
+state.
+*AC: all tabs navigable; power grid reflects live base+trained ranks; binder
+shows recruited vs. empty pockets.*
+
+**M6 — Quest & recruitment.** Quest log, the Ant-Man rescue questline (2 hub
+tasks + 1 battle), Ant-Man joins roster and appears in binder/party select.
+Ch. 1–2 story missions and both bosses wired in sequence.
+*AC: fresh save → complete Ch. 1–2 including recruiting Ant-Man, in under
+~45 minutes of play.*
+
+---
+
+## 10. CLAUDE.md Starter (place at repo root)
+
+```markdown
+# Roads to Secret Wars — POC
+
+Stardew-style Marvel RPG proof of concept. Python 3.11 + pygame-ce.
+The build spec is docs/GAME_SPEC.md — read it before any task and follow its
+numbers and schemas exactly.
+
+## Commands
+- Run: `python -m game`
+- Test: `pytest`
+
+## Rules
+- Do not make changes beyond the specific task requested. No drive-by
+  refactors, renames, or "improvements."
+- Game logic stays pure-Python and unit-tested; pygame only in rendering/input.
+- All content comes from JSON in /data — never hardcode character or item data.
+- All tunable numbers come from game/config.py, sourced from the spec.
+- Work one milestone (spec §9) at a time; run pytest before finishing a task.
+- Placeholder art = colored rectangles + text. Do not spend effort on art.
+```
+
+## 11. Working With Claude Code
+
+- Start each session by pointing it at a single milestone: "Read
+  docs/GAME_SPEC.md and implement M1. Stop at M1's acceptance criteria."
+- Keep tasks small — one system or one file cluster per request. Review diffs.
+- When something's off, quote the spec section at it rather than re-explaining.
+- Commit at every green-test point so you can roll back cheaply.
+- Update this spec when a design decision changes. The spec drifting from the
+  code is how projects rot.
