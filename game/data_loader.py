@@ -171,6 +171,46 @@ def load_items(data_dir=None):
     return result
 
 
+def load_calendar(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "calendar.json")
+    calendar = _load_json(path)
+    if not isinstance(calendar, dict):
+        raise DataError(f"calendar.json: top-level JSON must be an object")
+    for issue in _require(calendar, "issues", list, "calendar.json"):
+        _require(issue, "number", int, "calendar.json issue")
+        _require(issue, "days", int, "calendar.json issue")
+    for ev in _require(calendar, "events", list, "calendar.json"):
+        ew = f"calendar.json event '{ev.get('id', '?')}'"
+        _require(ev, "id", str, ew)
+        _require(ev, "name", str, ew)
+        _require(ev, "issue", int, ew)
+        _require(ev, "start_day", int, ew)
+        _require(ev, "end_day", int, ew)
+        if ev["end_day"] < ev["start_day"]:
+            raise DataError(f"{ew}: end_day before start_day")
+    return calendar
+
+
+def load_assignments(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "quests", "assignments.json")
+    tasks = _load_json(path)
+    if not isinstance(tasks, list):
+        raise DataError("assignments.json: top-level JSON must be a list")
+    seen = set()
+    for task in tasks:
+        if not isinstance(task, dict):
+            raise DataError("assignments.json: each task must be an object")
+        tw = f"assignments.json task '{task.get('id', '?')}'"
+        _require(task, "id", str, tw)
+        _require(task, "name", str, tw)
+        _require(task, "energy", int, tw)
+        _require(task, "credits", int, tw)
+        if task["id"] in seen:
+            raise DataError(f"{tw}: duplicate id")
+        seen.add(task["id"])
+    return tasks
+
+
 def load_all(data_dir=None):
     """Load and cross-validate all game content."""
     characters = load_characters(data_dir)
@@ -188,4 +228,5 @@ def load_all(data_dir=None):
         for syn in char.get("synergies", []):
             if syn["with"] not in characters:
                 raise DataError(f"{char['id']}: synergy partner '{syn['with']}' not found")
-    return {"characters": characters, "enemies": enemies, "items": items}
+    return {"characters": characters, "enemies": enemies, "items": items,
+            "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir)}

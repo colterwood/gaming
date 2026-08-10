@@ -1,0 +1,10 @@
+{
+  "issues": [
+    {"number": 1, "name": "Shattered Shield", "days": 28}
+  ],
+  "events": [
+    {"id": "shield_supply_drop", "name": "S.H.I.E.L.D. Supply Drop",
+     "issue": 1, "start_day": 12, "end_day": 13,
+     "effects": {"shop_discount": 0.5, "training_xp_bonus": 40}}
+  ]
+}

@@ -21,10 +21,12 @@ def new_game_state():
         "path": None,
         "roster": {},          # hero id -> trained ranks, attribute xp, perks, gear, ult charge
         "bonds": {},           # char id -> {points, gifts_this_week, talked_today}
-        "inventory": {},       # item id -> count
+        "inventory": {"med_kit": 2, "energy_bar": 1},
         "credits": 0,
         "story_flags": {},
         "quests": {},
+        "assignments_done": [],
+        "unspent_xp": 0,       # mission XP banked for progression systems
     }
 
 

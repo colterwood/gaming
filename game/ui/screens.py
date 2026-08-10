@@ -15,10 +15,10 @@ GREY = pygame.Color(90, 90, 100)
 
 HINTS = {
     GameState.BOOT: "Enter: continue",
-    GameState.TITLE: "Enter: start",
+    GameState.TITLE: "Enter: new game",
     GameState.PATH_SELECT: "Enter: choose the Avengers path",
-    GameState.HUB: "B: battle   P/Esc: pause   S: sleep",
-    GameState.BATTLE: "Enter: finish battle (back to hub)",
+    GameState.HUB: "",
+    GameState.BATTLE: "",
     GameState.PAUSE: "Esc: resume",
     GameState.SLEEP: "Enter: wake up",
 }
@@ -30,17 +30,17 @@ def handle_key(app, key):
     state = app.machine.state
     if state is GameState.BOOT and key == pygame.K_RETURN:
         app.machine.transition(GameState.TITLE)
-    elif state is GameState.TITLE and key == pygame.K_RETURN:
-        app.machine.transition(GameState.PATH_SELECT)
+    elif state is GameState.TITLE:
+        if key == pygame.K_RETURN:
+            app.machine.transition(GameState.PATH_SELECT)
+        elif key == pygame.K_c and app.load_game():
+            app.machine.transition(GameState.PATH_SELECT)
+            app.machine.transition(GameState.HUB)
     elif state is GameState.PATH_SELECT and key == pygame.K_RETURN:
+        app.new_game()
         app.machine.transition(GameState.HUB)
-    elif state is GameState.HUB:
-        if key == pygame.K_b:
-            app.start_battle()
-        elif key in (pygame.K_p, pygame.K_ESCAPE):
-            app.machine.transition(GameState.PAUSE)
-        elif key == pygame.K_s:
-            app.machine.transition(GameState.SLEEP)
+    elif state is GameState.HUB and app.hub:
+        app.hub.handle_key(app, key)
     elif state is GameState.BATTLE and app.battle:
         app.battle.handle_key(app, key)
     elif state is GameState.PAUSE and key == pygame.K_ESCAPE:
@@ -67,9 +67,23 @@ def draw(surface, app):
         app.battle.draw(surface)
         _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
         return
+    if state is GameState.HUB and app.hub and app.game_state:
+        app.hub.draw(surface, app)
+        _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
+        return
 
     surface.fill(NAVY)
     cx = config.WIDTH // 2
+
+    if state is GameState.SLEEP and app.game_state:
+        gs = app.game_state
+        _text(surface, "A NEW DAY", 72, CREAM, center=(cx, config.HEIGHT // 2 - 80))
+        _text(surface, f"Issue {gs['issue']}, Day {gs['day']}", 44, GOLD,
+              center=(cx, config.HEIGHT // 2))
+        _text(surface, f"Energy: {gs['energy']}", 30, CREAM,
+              center=(cx, config.HEIGHT // 2 + 50))
+        _text(surface, HINTS[state], 30, CREAM, center=(cx, config.HEIGHT - 60))
+        return
 
     if state is GameState.PATH_SELECT:
         _text(surface, "CHOOSE YOUR PATH", 56, CREAM, center=(cx, 90))
@@ -85,11 +99,10 @@ def draw(surface, app):
             _text(surface, "#1", 40, GOLD if selectable else INK, center=(rect.centerx, rect.top + 40))
     else:
         _text(surface, state.name, 72, CREAM, center=(cx, config.HEIGHT // 2 - 40))
-        if state is GameState.HUB:
-            roster = ", ".join(c["name"] for c in app.content["characters"].values()
-                               if c["recruit"]["method"] == "starter")
-            _text(surface, f"Avengers Tower — roster: {roster}", 30, GOLD,
-                  center=(cx, config.HEIGHT // 2 + 30))
+        if state is GameState.TITLE:
+            from game.core import save as save_module
+            if save_module.slot_exists(1):
+                _text(surface, "C: continue", 30, GOLD, center=(cx, config.HEIGHT // 2 + 30))
 
     _text(surface, HINTS[state], 30, CREAM, center=(cx, config.HEIGHT - 60))
     _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
