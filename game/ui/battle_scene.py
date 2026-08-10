@@ -116,11 +116,12 @@ class BattleScene:
 
         actor = self._actor()
         if self.phase == "turn_start":
+            turn_before = self.engine.turn_counter
             events = self.engine.begin_turn()
             self._emit(events)
             if self.engine.outcome:
                 self.phase = "result"
-            elif self._actor() is not actor:        # stun/burn consumed the turn
+            elif self.engine.turn_counter != turn_before:   # stun/burn consumed the turn
                 self.phase = "turn_start"
             elif self._actor().is_hero:
                 self.phase = "menu"

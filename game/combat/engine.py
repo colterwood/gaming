@@ -30,6 +30,7 @@ class BattleEngine:
         self.round_number = 0
         self.round_order = []
         self._turn_index = 0
+        self.turn_counter = 0               # increments on every consumed turn
         self._start_round()
 
     # --- round / turn bookkeeping ---
@@ -60,6 +61,7 @@ class BattleEngine:
 
     def _advance(self):
         self._turn_index += 1
+        self.turn_counter += 1
         self._check_outcome()
 
     def _check_outcome(self):
