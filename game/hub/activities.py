@@ -63,6 +63,23 @@ def do_assignment(state, task):
     return result
 
 
+def shop_discount(state, calendar_data):
+    """Multiplier applied to shop prices; events may discount (§7)."""
+    discount = 1.0
+    for ev in cal.active_events(state, calendar_data):
+        discount = min(discount, ev.get("effects", {}).get("shop_discount", 1.0))
+    return discount
+
+
+def buy_item(state, item, discount=1.0):
+    price = int(item["price"] * discount)
+    if state["credits"] < price:
+        return {"ok": False, "message": "Not enough credits."}
+    state["credits"] -= price
+    state["inventory"][item["id"]] = state["inventory"].get(item["id"], 0) + 1
+    return {"ok": True, "message": f"Bought {item['name']} for {price} cr."}
+
+
 def should_pass_out(state):
     """0 energy or 2 AM forces sleep with the §6.1 pass-out penalty."""
     return energy.is_exhausted(state) or clock.is_past_end(state)

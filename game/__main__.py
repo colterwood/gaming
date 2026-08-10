@@ -71,9 +71,11 @@ class App:
 
     def finish_battle(self, engine):
         if self.game_state and engine.outcome == "win":
+            from game.social import bonds
             rewards = engine.rewards()
             self.game_state["credits"] += rewards["credits"]
             self.game_state["unspent_xp"] += rewards["xp"]
+            bonds.mission_bond(self.game_state, [h.id for h in engine.heroes])
             if self.hub:
                 self.hub.log(f"Mission complete: +{rewards['credits']} cr, +{rewards['xp']} XP")
         elif self.hub:

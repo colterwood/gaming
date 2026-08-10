@@ -211,6 +211,29 @@ def load_assignments(data_dir=None):
     return tasks
 
 
+def load_bond_scenes(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "quests", "bond_scenes.json")
+    scenes = _load_json(path)
+    if not isinstance(scenes, list):
+        raise DataError("bond_scenes.json: top-level JSON must be a list")
+    seen = set()
+    for scene in scenes:
+        if not isinstance(scene, dict):
+            raise DataError("bond_scenes.json: each scene must be an object")
+        sw = f"bond_scenes.json scene '{scene.get('id', '?')}'"
+        _require(scene, "id", str, sw)
+        _require(scene, "character", str, sw)
+        _require(scene, "level", int, sw)
+        _require(scene, "title", str, sw)
+        lines = _require(scene, "lines", list, sw)
+        if not lines or not all(isinstance(l, str) for l in lines):
+            raise DataError(f"{sw}: lines must be a non-empty list of strings")
+        if scene["id"] in seen:
+            raise DataError(f"{sw}: duplicate id")
+        seen.add(scene["id"])
+    return scenes
+
+
 def load_all(data_dir=None):
     """Load and cross-validate all game content."""
     characters = load_characters(data_dir)
@@ -228,5 +251,10 @@ def load_all(data_dir=None):
         for syn in char.get("synergies", []):
             if syn["with"] not in characters:
                 raise DataError(f"{char['id']}: synergy partner '{syn['with']}' not found")
+    bond_scenes = load_bond_scenes(data_dir)
+    for scene in bond_scenes:
+        if scene["character"] not in characters:
+            raise DataError(f"bond_scenes.json: character '{scene['character']}' not found")
     return {"characters": characters, "enemies": enemies, "items": items,
-            "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir)}
+            "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir),
+            "bond_scenes": bond_scenes}
