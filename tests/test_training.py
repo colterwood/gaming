@@ -27,13 +27,15 @@ def content():
 
 
 def entry():
-    return {"trained_ranks": {}, "attribute_xp": {}, "perks": [], "perk_choices": {}}
+    return {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
+            "perk_choices": {}, "energy": 100, "unspent_xp": 0}
 
 
 def game_state(content):
     state = save.new_game_state()
     for hid in ("iron_man", "captain_america"):
         state["roster"][hid] = entry()
+    state["party"] = ["iron_man", "captain_america"]
     return state
 
 
@@ -132,8 +134,29 @@ def test_training_session_grants_xp(content):
     state = game_state(content)
     result = activities.training_session(state, content, "captain_america", "strength")
     assert result["ok"]
-    assert state["energy"] == 100 - config.TRAINING_ENERGY
+    # M9: only the TRAINEE drains, scaled by the rank trained toward (rank 1
+    # -> 15 + 5 = 20 EN); teammates untouched.
+    assert state["roster"]["captain_america"]["energy"] == 80
+    assert state["roster"]["iron_man"]["energy"] == 100
     assert state["roster"]["captain_america"]["attribute_xp"]["strength"] == 40
+
+
+def test_training_costs_scale_with_rank(content):
+    assert activities.training_cost(1) == (20, 75)
+    assert activities.training_cost(2) == (25, 90)     # original §6.1 values
+    assert activities.training_cost(7) == (50, 165)    # substantially more
+
+
+def test_banked_battle_xp_double_dips(content):
+    state = game_state(content)
+    cap = state["roster"]["captain_america"]
+    cap["unspent_xp"] = 100
+    result = activities.training_session(state, content, "captain_america", "strength")
+    assert result["ok"]
+    # session grants 40 facility XP + 40 banked battle XP alongside it
+    assert cap["attribute_xp"]["strength"] == 80       # rank 1 costs 100: banked
+    assert cap["trained_ranks"].get("strength", 0) == 0
+    assert cap["unspent_xp"] == 60
 
 
 def test_training_maxed_attribute_refused_without_cost(content):

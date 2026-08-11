@@ -1,0 +1,17 @@
+{
+  "train": {
+    "label": "Attribute training",
+    "xp_per_day": 40,
+    "requires": null
+  },
+  "support": {
+    "label": "Ops support",
+    "credits_per_day": 25,
+    "requires": {"attribute": "intelligence", "min": 4}
+  },
+  "socialize": {
+    "label": "Tower socializing",
+    "bond_per_day": 15,
+    "requires": null
+  }
+}

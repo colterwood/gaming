@@ -17,12 +17,13 @@ class BattleScene:
     def __init__(self, content, hero_ids=("iron_man", "captain_america"),
                  enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
                  inventory=None, trained=None, rng=None,
-                 perk_fx=None, synergy_crit=None):
+                 perk_fx=None, synergy_crit=None, energy_frac=None):
         self.content = content
         heroes = [Combatant(content["characters"][h],
                             trained_ranks=(trained or {}).get(h),
                             perk_effects=(perk_fx or {}).get(h),
                             synergy_crit=(synergy_crit or {}).get(h, 0),
+                            energy_frac=(energy_frac or {}).get(h, 1.0),
                             is_hero=True) for h in hero_ids]
         enemies = make_enemy_group([content["enemies"][e] for e in enemy_ids])
         self.engine = BattleEngine(
@@ -97,13 +98,21 @@ class BattleScene:
             self.popups.append({"text": label, "x": pos[0], "y": pos[1],
                                 "age": 0.0, "color": color})
 
+    def _enemy_rect(self, i):
+        """Up to 4 enemies: one column. Ambushes up to 8: two columns (M9)."""
+        if len(self.engine.enemies) <= 4:
+            return pygame.Rect(config.WIDTH - 218, 74 + i * 60, 188, 52)
+        col, row = divmod(i, 4)
+        return pygame.Rect(config.WIDTH - 348 + col * 174, 60 + row * 58, 166, 50)
+
     def _position_of(self, combatant_id):
         for i, h in enumerate(self.engine.heroes):
             if h.id == combatant_id:
                 return (150, 118 + i * 56)
         for i, e in enumerate(self.engine.enemies):
             if e.id == combatant_id:
-                return (config.WIDTH - 130, 92 + i * 60)
+                rect = self._enemy_rect(i)
+                return (rect.centerx, rect.y + 18)
         return (config.WIDTH // 2, config.HEIGHT // 2)
 
     # --- update / input (logic identical to M1) ---
@@ -218,8 +227,7 @@ class BattleScene:
         for i, hero in enumerate(self.engine.heroes):
             self._draw_hero(surface, hero, pygame.Rect(30, 100 + i * 56, 180, 48))
         for i, enemy in enumerate(self.engine.enemies):
-            self._draw_enemy(surface, enemy,
-                             pygame.Rect(config.WIDTH - 218, 74 + i * 60, 188, 52))
+            self._draw_enemy(surface, enemy, self._enemy_rect(i))
 
         if self.phase == "menu":
             pixelkit.text(surface, f"{self._actor().name}'s turn", 15, "gold",

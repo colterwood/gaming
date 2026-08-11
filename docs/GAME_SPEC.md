@@ -377,6 +377,41 @@ walkable scene is rendering/input only; game logic modules stay pure.
 *AC: walk between all three floors; every §7 activity reachable via an
 interaction point; recruited heroes appear standing in the tower.*
 
+**M9 — Field ops & team systems** *(added post-POC)*.
+- **Party**: the player roams as the active team (max `PARTY_SIZE_MAX` 4) —
+  leader walks, teammates follow in a chain. Battles field the party.
+  Swapping happens in person: engage a benched character; if they hold a
+  passive task with a requirement, the outgoing teammate must meet it
+  (they take the task over) or the swap is blocked.
+- **Per-character energy**: every roster member has daily energy 0–100.
+  Team energy = the minimum across the party; team actions drain every
+  member. Below 60% a hero's combat initiative takes a penalty that
+  worsens each additional 10% down (config EN_PENALTY_*).
+- **Passive assignments**: benched characters can Train (attribute XP/day),
+  do Ops Support (credits/day; requires the attribute minimum in
+  data/passive.json), or Socialize (bond/day with the lowest-bond NPC).
+  After `ATROPHY_GRACE_DAYS` (2) consecutive days in the same spot — or
+  idle — their unworked attributes decay: banked XP drains and trained
+  ranks drop when the bank empties.
+- **Mission zones & deadlines**: battle quests carry a `location` (zone in
+  data/zones.json, danger 1–3) and `deadline_days`. Travel by Quinjet,
+  find the target squad in the zone, engage (mission energy/time §6.1).
+  Deadline expiry or battle loss fails the mission: 2-day cooldown
+  (MISSION_FAIL_COOLDOWN_DAYS) before it reactivates.
+- **Ambushes**: while walking a zone, ambush chance scales with zone
+  danger and inversely with party size. Squad size rolls 2–8 and the
+  ambush only triggers if it outnumbers the party (max 8).
+- **XP**: battle XP banks per participating hero only (KO'd participants
+  earn KO_XP_MULT 50%); banked XP is consumed as bonus progress when that
+  hero trains. Training EN/time scale with the rank being trained
+  (TRAINING_ENERGY_BASE + PER_RANK × next rank; same for minutes).
+- **Crisp text**: all text renders on the window at native resolution with
+  anti-aliasing via pixelkit's deferred text pass; pixel art stays at
+  internal res. No text is pixel-scaled.
+*AC: complete a mission end-to-end (fly, search, engage, win) with the
+party; fail one by deadline and see the cooldown; assign a benched hero
+and observe passive gains and post-grace atrophy; all text crisp.*
+
 ---
 
 ## 10. CLAUDE.md Starter (place at repo root)

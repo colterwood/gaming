@@ -58,8 +58,12 @@ TICK_REAL_SECONDS = 7               # ...per 7 real seconds
 DAILY_ENERGY = 100
 PASS_OUT_NEXT_DAY_ENERGY = 80
 
-TRAINING_ENERGY = 25
-TRAINING_MINUTES = 90
+# Training costs scale with the rank being trained (M9): rank 2 matches the
+# original §6.1 flat costs (25 EN / 90 min).
+TRAINING_ENERGY_BASE = 15
+TRAINING_ENERGY_PER_RANK = 5
+TRAINING_MINUTES_BASE = 60
+TRAINING_MINUTES_PER_RANK = 15
 MISSION_ENERGY = 40
 MISSION_MINUTES = 180
 CRAFT_ENERGY = 15
@@ -99,6 +103,27 @@ BOND_PERSONAL_QUEST_MAX = 250
 JARVIS_ENERGY_BONUS = 10            # jarvis_service flag: morning espresso
 PEPPER_SHOP_DISCOUNT = 0.8          # pepper_requisitions flag: price multiplier
 COULSON_CREDIT_MULT = 1.5           # coulson_intel flag: mission credits
+
+# --- Field ops & team systems (M9) ---
+# Initiative penalty when a hero's daily energy is low: none at >= 60%,
+# then one tier per additional 10% below.
+EN_PENALTY_THRESHOLD = 0.6
+EN_PENALTY_STEP = 0.1
+EN_PENALTY_INITIATIVE = 5           # initiative lost per tier
+EN_PENALTY_MAX_TIERS = 6
+
+KO_XP_MULT = 0.5                    # KO'd participants earn half XP
+
+AMBUSH_MAX_SIZE = 8
+AMBUSH_BASE_CHANCE = 0.010          # per walk-tick, scaled by zone danger
+AMBUSH_PARTY_BONUS = 0.006          # added per missing party member below 4
+AMBUSH_TICK_SECONDS = 0.6           # walking time between ambush rolls
+
+ATROPHY_GRACE_DAYS = 2              # same-spot days before decay starts
+ATROPHY_XP_PER_DAY = 20             # XP drained per unworked attribute
+
+MISSION_FAIL_COOLDOWN_DAYS = 2
+TRAVEL_MINUTES = 30                 # Quinjet hop tower <-> zone
 
 # --- Attributes & Training (§6.3) ---
 ATTRIBUTE_XP_PER_RANK = 100         # XP to gain trained rank N = 100 * N

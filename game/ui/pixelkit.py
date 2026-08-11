@@ -33,11 +33,23 @@ def _resolve(c):
     return color(c) if isinstance(c, str) else c
 
 
+# --- crisp text pass (spec M9): text is NOT pixel-scaled. Calls made while
+# scenes draw at internal resolution are queued, then rendered onto the
+# window at native resolution with anti-aliasing after the frame scales up.
+
+_text_queue = []
+
+
 def text(surface, txt, size, c, center=None, topleft=None, midleft=None,
          topright=None, bold=False, shadow=None):
-    """Non-anti-aliased text; optional 1px drop shadow color name."""
-    img = font(size, bold).render(txt, False, _resolve(c))
-    rect = img.get_rect()
+    """Queue crisp text at internal-resolution coordinates. Returns the
+    approximate covered rect in internal coordinates (for layout)."""
+    _text_queue.append({"txt": txt, "size": size, "color": _resolve(c),
+                        "center": center, "topleft": topleft,
+                        "midleft": midleft, "topright": topright,
+                        "bold": bold, "shadow": _resolve(shadow) if shadow else None})
+    w, h = font(size, bold).size(txt)
+    rect = pygame.Rect(0, 0, w, h)
     if center:
         rect.center = center
     elif topleft:
@@ -46,11 +58,30 @@ def text(surface, txt, size, c, center=None, topleft=None, midleft=None,
         rect.midleft = midleft
     elif topright:
         rect.topright = topright
-    if shadow:
-        sh = font(size, bold).render(txt, False, _resolve(shadow))
-        surface.blit(sh, (rect.x + 1, rect.y + 1))
-    surface.blit(img, rect)
     return rect
+
+
+def drop_queued_text():
+    """Discard queued text (e.g. a modal cutscene hides the HUD text)."""
+    _text_queue.clear()
+
+
+def flush_text(window, scale):
+    """Render all queued text crisp onto the scaled-up window frame."""
+    for op in _text_queue:
+        f = font(op["size"] * scale, op["bold"])
+        img = f.render(op["txt"], True, op["color"])
+        rect = img.get_rect()
+        for anchor in ("center", "topleft", "midleft", "topright"):
+            pos = op[anchor]
+            if pos:
+                setattr(rect, anchor, (pos[0] * scale, pos[1] * scale))
+                break
+        if op["shadow"]:
+            sh = f.render(op["txt"], True, op["shadow"])
+            window.blit(sh, (rect.x + scale, rect.y + scale))
+        window.blit(img, rect)
+    _text_queue.clear()
 
 
 def panel(surface, rect, fill="paper", border="ink", shadow=True):

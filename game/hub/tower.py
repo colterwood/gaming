@@ -1,18 +1,20 @@
-"""Walkable Avengers Tower (spec §9 M8), 16-bit style. Rendering + input
-only — activity/bond/story rules live in game.hub.activities, game.hub.story,
-game.social, game.core.
+"""Walkable world (spec §9 M8/M9), 16-bit style: the Avengers Tower floors
+plus the city mission zones. Rendering + input only — rules live in
+game.hub.* / game.social / game.core.
 
-Three tile-map floors; arrow keys move the player, Enter interacts with the
-nearest station or character. Menus open as overlays on top of the scene.
+The player roams as the active TEAM: the leader walks, teammates follow in
+a chain. Enter interacts with the nearest station or character.
 """
+
+import random
 
 import pygame
 
 from game import config
 from game.core import calendar as cal
-from game.core import clock
+from game.core import clock, energy
 from game.core.state_machine import GameState
-from game.hub import activities, story
+from game.hub import activities, field, party as party_mod, passive, story
 from game.social import bonds, events
 from game.ui import pixelkit, sprites, widgets
 
@@ -21,16 +23,19 @@ HUD_H = 20
 MAP_W = 40
 MAP_H = 21
 
-WALKABLE = {".", ",", "m"}
+WALKABLE = {".", ",", "m", "=", "_", "H"}
 TILE_NAMES = {"#": "wall", "w": "window", "E": "elevator", ".": "floor",
               ",": "carpet", "m": "mat", "S": "counter", "b": "board",
               "O": "console", "Z": "bed", "c": "couch", "t": "table",
-              "p": "plant", "r": "rack"}
+              "p": "plant", "r": "rack", "=": "road", "_": "sidewalk",
+              "x": "crate", "H": "helipad"}
+ZONE_TILE_OVERRIDES = {"p": "tree", ".": "sidewalk"}
 STATION_KINDS = {"E": "elevator", "S": "shop", "b": "board", "O": "ops",
-                 "Z": "bed", "r": "training"}
+                 "Z": "bed", "r": "training", "H": "helipad"}
 STATION_LABELS = {"elevator": "Elevator", "shop": "Tower Shop",
                   "board": "Assignment Board", "ops": "Ops Console",
-                  "bed": "Sleep", "training": "Training Rack"}
+                  "bed": "Sleep", "training": "Training Rack",
+                  "helipad": "Return to Tower"}
 
 FLOORS = {
     "common": {
@@ -56,7 +61,6 @@ FLOORS = {
             "#p....................................p#",
             "#......................................#",
             "#......................................#",
-            "########################################",
             "########################################",
         ],
         "spawn": (17, 2),
@@ -84,7 +88,6 @@ FLOORS = {
             "#......................................#",
             "#......................................#",
             "########################################",
-            "########################################",
         ],
         "spawn": (17, 2),
     },
@@ -111,28 +114,25 @@ FLOORS = {
             "#......................................#",
             "#......................................#",
             "########################################",
-            "########################################",
         ],
         "spawn": (17, 2),
     },
 }
 
-def _normalize_maps():
-    """Pad/trim every floor map to exactly MAP_W x MAP_H, walls at edges."""
-    for floor in FLOORS.values():
-        rows = [r.ljust(MAP_W, "#")[:MAP_W] for r in floor["map"]]
-        while len(rows) < MAP_H:
-            rows.append("#" * MAP_W)
-        rows = rows[:MAP_H]
-        rows[0] = "#" * MAP_W
-        rows[-1] = "#" * MAP_W
-        rows = [("#" + r[1:-1] + "#") for r in rows]
-        floor["map"] = rows
+
+def _normalize(rows):
+    rows = [r.ljust(MAP_W, "#")[:MAP_W] for r in rows]
+    while len(rows) < MAP_H:
+        rows.append("#" * MAP_W)
+    rows = rows[:MAP_H]
+    rows[0] = "#" * MAP_W
+    rows[-1] = "#" * MAP_W
+    return [("#" + r[1:-1] + "#") for r in rows]
 
 
-_normalize_maps()
+for _floor in FLOORS.values():
+    _floor["map"] = _normalize(_floor["map"])
 
-# Where characters stand: floor -> [(char_id or role, tile_x, tile_y)]
 FLAVOR = {
     "iron_man": [
         "TONY: JARVIS ran the numbers. We're statistically overdue for a Tuesday.",
@@ -156,101 +156,169 @@ FLAVOR = {
     ],
 }
 
+# Benched heroes stand where their assignment happens
+ASSIGNMENT_SPOTS = {
+    "train": ("training", 34, 8),
+    "support": ("ops", 10, 6),
+    "socialize": ("common", 22, 12),
+    None: ("common", 8, 15),        # idle: loafing by the bunks
+}
+
 
 class HubScene:
     def __init__(self, content):
         self.content = content
+        self.area = "tower"         # "tower" | zone id
         self.floor = "common"
+        self._zone_maps = {}
         spawn = FLOORS["common"]["spawn"]
         self.px = spawn[0] * TILE + TILE // 2
         self.py = HUD_H + spawn[1] * TILE + TILE // 2
+        self.trail = []             # leader position history for followers
         self.facing_left = False
         self.walk_bob = 0.0
         self.messages = []
         self.tick_accum = 0.0
+        self.ambush_accum = 0.0
+        self.rng = random.Random()
         # modes: normal | submenu | train_attr | perk_choice | scene
         self.mode = "normal"
-        self.submenu = None         # {"title", "items": [(label, disabled, cb)], "index"}
+        self.submenu = None
         self.train_hero_id = None
         self.perk_ctx = None
         self.scene = None
         self.scene_line = 0
-        self.submenu_index = 0      # used by train_attr / perk_choice overlays
+        self.submenu_index = 0
 
     # ------------------------------------------------------------------ util
 
     def log(self, message):
         self.messages.append(message)
-        self.messages = self.messages[-2:]
+        self.messages = self.messages[-3:]
 
     def reset_modes(self):
-        """Back to walking (e.g. after a forced pass-out mid-menu). A pending
-        perk choice re-prompts on the next Training Rack visit."""
         self.mode = "normal"
         self.submenu = None
         self.submenu_index = 0
         self.train_hero_id = None
         self.perk_ctx = None
 
+    def return_to_tower(self):
+        self.reset_modes()
+        if self.area != "tower":
+            self.area = "tower"
+            self.floor = "common"
+        self._place_at_spawn()
+
+    def _place_at_spawn(self):
+        if self.area == "tower":
+            spawn = FLOORS[self.floor]["spawn"]
+        else:
+            spawn = self.content["zones"][self.area]["spawn"]
+        self.px = spawn[0] * TILE + TILE // 2
+        self.py = HUD_H + spawn[1] * TILE + TILE // 2
+        self.trail = []
+
+    def _zone(self):
+        return self.content["zones"].get(self.area) if self.area != "tower" else None
+
     def _map(self):
-        return FLOORS[self.floor]["map"]
+        if self.area == "tower":
+            return FLOORS[self.floor]["map"]
+        if self.area not in self._zone_maps:
+            self._zone_maps[self.area] = _normalize(self.content["zones"][self.area]["map"])
+        return self._zone_maps[self.area]
+
+    def _tile_name(self, ch):
+        if self.area != "tower" and ch in ZONE_TILE_OVERRIDES:
+            return ZONE_TILE_OVERRIDES[ch]
+        return TILE_NAMES.get(ch, "floor")
 
     def _solid(self, px, py):
         tx, ty = int(px // TILE), int((py - HUD_H) // TILE)
         if not (0 <= tx < MAP_W and 0 <= ty < MAP_H):
             return True
-        row = self._map()[ty]
-        ch = row[tx] if tx < len(row) else "#"
+        ch = self._map()[ty][tx]
         return ch not in WALKABLE
 
+    # -------------------------------------------------------------- entities
+
+    def _party(self, state):
+        return party_mod.get_party(state)
+
     def _characters_here(self, state):
-        """(char_id, px, py) for everyone standing on the current floor."""
+        """(char_id, px, py) for benched roster + NPCs on this screen."""
         placed = []
 
         def put(cid, tx, ty):
             placed.append((cid, tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2))
 
+        if self.area != "tower":
+            return placed
         roster = state.get("roster", {})
+        active = set(self._party(state))
         flags = state.get("story_flags", {})
         if self.floor == "common":
             put("jarvis", 4, 6)
             put("coulson", 33, 10)
-            put("iron_man", 10, 3)
-            put("captain_america", 24, 8)
-            if "ant_man" in roster:
-                put("ant_man", 14, 3)
-            if "hulk" in roster:
-                put("hulk", 29, 3)
-        elif self.floor == "training":
-            if flags.get("hulk_arrived") and "hulk" not in roster:
-                put("hulk", 8, 12)
         elif self.floor == "ops":
             put("pepper_potts", 12, 5)
+        if flags.get("hulk_arrived") and "hulk" not in roster \
+                and self.floor == "training":
+            put("hulk", 8, 12)
+        bench_offsets = 0
+        for hero_id in sorted(roster):
+            if hero_id in active:
+                continue
+            assignment = roster[hero_id].get("assignment")
+            kind = assignment["kind"] if assignment else None
+            floor, tx, ty = ASSIGNMENT_SPOTS.get(kind, ASSIGNMENT_SPOTS[None])
+            if floor == self.floor:
+                put(hero_id, tx + bench_offsets, ty)
+                bench_offsets += 2
         return placed
+
+    def _mission_target(self, state):
+        """(quest, x, y) if the current mission's squad is in this zone."""
+        zone = self._zone()
+        if not zone:
+            return None
+        quest = story.current_quest(state, self.content["story"])
+        if (not quest or quest["kind"] != "battle"
+                or quest.get("location") != zone["id"]
+                or story.is_locked(state, quest)):
+            return None
+        tx, ty = zone["target_spot"]
+        return (quest, tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2)
 
     def _stations_here(self):
         found = []
         for ty, row in enumerate(self._map()):
             for tx, ch in enumerate(row):
                 kind = STATION_KINDS.get(ch)
-                if kind:
+                if kind and (self.area == "tower") == (kind != "helipad"):
                     found.append((kind, tx * TILE + TILE // 2,
                                   HUD_H + ty * TILE + TILE // 2))
         return found
 
     def _nearest_interaction(self, state):
-        """('char', id, label) or ('station', kind, label) within reach."""
         best = None
         best_d = 26 ** 2
         for cid, x, y in self._characters_here(state):
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
-                name = self.content["characters"][cid]["name"]
-                best, best_d = ("char", cid, name), d
+                best, best_d = ("char", cid,
+                                self.content["characters"][cid]["name"]), d
         for kind, x, y in self._stations_here():
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
                 best, best_d = ("station", kind, STATION_LABELS[kind]), d
+        target = self._mission_target(state)
+        if target:
+            quest, x, y = target
+            d = (x - self.px) ** 2 + (y - self.py) ** 2
+            if d < 34 ** 2 and d < best_d:
+                best = ("target", quest["id"], f"Engage: {quest['name']}")
         return best
 
     # ---------------------------------------------------------------- update
@@ -266,16 +334,16 @@ class HubScene:
                 self.scene_line = 0
                 self.mode = "scene"
                 return
-            self._move(dt)
+            self._move(dt, app)
         self.tick_accum += dt
         if self.tick_accum >= config.TICK_REAL_SECONDS:
             self.tick_accum -= config.TICK_REAL_SECONDS
             clock.advance(state, config.TICK_GAME_MINUTES)
         if activities.should_pass_out(state):
-            self.log("You pass out...")
+            self.log("The team passes out...")
             app.go_to_sleep(passed_out=True)
 
-    def _move(self, dt):
+    def _move(self, dt, app):
         keys = pygame.key.get_pressed()
         dx = (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * 90 * dt
         dy = (keys[pygame.K_DOWN] - keys[pygame.K_UP]) * 90 * dt
@@ -283,13 +351,32 @@ class HubScene:
             self.facing_left = True
         elif dx > 0:
             self.facing_left = False
-        if dx or dy:
-            self.walk_bob += dt * 10
+        moved = False
         for axis_dx, axis_dy in ((dx, 0), (0, dy)):
             nx, ny = self.px + axis_dx, self.py + axis_dy
             feet = [(nx - 4, ny + 6), (nx + 4, ny + 6), (nx - 4, ny), (nx + 4, ny)]
-            if not any(self._solid(fx, fy) for fx, fy in feet):
+            if (axis_dx or axis_dy) and not any(self._solid(fx, fy) for fx, fy in feet):
                 self.px, self.py = nx, ny
+                moved = True
+        if moved:
+            self.walk_bob += dt * 10
+            self.trail.insert(0, (self.px, self.py, self.facing_left))
+            del self.trail[64:]
+            self._maybe_ambush(dt, app)
+
+    def _maybe_ambush(self, dt, app):
+        zone = self._zone()
+        if not zone:
+            return
+        self.ambush_accum += dt
+        if self.ambush_accum < config.AMBUSH_TICK_SECONDS:
+            return
+        self.ambush_accum = 0.0
+        squad = field.roll_ambush(zone["danger"], len(self._party(app.game_state)),
+                                  self.rng)
+        if squad:
+            self.log(f"AMBUSH! A HYDRA squad of {len(squad)} jumps the team!")
+            app.start_battle(enemy_ids=squad, ambush=True)
 
     # ----------------------------------------------------------------- input
 
@@ -311,7 +398,6 @@ class HubScene:
         if self.mode == "perk_choice":
             self._perk_choice_key(app, key)
             return
-        # normal
         if key == pygame.K_RETURN:
             hit = self._nearest_interaction(app.game_state)
             if hit:
@@ -350,15 +436,14 @@ class HubScene:
         kind, ident, label = hit
         if kind == "char":
             self._interact_char(app, ident)
-            return
-        state = app.game_state
-        if ident == "bed":
+        elif kind == "target":
+            self._engage_target(app)
+        elif ident == "bed":
             app.go_to_sleep(passed_out=False)
         elif ident == "elevator":
-            items = [(FLOORS[f]["name"], f == self.floor,
-                      (lambda a, fl=f: self._switch_floor(fl)))
-                     for f in ("common", "training", "ops")]
-            self._open_submenu("Elevator", items)
+            self._open_elevator(app)
+        elif ident == "helipad":
+            self._travel(app, "tower")
         elif ident == "shop":
             self._open_shop(app)
         elif ident == "board":
@@ -368,31 +453,85 @@ class HubScene:
         elif ident == "ops":
             self._open_ops(app)
 
+    def _open_elevator(self, app):
+        items = [(FLOORS[f]["name"], self.floor == f and self.area == "tower",
+                  (lambda a, fl=f: self._switch_floor(fl)))
+                 for f in ("common", "training", "ops")]
+        for zone in sorted(self.content["zones"].values(), key=lambda z: z["danger"]):
+            danger = "!" * zone["danger"]
+            items.append((f"Quinjet: {zone['name']}  [{danger}]", False,
+                          (lambda a, zid=zone["id"]: self._travel(a, zid))))
+        self._open_submenu("Elevator", items)
+
     def _switch_floor(self, floor):
+        self.area = "tower"
         self.floor = floor
-        spawn = FLOORS[floor]["spawn"]
-        self.px = spawn[0] * TILE + TILE // 2
-        self.py = HUD_H + spawn[1] * TILE + TILE // 2
+        self._place_at_spawn()
         self.reset_modes()
         self.log(f"{FLOORS[floor]['name']}.")
+
+    def _travel(self, app, destination):
+        clock.advance(app.game_state, config.TRAVEL_MINUTES)
+        self.reset_modes()
+        if destination == "tower":
+            self.area = "tower"
+            self.floor = "common"
+            self.log("Quinjet home. Tower sweet tower.")
+        else:
+            self.area = destination
+            zone = self.content["zones"][destination]
+            self.log(f"{zone['name']} - danger {'!' * zone['danger']}. "
+                     f"Stay sharp.")
+        self._place_at_spawn()
+        self._after_action(app)
+
+    def _engage_target(self, app):
+        state = app.game_state
+        quest = story.current_quest(state, self.content["story"])
+        if not quest:
+            return
+        result = activities.launch_mission(state)
+        self.log(result["message"])
+        self.reset_modes()
+        if result.get("launch_battle"):
+            app.start_battle(enemy_ids=quest["enemies"], quest=quest)
+            return
+        self._after_action(app)
 
     def _interact_char(self, app, char_id):
         state = app.game_state
         char = self.content["characters"][char_id]
-        if not bonds.bondable(char):
-            lines = FLAVOR.get(char_id, ["..."])
-            self.log(lines[(state["day"] + len(char_id)) % len(lines)])
-            return
-        bond = bonds.ensure_bond(state, char_id)
-        capped = bond["gifts_this_week"] >= config.GIFTS_PER_WEEK_MAX
-        items = [
-            ("Talk", bond["talked_today"], lambda a: self._talk(a, char_id)),
-            ("Give Gift" + ("  [week limit]" if capped else ""), capped,
-             lambda a: self._open_gift_menu(a, char_id)),
-            ("Never mind", False, None),
-        ]
-        level = bonds.bond_level(bond["points"])
-        self._open_submenu(f"{char['name']} - Bond {level}", items)
+        entry = state["roster"].get(char_id)
+        items = []
+        if bonds.bondable(char):
+            bond = bonds.ensure_bond(state, char_id)
+            capped = bond["gifts_this_week"] >= config.GIFTS_PER_WEEK_MAX
+            items.append(("Talk", bond["talked_today"],
+                          lambda a: self._talk(a, char_id)))
+            items.append(("Give Gift" + ("  [week limit]" if capped else ""),
+                          capped, lambda a: self._open_gift_menu(a, char_id)))
+        else:
+            items.append(("Chat", False, lambda a: self._flavor(a, char_id)))
+        if entry is not None and not party_mod.in_party(state, char_id):
+            items.append(("Swap into team...", False,
+                          lambda a: self._open_swap_menu(a, char_id)))
+            items.append(("Assign task...", False,
+                          lambda a: self._open_assign_menu(a, char_id)))
+            if entry.get("assignment"):
+                items.append(("Relieve from task", False,
+                              lambda a: self._clear_assignment(a, char_id)))
+        items.append(("Never mind", False, None))
+        title = char["name"]
+        if bonds.bondable(char):
+            title += f" - Bond {bonds.bond_level(bonds.ensure_bond(state, char_id)['points'])}"
+        if entry is not None:
+            title += f"  EN {energy.hero_energy(state, char_id)}"
+        self._open_submenu(title, items)
+
+    def _flavor(self, app, char_id):
+        lines = FLAVOR.get(char_id, ["..."])
+        self.log(lines[(app.game_state["day"] + len(char_id)) % len(lines)])
+        self.reset_modes()
 
     def _talk(self, app, char_id):
         state = app.game_state
@@ -444,6 +583,68 @@ class HubScene:
         self.reset_modes()
         self._after_action(app)
 
+    def _open_swap_menu(self, app, incoming_id):
+        state = app.game_state
+        incoming = self.content["characters"][incoming_id]["name"]
+        items = []
+        if len(self._party(state)) < config.PARTY_SIZE_MAX:
+            items.append((f"Add {incoming} (open slot)", False,
+                          (lambda a: self._add_to_party(a, incoming_id))))
+        for out_id in self._party(state):
+            ok, reason = party_mod.can_swap_in(self.content, state,
+                                               incoming_id, out_id)
+            out_name = self.content["characters"][out_id]["name"]
+            label = f"Swap out {out_name}"
+            if not ok:
+                label += f"  [{reason}]"
+            items.append((label, not ok,
+                          (lambda a, o=out_id: self._do_swap(a, incoming_id, o))))
+        items.append(("Never mind", False, None))
+        self._open_submenu(f"Team change: {incoming} in", items)
+
+    def _add_to_party(self, app, hero_id):
+        ok, message = party_mod.add_to_party(self.content, app.game_state, hero_id)
+        self.log(message)
+        energy.sync(app.game_state)
+        self.reset_modes()
+
+    def _do_swap(self, app, incoming_id, outgoing_id):
+        ok, message = party_mod.swap(self.content, app.game_state,
+                                     incoming_id, outgoing_id)
+        self.log(message)
+        energy.sync(app.game_state)
+        self.reset_modes()
+
+    def _open_assign_menu(self, app, hero_id):
+        state = app.game_state
+        name = self.content["characters"][hero_id]["name"]
+        items = []
+        for attribute in config.ATTRIBUTES:
+            items.append((f"Train {attribute.title()} (+40 xp/day)", False,
+                          (lambda a, attr=attribute:
+                           self._do_assign(a, hero_id, "train", attr))))
+        for kind in ("support", "socialize"):
+            spec = self.content["passive"][kind]
+            requirement = spec.get("requires")
+            suffix = ""
+            if requirement:
+                suffix = f"  [{requirement['attribute']} {requirement['min']}+]"
+            items.append((f"{spec['label']}{suffix}", False,
+                          (lambda a, k=kind: self._do_assign(a, hero_id, k))))
+        items.append(("Never mind", False, None))
+        self._open_submenu(f"Assign {name}", items)
+
+    def _do_assign(self, app, hero_id, kind, attribute=None):
+        ok, message = passive.assign(self.content, app.game_state, hero_id,
+                                     kind, attribute)
+        self.log(message)
+        self.reset_modes()
+
+    def _clear_assignment(self, app, hero_id):
+        passive.clear(app.game_state, hero_id)
+        self.log(f"{self.content['characters'][hero_id]['name']} stands down.")
+        self.reset_modes()
+
     def _open_shop(self, app):
         state = app.game_state
         discount = activities.shop_discount(state, self.content["calendar"])
@@ -463,7 +664,7 @@ class HubScene:
         discount = activities.shop_discount(state, self.content["calendar"])
         self.log(activities.buy_item(state, item, discount)["message"])
         index = self.submenu["index"] if self.submenu else 0
-        self._open_shop(app)                    # refresh credits in title
+        self._open_shop(app)
         self.submenu["index"] = min(index, len(self.submenu["items"]) - 1)
 
     def _open_board(self, app):
@@ -474,11 +675,11 @@ class HubScene:
             label = f"{task['name']} ({task['energy']} EN, +{task['credits']} cr)"
             if done:
                 label += "  [done]"
-            items.append((label, done, (lambda a, t=task: self._do_assignment(a, t))))
+            items.append((label, done, (lambda a, t=task: self._do_board_task(a, t))))
         items.append(("Close", False, None))
         self._open_submenu("Assignment Board", items)
 
-    def _do_assignment(self, app, task):
+    def _do_board_task(self, app, task):
         self.log(activities.do_assignment(app.game_state, task)["message"])
         self.reset_modes()
         self._after_action(app)
@@ -486,14 +687,28 @@ class HubScene:
     def _open_ops(self, app):
         state = app.game_state
         quest = story.current_quest(state, self.content["story"])
-        done = sum(1 for v in state.get("quests", {}).values() if v["status"] == "done")
+        done = sum(1 for v in state.get("quests", {}).values()
+                   if v["status"] == "done")
         items = []
         if quest is None:
             items.append(("Chapters 1-2 complete!", True, None))
         elif quest["kind"] == "battle":
-            tag = "BOSS - " if quest.get("boss") else "Mission - "
-            items.append((f"{tag}{quest['name']} ({config.MISSION_ENERGY} EN)", False,
-                          (lambda a, q=quest: self._launch_story_battle(a, q))))
+            zone = self.content["zones"].get(quest.get("location", ""), {})
+            if story.is_locked(state, quest):
+                entry = state["quests"][quest["id"]]
+                wait = entry.get("retry_day", 0) - story.abs_day(state)
+                items.append((f"FAILED - {quest['name']} (retry in {wait}d)",
+                              True, None))
+            else:
+                tag = "BOSS - " if quest.get("boss") else "Mission - "
+                items.append((f"{tag}{quest['name']}", True, None))
+                left = story.days_left(state, quest)
+                where = zone.get("name", "?")
+                danger = "!" * zone.get("danger", 0)
+                items.append((f"  Where: {where}  [{danger}]", True, None))
+                items.append((f"  Deadline: {left} day(s) left", True, None))
+                items.append((f"  Fly to {where} now", False,
+                              (lambda a, z=quest["location"]: self._travel(a, z))))
             items.append((quest["desc"][:44], True, None))
         else:
             items.append((f"Task - {quest['name']} ({quest['energy']} EN)", False,
@@ -504,17 +719,9 @@ class HubScene:
         items.append(("Close", False, None))
         self._open_submenu("Ops Console", items)
 
-    def _launch_story_battle(self, app, quest):
-        result = activities.launch_mission(app.game_state)
-        self.log(result["message"])
-        self.reset_modes()
-        if result.get("launch_battle"):
-            app.start_battle(enemy_ids=quest["enemies"], quest=quest)
-            return
-        self._after_action(app)
-
     def _do_story_task(self, app, quest):
-        self.log(story.do_hub_task(app.game_state, quest, self.content["story"])["message"])
+        self.log(story.do_hub_task(app.game_state, quest,
+                                   self.content["story"])["message"])
         self.reset_modes()
         self._after_action(app)
 
@@ -524,10 +731,12 @@ class HubScene:
             return
         from game.progression import attributes as attrs
         xp = attrs.session_xp(state, self.content["calendar"])
-        items = [(f"Train {self.content['characters'][hid]['name']} "
-                  f"({config.TRAINING_ENERGY} EN, +{xp} XP)", False,
-                  (lambda a, h=hid: self._pick_train_hero(a, h)))
-                 for hid in sorted(state.get("roster", {}))]
+        items = []
+        for hid in sorted(state.get("roster", {})):
+            en = energy.hero_energy(state, hid)
+            items.append((f"Train {self.content['characters'][hid]['name']} "
+                          f"(EN {en}, +{xp} XP)", False,
+                          (lambda a, h=hid: self._pick_train_hero(a, h))))
         items.append(("Close", False, None))
         self._open_submenu("Training Rack", items)
 
@@ -541,7 +750,7 @@ class HubScene:
 
     def _after_action(self, app):
         if activities.should_pass_out(app.game_state):
-            self.log("You pass out...")
+            self.log("The team passes out...")
             app.go_to_sleep(passed_out=True)
 
     # ------------------------------------------- training + perks (overlays)
@@ -578,7 +787,9 @@ class HubScene:
             else:
                 banked = entry.get("attribute_xp", {}).get(attribute, 0)
                 cost = attrs.xp_for_rank(trained + 1)
-                labels.append(f"{attribute.title()}  {eff}/7  (+{trained})  {banked}/{cost}xp")
+                en_cost, minutes = activities.training_cost(trained + 1)
+                labels.append(f"{attribute.title()}  {eff}/7  {banked}/{cost}xp"
+                              f"  ({en_cost}EN {minutes}m)")
         return labels
 
     def _train_attr_key(self, app, key):
@@ -595,10 +806,11 @@ class HubScene:
             result = activities.training_session(state, self.content,
                                                  self.train_hero_id, attribute)
             self.log(result["message"])
+            energy.sync(state)
             if result.get("perk_pending"):
                 self._open_pending_perk(state, self.train_hero_id)
             elif activities.should_pass_out(state):
-                self.log("You pass out...")
+                self.log("The team passes out...")
                 self.reset_modes()
                 app.go_to_sleep(passed_out=True)
 
@@ -621,7 +833,6 @@ class HubScene:
             if not self._open_pending_perk(app.game_state, ctx["hero_id"]):
                 self.mode = "train_attr"
                 self.submenu_index = 0
-        # no Esc: the perk choice is part of the rank-up
 
     # ------------------------------------------------------------------ draw
 
@@ -634,7 +845,7 @@ class HubScene:
         self._draw_prompt(surface, state)
         for i, msg in enumerate(self.messages):
             pixelkit.text(surface, msg, 12, "white",
-                          topleft=(6, config.HEIGHT - 30 + i * 13), shadow="ink")
+                          topleft=(6, config.HEIGHT - 42 + i * 13), shadow="ink")
 
         if self.mode == "submenu" and self.submenu:
             self._draw_submenu(surface, self.submenu["title"],
@@ -649,7 +860,8 @@ class HubScene:
             ctx = self.perk_ctx
             hero = self.content["characters"][ctx["hero_id"]]
             self._draw_submenu(
-                surface, f"{hero['name']} - {ctx['attribute'].title()} rank {ctx['tier']} perk!",
+                surface,
+                f"{hero['name']} - {ctx['attribute'].title()} rank {ctx['tier']} perk!",
                 [f"{p['name']} - {p['blurb']}" for p in ctx["options"]],
                 self.submenu_index)
         elif self.mode == "scene" and self.scene:
@@ -658,17 +870,28 @@ class HubScene:
     def _draw_map(self, surface):
         for ty, row in enumerate(self._map()):
             for tx in range(MAP_W):
-                ch = row[tx] if tx < len(row) else "#"
-                name = TILE_NAMES.get(ch, "floor")
-                surface.blit(sprites.tile(name), (tx * TILE, HUD_H + ty * TILE))
+                surface.blit(sprites.tile(self._tile_name(row[tx])),
+                             (tx * TILE, HUD_H + ty * TILE))
 
     def _draw_entities(self, surface, state):
-        entities = [(cid, x, y, False) for cid, x, y in self._characters_here(state)]
-        entities.append(("player", self.px, self.py, self.facing_left))
+        entities = [(cid, x, y, False, 0)
+                    for cid, x, y in self._characters_here(state)]
+        target = self._mission_target(state)
+        if target:
+            _, x, y = target
+            entities.append(("hydra_squad", x, y, False, 0))
+        party = self._party(state)
         bob = int(self.walk_bob) % 2
-        for cid, x, y, flip in sorted(entities, key=lambda e: e[2]):
+        for i, hero_id in enumerate(party):
+            if i == 0:
+                entities.append((hero_id, self.px, self.py, self.facing_left, bob))
+            else:
+                idx = min(len(self.trail) - 1, i * 9 - 1)
+                if idx >= 0:
+                    x, y, flip = self.trail[idx]
+                    entities.append((hero_id, x, y, flip, bob if idx < 30 else 0))
+        for cid, x, y, flip, oy in sorted(entities, key=lambda e: e[2]):
             spr = sprites.standing(cid, flip=flip)
-            oy = bob if cid == "player" else 0
             surface.blit(spr, (int(x) - 6, int(y) - 12 - oy))
             pygame.draw.ellipse(surface, pixelkit.color("shadow"),
                                 pygame.Rect(int(x) - 5, int(y) + 4, 10, 3))
@@ -681,17 +904,23 @@ class HubScene:
         pixelkit.text(surface, f"Issue {state['issue']} Day {state['day']}", 13,
                       "white", topleft=(6, 5))
         pixelkit.text(surface, clock.format_time(state["time_minutes"]), 13,
-                      "gold", center=(config.WIDTH // 2 - 60, 10))
-        widgets.bar(surface, pygame.Rect(config.WIDTH // 2, 5, 110, 10),
-                    state["energy"] / config.DAILY_ENERGY, "green",
-                    label=f"{state['energy']}")
+                      "gold", center=(config.WIDTH // 2 - 70, 10))
+        team_en = energy.team_energy(state)
+        widgets.bar(surface, pygame.Rect(config.WIDTH // 2 - 10, 5, 100, 10),
+                    team_en / config.DAILY_ENERGY, "green",
+                    label=f"{team_en}")
         pixelkit.text(surface, f"{state['credits']} cr", 13, "gold",
                       topright=(config.WIDTH - 6, 5))
-        pixelkit.text(surface, FLOORS[self.floor]["name"], 13, "steel_light",
-                      topright=(config.WIDTH - 90, 5))
+        zone = self._zone()
+        if zone:
+            pixelkit.text(surface, f"{zone['name']} [{'!' * zone['danger']}]", 13,
+                          "red", topright=(config.WIDTH - 70, 5))
+        else:
+            pixelkit.text(surface, FLOORS[self.floor]["name"], 13, "steel_light",
+                          topright=(config.WIDTH - 70, 5))
         for ev in cal.active_events(state, self.content["calendar"]):
             pixelkit.text(surface, ev["name"], 12, "red",
-                          center=(config.WIDTH // 2 + 160, 10), shadow="ink")
+                          center=(config.WIDTH // 2 + 170, 10), shadow="ink")
 
     def _draw_prompt(self, surface, state):
         if self.mode != "normal":
@@ -701,7 +930,7 @@ class HubScene:
             return
         _, _, label = hit
         txt = f"[Enter] {label}"
-        w = pixelkit.font(12).size(txt)[0] + 10
+        w = pixelkit.font(12).size(txt)[0] + 12
         box = pygame.Rect(int(self.px) - w // 2, int(self.py) - 30, w, 13)
         box.clamp_ip(surface.get_rect())
         pygame.draw.rect(surface, pixelkit.color("ink"), box)
@@ -709,12 +938,12 @@ class HubScene:
         pixelkit.text(surface, txt, 12, "white", center=box.center)
 
     def _draw_submenu(self, surface, title, labels, selected_index, disabled=()):
-        overlay = pygame.Rect(160, 70, 320, 220)
+        overlay = pygame.Rect(150, 60, 340, 240)
         pixelkit.panel(surface, overlay, fill="navy", border="gold")
         pixelkit.text(surface, title, 15, "gold", bold=True,
                       topleft=(overlay.x + 10, overlay.y + 7), shadow="ink")
         labels = labels or ["(empty)"]
-        visible = 8
+        visible = 9
         selected = selected_index % len(labels)
         first = max(0, min(selected - visible + 1, len(labels) - visible)) \
             if len(labels) > visible else 0
@@ -738,6 +967,7 @@ class HubScene:
                       center=(overlay.centerx, overlay.bottom - 11))
 
     def _draw_scene(self, surface):
+        pixelkit.drop_queued_text()     # cutscene hides world text
         shade = pygame.Surface((config.WIDTH, config.HEIGHT), pygame.SRCALPHA)
         shade.fill((0, 0, 0, 170))
         surface.blit(shade, (0, 0))

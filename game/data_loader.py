@@ -313,6 +313,53 @@ def load_story(data_dir=None):
     return story
 
 
+def load_zones(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "zones.json")
+    zones = _load_json(path)
+    if not isinstance(zones, list):
+        raise DataError("zones.json: top-level JSON must be a list")
+    seen = set()
+    for zone in zones:
+        if not isinstance(zone, dict):
+            raise DataError("zones.json: each zone must be an object")
+        zw = f"zones.json zone '{zone.get('id', '?')}'"
+        _require(zone, "id", str, zw)
+        _require(zone, "name", str, zw)
+        danger = _require(zone, "danger", int, zw)
+        if not 1 <= danger <= 3:
+            raise DataError(f"{zw}: danger must be 1..3")
+        zone_map = _require(zone, "map", list, zw)
+        if not zone_map or not all(isinstance(r, str) for r in zone_map):
+            raise DataError(f"{zw}: map must be a non-empty list of strings")
+        for key in ("spawn", "target_spot"):
+            point = _require(zone, key, list, zw)
+            if len(point) != 2 or not all(isinstance(v, int) for v in point):
+                raise DataError(f"{zw}: {key} must be [x, y]")
+        if zone["id"] in seen:
+            raise DataError(f"{zw}: duplicate id")
+        seen.add(zone["id"])
+    return {z["id"]: z for z in zones}
+
+
+def load_passive(data_dir=None):
+    path = os.path.join(data_dir or DATA_DIR, "passive.json")
+    passive = _load_json(path)
+    if not isinstance(passive, dict):
+        raise DataError("passive.json: top-level JSON must be an object")
+    for kind, spec in passive.items():
+        pw = f"passive.json '{kind}'"
+        if not isinstance(spec, dict):
+            raise DataError(f"{pw}: must be an object")
+        _require(spec, "label", str, pw)
+        requirement = spec.get("requires")
+        if requirement is not None:
+            _require(requirement, "attribute", str, pw)
+            if requirement["attribute"] not in config.ATTRIBUTES:
+                raise DataError(f"{pw}: unknown attribute in requires")
+            _require(requirement, "min", int, pw)
+    return passive
+
+
 def load_all(data_dir=None):
     """Load and cross-validate all game content."""
     characters = load_characters(data_dir)
@@ -335,12 +382,20 @@ def load_all(data_dir=None):
         if scene["character"] not in characters:
             raise DataError(f"bond_scenes.json: character '{scene['character']}' not found")
     story = load_story(data_dir)
+    zones = load_zones(data_dir)
     for quest in story:
         for enemy_id in quest.get("enemies", []):
             if enemy_id not in enemies:
                 raise DataError(f"story.json '{quest['id']}': enemy '{enemy_id}' not found")
         if quest.get("recruit") and quest["recruit"] not in characters:
             raise DataError(f"story.json '{quest['id']}': recruit '{quest['recruit']}' not found")
+        if quest["kind"] == "battle":
+            if quest.get("location") and quest["location"] not in zones:
+                raise DataError(f"story.json '{quest['id']}': zone '{quest['location']}' not found")
+            if quest.get("deadline_days") is not None and (
+                    not isinstance(quest["deadline_days"], int) or quest["deadline_days"] < 1):
+                raise DataError(f"story.json '{quest['id']}': deadline_days must be a positive int")
     return {"characters": characters, "enemies": enemies, "items": items,
             "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir),
-            "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story}
+            "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story,
+            "zones": zones, "passive": load_passive(data_dir)}

@@ -7,7 +7,8 @@ from game.combat import formulas
 
 class Combatant:
     def __init__(self, data, trained_ranks=None, is_hero=False, instance_id=None,
-                 name=None, perk_effects=None, synergy_crit=0):
+                 name=None, perk_effects=None, synergy_crit=0, energy_frac=1.0):
+        self.energy_frac = energy_frac      # daily energy %, M9 initiative penalty
         self.id = instance_id or data["id"]
         self.name = name or data["name"]
         self.data = data

@@ -20,34 +20,51 @@ def _spend(state, energy_cost, minutes):
     return {"ok": True, "hit_day_end": hit_end}
 
 
+def training_cost(next_rank):
+    """M9: EN and time scale with the rank being trained toward."""
+    en = config.TRAINING_ENERGY_BASE + config.TRAINING_ENERGY_PER_RANK * next_rank
+    minutes = config.TRAINING_MINUTES_BASE + config.TRAINING_MINUTES_PER_RANK * next_rank
+    return en, minutes
+
+
 def training_session(state, content=None, hero_id=None, attribute=None):
-    """Spend a §6.1 training session; with a hero + attribute, grant §6.3
-    attribute XP (facility/event tier) and report rank-ups + pending perks."""
+    """A supervised training session: drains the TRAINEE's energy (scaled by
+    the rank being trained, M9), advances the clock, grants §6.3 facility XP
+    plus any banked battle XP the hero has."""
     from game.progression import attributes as attrs
     from game.progression import mastery
 
-    if content and hero_id and attribute:
-        character = content["characters"][hero_id]
-        entry = state["roster"][hero_id]
-        if not attrs.can_train(character["power_grid"], entry, attribute):
-            return {"ok": False, "message": f"{attribute.title()} is already at max."}
-
-    result = _spend(state, config.TRAINING_ENERGY, config.TRAINING_MINUTES)
-    if not result["ok"]:
-        return result
     if not (content and hero_id and attribute):
-        result["message"] = "Training session complete."
+        # legacy generic session (rank-2 equivalent costs)
+        result = _spend(state, *training_cost(2))
+        if result["ok"]:
+            result["message"] = "Training session complete."
         return result
+
+    character = content["characters"][hero_id]
+    entry = state["roster"][hero_id]
+    if not attrs.can_train(character["power_grid"], entry, attribute):
+        return {"ok": False, "message": f"{attribute.title()} is already at max."}
+    next_rank = entry.get("trained_ranks", {}).get(attribute, 0) + 1
+    en_cost, minutes = training_cost(next_rank)
+    if not energy.spend_hero(state, hero_id, en_cost):
+        return {"ok": False, "message": f"{character['name']} is too exhausted."}
+    hit_end = clock.advance(state, minutes)
 
     xp = attrs.session_xp(state, content["calendar"])
-    gain = attrs.add_training_xp(character["power_grid"], entry, attribute, xp)
+    banked = min(entry.get("unspent_xp", 0), xp)        # battle XP double-dips
+    if banked:
+        entry["unspent_xp"] = entry.get("unspent_xp", 0) - banked
+    gain = attrs.add_training_xp(character["power_grid"], entry, attribute,
+                                 xp + banked)
     message = f"{character['name']} trains {attribute.title()}: +{xp} XP"
+    if banked:
+        message += f" (+{banked} banked)"
     if gain["ranks_gained"]:
-        message += f" — rank up! ({gain['effective_rank']}/{config.RANK_MAX})"
+        message += f" - rank up! ({gain['effective_rank']}/{config.RANK_MAX})"
     if mastery.update_mastery(character["power_grid"], entry):
-        message += "  MASTERED — the card goes foil!"
-    result.update(message=message, **gain)
-    return result
+        message += "  MASTERED - the card goes foil!"
+    return {"ok": True, "hit_day_end": hit_end, "message": message, **gain}
 
 
 def craft(state):

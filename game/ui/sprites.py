@@ -424,6 +424,24 @@ STANDING["_human"] = [      # template: h=hair, x=jacket, v=shirt
     "..kkk..kkk..",
     "............",
 ]
+STANDING["hydra_squad"] = [
+    "...kkkkkk...",
+    "..knnnnnnk..",
+    "..knkyyknk..",
+    "..knnnnnnk..",
+    "...knnnnk...",
+    "..knnnnnnk..",
+    ".knnkNNknnk.",
+    ".knnkNNknnk.",
+    ".knnnnnnnnk.",
+    ".knnnnnnnnk.",
+    "..knnnnnnk..",
+    "..knnkknnk..",
+    "..knnk.knnk."[:12],
+    "..kNNk.kNNk."[:12],
+    "..kkk..kkk..",
+    "............",
+]
 _STAND_VARIANTS = {
     "jarvis": {"h": "grey", "x": "shadow", "v": "white"},
     "pepper_potts": {"h": "orange", "x": "steel_light", "v": "white"},
@@ -541,6 +559,35 @@ def _make_tile(name):
         pygame.draw.rect(surf, c("steel"), r(1, 1, 14, 14), 1)
         pygame.draw.rect(surf, c("wood"), r(2, 4, 12, 8))
         pygame.draw.rect(surf, c("wood_dark"), r(2, 10, 12, 2))
+    elif name == "road":
+        surf.fill(c("shadow"))
+        pygame.draw.line(surf, c("grey_dark"), (0, 0), (15, 0))
+        for x in range(1, 16, 5):
+            pygame.draw.line(surf, c("gold_dark"), (x, 8), (x + 2, 8))
+    elif name == "sidewalk":
+        surf.fill(c("grey_dark"))
+        pygame.draw.line(surf, c("shadow"), (0, 15), (15, 15))
+        pygame.draw.line(surf, c("shadow"), (15, 0), (15, 15))
+        surf.set_at((5, 6), c("grey"))
+        surf.set_at((11, 12), c("grey"))
+    elif name == "crate":
+        surf.fill(c("grey_dark"))
+        pygame.draw.rect(surf, c("wood"), r(1, 2, 14, 13))
+        pygame.draw.rect(surf, c("wood_dark"), r(1, 2, 14, 13), 1)
+        pygame.draw.line(surf, c("wood_dark"), (1, 8), (14, 8))
+        pygame.draw.line(surf, c("wood_dark"), (8, 2), (8, 14))
+    elif name == "helipad":
+        surf.fill(c("shadow"))
+        pygame.draw.circle(surf, c("gold"), (8, 8), 7, 1)
+        pygame.draw.line(surf, c("gold"), (5, 4), (5, 12), 2)
+        pygame.draw.line(surf, c("gold"), (10, 4), (10, 12), 2)
+        pygame.draw.line(surf, c("gold"), (5, 8), (10, 8), 2)
+    elif name == "tree":
+        surf.fill(c("grey_dark"))
+        pygame.draw.rect(surf, c("wood_dark"), r(7, 9, 3, 6))
+        pygame.draw.circle(surf, c("green_dark"), (8, 6), 6)
+        pygame.draw.circle(surf, c("green"), (6, 4), 3)
+        pygame.draw.circle(surf, c("mint"), (10, 3), 2)
     elif name == "rack":
         surf.fill(c("steel_dark"))
         pygame.draw.rect(surf, c("steel"), r(1, 1, 14, 14), 1)

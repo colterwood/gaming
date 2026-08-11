@@ -41,9 +41,12 @@ class BattleEngine:
     def _start_round(self):
         self.round_number += 1
         combatants = self.living(self.heroes) + self.living(self.enemies)
-        rolls = {c.id: formulas.initiative(c.rank("speed"),
-                                           self.rng.randint(*config.INITIATIVE_ROLL))
-                 for c in combatants}
+        rolls = {}
+        for c in combatants:
+            base = formulas.initiative(c.rank("speed"),
+                                       self.rng.randint(*config.INITIATIVE_ROLL))
+            tiers = formulas.energy_penalty_tiers(getattr(c, "energy_frac", 1.0))
+            rolls[c.id] = base - tiers * config.EN_PENALTY_INITIATIVE
         self.round_order = sorted(combatants, key=lambda c: rolls[c.id], reverse=True)
         self._turn_index = 0
 

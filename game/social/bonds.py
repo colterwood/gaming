@@ -98,7 +98,9 @@ def check_bond_progress(state, content):
                 and level >= recruit["bond_level"]):
             state["roster"][char["id"]] = {"trained_ranks": {}, "attribute_xp": {},
                                            "perks": [], "perk_choices": {},
-                                           "gear": {}, "ult_charge": 0}
+                                           "gear": {}, "ult_charge": 0,
+                                           "energy": config.DAILY_ENERGY,
+                                           "unspent_xp": 0}
             messages.append(f"{char['name']} joins the roster!")
         for unlock in char.get("bond_unlocks", []):
             flags = state.setdefault("story_flags", {})

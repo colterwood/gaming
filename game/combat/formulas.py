@@ -20,6 +20,16 @@ def initiative(speed, roll):
     return speed * config.INITIATIVE_SPEED_MULT + roll
 
 
+def energy_penalty_tiers(energy_frac):
+    """M9: tired heroes act slower. 0 tiers at >= 60% daily energy, then one
+    tier per additional 10% below (capped)."""
+    if energy_frac >= config.EN_PENALTY_THRESHOLD:
+        return 0
+    below = config.EN_PENALTY_THRESHOLD - energy_frac
+    tiers = 1 + int(below / config.EN_PENALTY_STEP - 1e-9)
+    return min(config.EN_PENALTY_MAX_TIERS, tiers)
+
+
 def ability_damage(power, scaling_rank, target_durability, ability_type):
     """Base damage before dodge/crit/defend. Ultimates scale like specials."""
     mult = config.BASIC_SCALING_MULT if ability_type == "basic" else config.SPECIAL_SCALING_MULT

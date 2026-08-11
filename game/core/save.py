@@ -19,7 +19,8 @@ def new_game_state():
         "time_minutes": config.DAY_START_MINUTES,
         "energy": config.DAILY_ENERGY,
         "path": None,
-        "roster": {},          # hero id -> trained ranks, attribute xp, perks, gear, ult charge
+        "roster": {},          # hero id -> trained ranks, xp, perks, gear, energy
+        "party": [],           # active team, max PARTY_SIZE_MAX (M9)
         "bonds": {},           # char id -> {points, gifts_this_week, talked_today}
         "inventory": {"med_kit": 2, "energy_bar": 1},
         "credits": 0,

@@ -14,7 +14,13 @@ def content():
 
 
 def fresh_state():
-    return save.new_game_state()
+    state = save.new_game_state()
+    for hid in ("iron_man", "captain_america"):
+        state["roster"][hid] = {"trained_ranks": {}, "attribute_xp": {},
+                                "perks": [], "perk_choices": {}, "gear": {},
+                                "ult_charge": 0, "energy": 100, "unspent_xp": 0}
+    state["party"] = ["iron_man", "captain_america"]
+    return state
 
 
 # --- clock (§6.1) ---
@@ -45,9 +51,19 @@ def test_clock_clamps_at_day_end():
 def test_energy_spend_and_block():
     state = fresh_state()
     assert energy.spend(state, 40) is True
-    assert state["energy"] == 60
+    assert state["energy"] == 60                     # every party member drained
+    assert state["roster"]["iron_man"]["energy"] == 60
     assert energy.spend(state, 61) is False
     assert state["energy"] == 60                     # nothing spent on failure
+
+
+def test_team_energy_is_minimum_of_party():
+    state = fresh_state()
+    state["roster"]["captain_america"]["energy"] = 35
+    assert energy.team_energy(state) == 35           # M9: weakest member rules
+    assert energy.spend(state, 40) is False          # cap can't afford it
+    assert energy.spend_hero(state, "iron_man", 30)
+    assert energy.team_energy(state) == 35           # iron man at 70, cap still min
 
 
 # --- calendar (§6.2, §7) ---
@@ -112,11 +128,12 @@ def test_supply_drop_event_active_days_12_13(content):
 # --- activities (§6.1 costs) ---
 
 def test_training_costs():
+    # generic session = rank-2 equivalent costs (25 EN / 90 min, the old §6.1 flat)
     state = fresh_state()
     result = activities.training_session(state)
     assert result["ok"]
-    assert state["energy"] == config.DAILY_ENERGY - config.TRAINING_ENERGY
-    assert state["time_minutes"] == 360 + config.TRAINING_MINUTES
+    assert state["energy"] == config.DAILY_ENERGY - 25
+    assert state["time_minutes"] == 360 + 90
 
 
 def test_mission_costs_and_launches():
@@ -129,10 +146,10 @@ def test_mission_costs_and_launches():
 
 def test_activity_blocked_without_energy():
     state = fresh_state()
-    state["energy"] = 10
+    state["roster"]["captain_america"]["energy"] = 10   # weakest member blocks
     result = activities.launch_mission(state)
     assert not result["ok"]
-    assert state["energy"] == 10
+    assert state["roster"]["iron_man"]["energy"] == 100  # nothing spent
 
 
 def test_assignments_rotate_and_complete(content):
@@ -152,9 +169,11 @@ def test_assignments_rotate_and_complete(content):
 def test_pass_out_conditions():
     state = fresh_state()
     assert not activities.should_pass_out(state)
-    state["energy"] = 0
+    for entry in state["roster"].values():
+        entry["energy"] = 0
     assert activities.should_pass_out(state)
-    state["energy"] = 50
+    for entry in state["roster"].values():
+        entry["energy"] = 50
     state["time_minutes"] = config.DAY_END_MINUTES
     assert activities.should_pass_out(state)
 
@@ -167,8 +186,9 @@ def test_three_consecutive_days(content):
         assert state["day"] == expected_day
         while activities.training_session(state)["ok"]:
             pass
-        assert state["energy"] < config.TRAINING_ENERGY   # energy limit enforced
+        assert state["energy"] < 25                       # energy limit enforced
         cal.sleep(state, passed_out=activities.should_pass_out(state))
+        assert state["roster"]["iron_man"]["energy"] >= 80  # per-hero reset
     assert state["day"] == 4
 
 

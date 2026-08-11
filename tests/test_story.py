@@ -34,7 +34,9 @@ def fresh_run(content):
         if c["recruit"]["method"] == "starter":
             state["roster"][c["id"]] = {"trained_ranks": {}, "attribute_xp": {},
                                         "perks": [], "perk_choices": {},
-                                        "gear": {}, "ult_charge": 0}
+                                        "gear": {}, "ult_charge": 0,
+                                        "energy": 100, "unspent_xp": 0}
+    state["party"] = sorted(state["roster"], reverse=True)
     story.init(state, content["story"])
     return state
 
@@ -82,10 +84,11 @@ def test_hub_task_activates_next_quest_entry(content):
 
 def test_hub_task_blocked_without_energy(content):
     state = fresh_run(content)
-    state["energy"] = 5
+    for entry in state["roster"].values():
+        entry["energy"] = 5
     task = next(q for q in content["story"] if q["kind"] == "hub_task")
     assert not story.do_hub_task(state, task)["ok"]
-    assert state["energy"] == 5
+    assert state["roster"]["iron_man"]["energy"] == 5
 
 
 def test_battle_quest_recruits_and_flags(content):
@@ -109,6 +112,36 @@ def test_recruit_is_idempotent(content):
     state["roster"]["ant_man"]["trained_ranks"]["agility"] = 1
     story.complete_battle_quest(state, breakout, content)     # replay must not reset
     assert state["roster"]["ant_man"]["trained_ranks"]["agility"] == 1
+
+
+# --- M9: mission deadlines and fail cooldowns ---
+
+def test_mission_deadline_expires_and_cools_down(content):
+    state = fresh_run(content)
+    quest = story.current_quest(state, content["story"])
+    assert quest["kind"] == "battle" and quest["deadline_days"] == 3
+    assert story.days_left(state, quest) == 3
+    state["day"] += 4                                  # blow the deadline
+    messages = story.check_deadlines(state, content["story"])
+    assert any("Mission failed" in m for m in messages)
+    assert story.is_locked(state, quest)
+    state["day"] += 1                                  # cooldown day 1 of 2
+    assert story.check_deadlines(state, content["story"]) == []
+    assert story.is_locked(state, quest)
+    state["day"] += 1                                  # cooldown over
+    messages = story.check_deadlines(state, content["story"])
+    assert any("back on the board" in m for m in messages)
+    assert not story.is_locked(state, quest)
+    assert story.days_left(state, quest) == 3          # fresh deadline
+
+
+def test_battle_loss_fails_mission(content):
+    state = fresh_run(content)
+    quest = story.current_quest(state, content["story"])
+    message = story.fail_mission(state, quest)
+    assert "Mission failed" in message
+    assert story.is_locked(state, quest)
+    assert state["quests"][quest["id"]]["retry_day"] == story.abs_day(state) + 2
 
 
 # --- M6 acceptance: fresh save -> Ch.1-2 complete incl. Ant-Man ---
