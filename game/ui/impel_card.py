@@ -35,12 +35,17 @@ def btext(surface, *args, **kwargs):
     return pixelkit.text(surface, *args, **kwargs)
 
 
+SCROLLABLE_TABS = ("Social", "Tasks")   # lists that grow with the roster
+
+
 class ImpelCardScene:
     def __init__(self, content):
         self.content = content
         self.tab_index = 0
         self.hero_index = 0
         self.message = ""
+        # M14: Social/Tasks lists scroll independently of hero switching.
+        self.scroll = {"Social": 0, "Tasks": 0}
 
     # --- helpers ---
 
@@ -66,9 +71,15 @@ class ImpelCardScene:
             self.message = ""
         elif key in (pygame.K_UP, pygame.K_DOWN):
             step = -1 if key == pygame.K_UP else 1
-            ids = self._hero_ids(state)
-            if ids:
-                self.hero_index = (self.hero_index + step) % len(ids)
+            tab = TABS[self.tab_index]
+            if tab in SCROLLABLE_TABS:
+                # Clamped against the real row count at draw time — here we
+                # just track intent so repeated presses keep working.
+                self.scroll[tab] = max(0, self.scroll[tab] + step)
+            else:
+                ids = self._hero_ids(state)
+                if ids:
+                    self.hero_index = (self.hero_index + step) % len(ids)
         elif key == pygame.K_RETURN and TABS[self.tab_index] == "Options":
             save.save_game(state, app.SAVE_SLOT)
             self.message = f"Saved to slot {app.SAVE_SLOT}."
@@ -209,6 +220,31 @@ class ImpelCardScene:
             pygame.draw.line(surface, pixelkit.color("white"), (x - 2, y), (x + 2, y))
             pygame.draw.line(surface, pixelkit.color("white"), (x, y - 2), (x, y + 2))
 
+    def _scroll_window(self, tab, total, visible):
+        """Clamp the tab's scroll offset against the real row count and
+        return (first_index, showing_more_above, showing_more_below)."""
+        max_scroll = max(0, total - visible)
+        offset = max(0, min(self.scroll[tab], max_scroll))
+        self.scroll[tab] = offset
+        return offset, offset > 0, offset + visible < total
+
+    @staticmethod
+    def _fit(text, max_width, size=11, bold=False):
+        """Truncate text with an ellipsis so it never overflows its column."""
+        f = pixelkit.font(size, bold)
+        if f.size(text)[0] <= max_width:
+            return text
+        while text and f.size(text + "...")[0] > max_width:
+            text = text[:-1]
+        return text + "..." if text else "..."
+
+    def _scroll_arrows(self, surface, panel, more_above, more_below):
+        if more_above:
+            pixelkit.text(surface, "^", 11, GREY, topright=(panel.right - 6, panel.y + 1))
+        if more_below:
+            pixelkit.text(surface, "v", 11, GREY,
+                          bottomright=(panel.right - 6, panel.bottom - 1))
+
     # --- lower panel per tab ---
 
     def _draw_lower_panel(self, surface, panel, app, tab):
@@ -271,62 +307,82 @@ class ImpelCardScene:
             pixelkit.text(surface, "Banked XP:  " + summary, 11, INK,
                           topleft=(panel.x + pad, panel.bottom - 14))
         elif tab == "Social":
-            y = panel.y + 6
+            row_h = 15
+            top = panel.y + 4
             names = sorted(c["id"] for c in self.content["characters"].values()
                            if bonds.bondable(c))
-            shown = 0
-            for char_id in names:
-                if shown >= 4:
-                    continue
+            visible = max(1, (panel.height - 4) // row_h)
+            first, more_above, more_below = self._scroll_window(
+                "Social", len(names), visible)
+            y = top
+            for char_id in names[first:first + visible]:
                 char = self.content["characters"][char_id]
                 bond = bonds.ensure_bond(state, char_id)
                 level = bonds.bond_level(bond["points"])
                 birthday = char["birthday"]
-                pixelkit.text(surface,
-                              f"{char['name']} - Bond {level} ({bond['points']} pts)  "
-                              f"bday I{birthday['issue']} D{birthday['day']}",
-                              12, INK, topleft=(panel.x + pad, y))
+                bar = pygame.Rect(panel.right - pad - 110, y + 1, 110, 6)
+                pixelkit.text(
+                    surface,
+                    f"{char['name']} - Bond {level} ({bond['points']}pts) "
+                    f"bday I{birthday['issue']}D{birthday['day']}",
+                    11, INK, topleft=(panel.x + pad, y))
                 into = bond["points"] - level * config.BOND_POINTS_PER_LEVEL
                 frac = 1.0 if level >= config.BOND_LEVEL_MAX else into / config.BOND_POINTS_PER_LEVEL
-                bar = pygame.Rect(panel.right - pad - 140, y + 1, 140, 7)
                 pygame.draw.rect(surface, pixelkit.color(CREAM), bar)
                 pygame.draw.rect(surface, pixelkit.color(PINK),
                                  pygame.Rect(bar.x, bar.y, max(1, int(bar.width * frac)),
                                              bar.height))
                 pygame.draw.rect(surface, pixelkit.color(INK), bar, width=1)
-                y += 19
-                shown += 1
+                y += row_h
+            if not names:
+                pixelkit.text(surface, "(no relationships yet)", 12, GREY,
+                              topleft=(panel.x + pad, top))
+            self._scroll_arrows(surface, panel, more_above, more_below)
         elif tab == "Tasks":
             half = panel.width // 2
+            board_w = half - pad - 4
             tier = dispatch.roster_tier(self.content, state)
-            btext(surface, f"Board (today) - Tier {tier}", 13, INK,
+            btext(surface, f"Board (today) - Tier {tier}", 12, INK,
                   topleft=(panel.x + pad, panel.y + 5))
-            y = panel.y + 20
+            row_h = 11
+            list_top = panel.y + 18
             today = activities.assignment_tasks_today(
                 state, self.content["assignments"], tier)
+            today_ids = {t["id"] for t in today}
+            rows = []
             for task in today:
                 job = dispatch.find(state, task["id"])
                 mark = "[>]" if job else "[ ]"
                 heroes, days = task["heroes"], task["days"]
-                crew = (f"{heroes} Hero{'es' if heroes != 1 else ''} / "
-                        f"{days} Day{'s' if days != 1 else ''}")
-                line = f"{mark} {task['name']} - {task['credits']}cr"
-                line += (f" (back in {job['days_left']}d)" if job
-                         else f" ({crew})")
-                pixelkit.text(surface, line, 11, GREY if job else INK,
-                              topleft=(panel.x + pad, y))
-                y += 13
+                crew = (f"{heroes}H/{days}D" if job is None else
+                        f"back {job['days_left']}d")
+                rows.append((f"{mark} {task['name']} -{task['credits']}cr {crew}",
+                            bool(job)))
             for job in dispatch.active(state):
-                if any(t["id"] == job["task_id"] for t in today):
-                    continue        # already shown above
+                if job["task_id"] in today_ids:
+                    continue         # already shown above
                 names = ", ".join(self.content["characters"][h]["name"]
                                   for h in job["heroes"])
-                pixelkit.text(surface, f"[>] {job['name']}: {names} - "
-                              f"{job['days_left']}d left", 11, GREY,
+                rows.append((f"[>] {job['name']}: {names} -{job['days_left']}d",
+                            True))
+            visible = max(1, (panel.bottom - list_top) // row_h)
+            first, more_above, more_below = self._scroll_window(
+                "Tasks", len(rows), visible)
+            y = list_top
+            for line, done in rows[first:first + visible]:
+                pixelkit.text(surface, self._fit(line, board_w),
+                              10, GREY if done else INK,
                               topleft=(panel.x + pad, y))
-                y += 13
+                y += row_h
+            if not rows:
+                pixelkit.text(surface, "(nothing on the board)", 11, GREY,
+                              topleft=(panel.x + pad, list_top))
+            board_panel = pygame.Rect(panel.x, list_top, half, panel.bottom - list_top)
+            self._scroll_arrows(surface, board_panel, more_above, more_below)
+
             qx = panel.x + half + pad
-            btext(surface, "Quests", 13, INK, topleft=(qx, panel.y + 5))
+            btext(surface, "Quests", 12, INK, topleft=(qx, panel.y + 5))
+            quest_w = (half - 2 * pad) // 2 - 4
             quests = sorted(state.get("quests", {}).items())
             if quests:
                 col_w = (half - 2 * pad) // 2
@@ -334,12 +390,13 @@ class ImpelCardScene:
                     col, row = divmod(i, 4)
                     done = q.get("status") == "done"
                     mark = "[x]" if done else "[>]"
-                    pixelkit.text(surface, f"{mark} {q.get('name', qid)}", 11,
-                                  GREY if done else INK,
-                                  topleft=(qx + col * col_w, panel.y + 20 + row * 12))
+                    pixelkit.text(
+                        surface, self._fit(f"{mark} {q.get('name', qid)}", quest_w, 10),
+                        10, GREY if done else INK,
+                        topleft=(qx + col * col_w, panel.y + 18 + row * 12))
             else:
                 pixelkit.text(surface, "(no active quests)", 11, GREY,
-                              topleft=(qx, panel.y + 20))
+                              topleft=(qx, panel.y + 18))
         elif tab == "Map":
             btext(surface, "WORLD MAP - coming in a later issue", 15, GREY,
                   center=panel.center)

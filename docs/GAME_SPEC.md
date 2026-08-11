@@ -309,6 +309,12 @@ Layout zones (px, at 1280×720):
 Collections tab renders the roster as a 9-pocket binder page: filled pockets show
 mini card fronts; empty pockets show grey slots with silhouettes.
 
+The Social and Tasks tabs' lists (M14, added post-POC) grow with the roster
+and board tier, so their lower panel is scrollable: Up/Down scrolls the list
+on those two tabs specifically (elsewhere Up/Down still switches which
+hero's card is shown), with `^`/`v` glyphs indicating more rows off-screen.
+Long lines truncate with an ellipsis rather than overflow their column.
+
 **Palette:** placeholder era-inspired values until reference scans exist —
 cream `#F2E6C9`, red `#C8102E`, gold `#FFC72C`, navy `#1B1F3B`, ink `#121212`,
 plus a subtle halftone-dot texture. **Before building M5, drop 2–3 scans of real

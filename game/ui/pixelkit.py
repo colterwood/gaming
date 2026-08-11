@@ -41,12 +41,13 @@ _text_queue = []
 
 
 def text(surface, txt, size, c, center=None, topleft=None, midleft=None,
-         topright=None, bold=False, shadow=None):
+         topright=None, bottomright=None, bold=False, shadow=None):
     """Queue crisp text at internal-resolution coordinates. Returns the
     approximate covered rect in internal coordinates (for layout)."""
     _text_queue.append({"txt": txt, "size": size, "color": _resolve(c),
                         "center": center, "topleft": topleft,
                         "midleft": midleft, "topright": topright,
+                        "bottomright": bottomright,
                         "bold": bold, "shadow": _resolve(shadow) if shadow else None})
     w, h = font(size, bold).size(txt)
     rect = pygame.Rect(0, 0, w, h)
@@ -58,6 +59,8 @@ def text(surface, txt, size, c, center=None, topleft=None, midleft=None,
         rect.midleft = midleft
     elif topright:
         rect.topright = topright
+    elif bottomright:
+        rect.bottomright = bottomright
     return rect
 
 
@@ -72,7 +75,7 @@ def flush_text(window, scale):
         f = font(op["size"] * scale, op["bold"])
         img = f.render(op["txt"], True, op["color"])
         rect = img.get_rect()
-        for anchor in ("center", "topleft", "midleft", "topright"):
+        for anchor in ("center", "topleft", "midleft", "topright", "bottomright"):
             pos = op[anchor]
             if pos:
                 setattr(rect, anchor, (pos[0] * scale, pos[1] * scale))
