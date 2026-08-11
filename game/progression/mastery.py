@@ -1,13 +1,13 @@
-"""Mastery stub (spec §6.3): detect all-six-at-7, log Mastery XP, show the
-foil treatment. No perk shop in the POC. Pure Python — no pygame."""
+"""Mastery stub (spec §6.3 / GDD): a hero Masters when they reach TRAINED
+rank 7 in all six attributes. Detect it, log Mastery XP, show the foil
+treatment. No perk shop in the POC. Pure Python — no pygame."""
 
 from game import config
-from game.progression import attributes
 
 
 def is_mastered(base_grid, roster_entry):
-    return all(attributes.effective_rank(base_grid, roster_entry, attr) == config.RANK_MAX
-               for attr in config.ATTRIBUTES)
+    trained = roster_entry.get("trained_ranks", {})
+    return all(trained.get(attr, 0) >= config.RANK_MAX for attr in config.ATTRIBUTES)
 
 
 def update_mastery(base_grid, roster_entry):

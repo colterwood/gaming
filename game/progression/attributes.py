@@ -16,12 +16,16 @@ def xp_for_rank(n):
 
 
 def effective_rank(base_grid, roster_entry, attribute):
+    """Combat rank: base + trained, capped at RANK_MAX (§6.3)."""
     trained = roster_entry.get("trained_ranks", {}).get(attribute, 0)
     return min(config.RANK_MAX, base_grid[attribute] + trained)
 
 
 def can_train(base_grid, roster_entry, attribute):
-    return effective_rank(base_grid, roster_entry, attribute) < config.RANK_MAX
+    """Trained ranks run 1..RANK_MAX independently of the base grid (§6.3:
+    ranks cost 100..700 XP, 2,800 total) — they gate perks (3/6) and Mastery
+    (trained 7); only the combat math is capped via effective_rank."""
+    return roster_entry.get("trained_ranks", {}).get(attribute, 0) < config.RANK_MAX
 
 
 def session_xp(state, calendar_data):
@@ -35,13 +39,13 @@ def session_xp(state, calendar_data):
 
 
 def add_training_xp(base_grid, roster_entry, attribute, xp):
-    """Bank XP and consume it into trained ranks. Multiple rank-ups can occur.
-    Training past effective rank 7 is blocked by the caller via can_train."""
+    """Bank XP and consume it into trained ranks (1..RANK_MAX). Multiple
+    rank-ups can occur. Training past trained rank 7 is blocked by can_train."""
     xp_bank = roster_entry.setdefault("attribute_xp", {})
     ranks = roster_entry.setdefault("trained_ranks", {})
     xp_bank[attribute] = xp_bank.get(attribute, 0) + xp
     gained = []
-    while effective_rank(base_grid, roster_entry, attribute) < config.RANK_MAX:
+    while ranks.get(attribute, 0) < config.RANK_MAX:
         next_rank = ranks.get(attribute, 0) + 1
         cost = xp_for_rank(next_rank)
         if xp_bank[attribute] < cost:
@@ -67,6 +71,14 @@ def pending_perk_tier(roster_entry, attribute):
     return None
 
 
+def sanitize_perk_choices(roster_entry, perks_data):
+    """Drop perk ids that no longer exist in perks.json (content updates)."""
+    valid = {p["id"] for attr in perks_data.values() for tier in attr.values() for p in tier}
+    chosen = roster_entry.get("perk_choices", {})
+    for key in [k for k, pid in chosen.items() if pid not in valid]:
+        del chosen[key]
+
+
 def choose_perk(roster_entry, attribute, tier, perk_id, perks_data):
     options = perk_options(attribute, tier, perks_data)
     if perk_id not in [p["id"] for p in options]:
@@ -89,6 +101,9 @@ def perk_effects(roster_entry, perks_data):
     by_id = {p["id"]: p for attr in perks_data.values()
              for tier in attr.values() for p in tier}
     for perk_id in roster_entry.get("perk_choices", {}).values():
-        for key, value in by_id[perk_id]["effect"].items():
+        perk = by_id.get(perk_id)
+        if perk is None:            # stale id from an older save/content update
+            continue
+        for key, value in perk["effect"].items():
             total[key] = total.get(key, 0) + value
     return total

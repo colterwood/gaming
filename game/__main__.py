@@ -51,10 +51,15 @@ class App:
         self.hub = HubScene(self.content)
 
     def load_game(self):
+        from game.hub import story
         from game.hub.tower import HubScene
+        from game.progression import attributes as attrs
         if not save.slot_exists(self.SAVE_SLOT):
             return False
         self.game_state = save.load_game(self.SAVE_SLOT)
+        story.init(self.game_state, self.content["story"])
+        for entry in self.game_state["roster"].values():
+            attrs.sanitize_perk_choices(entry, self.content["perks"])
         self.hub = HubScene(self.content)
         return True
 
@@ -67,6 +72,7 @@ class App:
         self.autosave()
         if self.hub:
             self.hub.log(result["message"])
+            self.hub.reset_modes()      # never wake up inside yesterday's submenu
         self.machine.transition(GameState.SLEEP)
 
     def start_battle(self, enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),

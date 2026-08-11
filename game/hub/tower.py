@@ -105,6 +105,15 @@ class HubScene:
         self.messages.append(message)
         self.messages = self.messages[-3:]
 
+    def reset_modes(self):
+        """Back to the plain hub view (e.g. after a forced pass-out mid-submenu).
+        A pending perk choice re-prompts on the next Training Floor visit."""
+        self.mode = "normal"
+        self.submenu_index = 0
+        self.gift_hero_id = None
+        self.train_hero_id = None
+        self.perk_ctx = None
+
     # --- update / input ---
 
     def update(self, dt, app):
@@ -212,7 +221,8 @@ class HubScene:
                 return
         elif kind == "story_task":
             from game.hub import story
-            self.log(story.do_hub_task(state, act["quest"])["message"])
+            self.log(story.do_hub_task(state, act["quest"],
+                                       self.content["story"])["message"])
         elif kind == "noop":
             return
         if activities.should_pass_out(state):
@@ -431,11 +441,22 @@ class HubScene:
         pygame.draw.rect(surface, widgets.INK, overlay, border_radius=10)
         pygame.draw.rect(surface, widgets.GOLD, overlay, width=3, border_radius=10)
         widgets.text(surface, title, 32, widgets.GOLD, topleft=(overlay.x + 20, overlay.y + 14))
-        for i, label in enumerate(labels or ["(empty)"]):
+        labels = labels or ["(empty)"]
+        visible = 8                     # rows that fit between title and footer
+        selected = self.submenu_index % len(labels)
+        first = max(0, min(selected - visible + 1, len(labels) - visible)) \
+            if len(labels) > visible else 0
+        for i, label in enumerate(labels[first:first + visible]):
             row = pygame.Rect(overlay.x + 12, overlay.y + 60 + i * 40, overlay.width - 24, 36)
-            if labels and i == self.submenu_index % len(labels):
+            if first + i == selected:
                 pygame.draw.rect(surface, widgets.RED, row, border_radius=6)
             widgets.text(surface, label, 28, widgets.CREAM, midleft=(row.x + 12, row.centery))
+        if first > 0:
+            widgets.text(surface, "^ more", 22, widgets.GREY,
+                         topright=(overlay.right - 16, overlay.y + 40))
+        if first + visible < len(labels):
+            widgets.text(surface, "v more", 22, widgets.GREY,
+                         topright=(overlay.right - 16, overlay.bottom - 44))
         widgets.text(surface, "Enter: choose   Esc: back", 24, widgets.CREAM,
                      center=(overlay.centerx, overlay.bottom - 22))
 

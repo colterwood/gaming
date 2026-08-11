@@ -35,13 +35,15 @@ def story_complete(state, story_data):
     return current_quest(state, story_data) is None
 
 
-def do_hub_task(state, quest):
+def do_hub_task(state, quest, story_data=None):
     """Perform a hub_task quest step (§6.1 small-task costs from quest data)."""
     if not energy.can_afford(state, quest["energy"]):
         return {"ok": False, "message": "Too exhausted — sleep to recover."}
     energy.spend(state, quest["energy"])
     clock.advance(state, quest.get("minutes", 60))
     state["quests"][quest["id"]] = {"name": quest["name"], "status": "done"}
+    if story_data:
+        _activate_next(state, story_data)
     return {"ok": True, "message": f"{quest['name']} — done."}
 
 
@@ -49,6 +51,7 @@ def complete_battle_quest(state, quest, content):
     """Mark a battle quest won and apply recruit/flags. Returns messages."""
     messages = [f"{quest['name']} — complete!"]
     state["quests"][quest["id"]] = {"name": quest["name"], "status": "done"}
+    _activate_next(state, content["story"])
     recruit_id = quest.get("recruit")
     if recruit_id and recruit_id not in state["roster"]:
         state["roster"][recruit_id] = {"trained_ranks": {}, "attribute_xp": {},

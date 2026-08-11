@@ -231,15 +231,17 @@ class ImpelCardScene:
         pygame.draw.rect(surface, PAPER, panel, border_radius=6)
         pygame.draw.rect(surface, INK, panel, width=2, border_radius=6)
         pad = 14
+        surface.set_clip(panel.inflate(-4, -4))     # nothing bleeds past the panel
         if tab == "Inventory":
             items = [(iid, n) for iid, n in sorted(state["inventory"].items()) if n > 0]
-            btext(surface, f"Inventory — {state['credits']} credits", 28, INK,
-                  topleft=(panel.x + pad, panel.y + 10))
-            slot_w, slot_h = 214, 44
-            for i, (iid, n) in enumerate(items[:15]):
+            extra = f"   (+{len(items) - 10} more)" if len(items) > 10 else ""
+            btext(surface, f"Inventory — {state['credits']} credits{extra}", 26, INK,
+                  topleft=(panel.x + pad, panel.y + 8))
+            slot_w, slot_h = 214, 40
+            for i, (iid, n) in enumerate(items[:10]):
                 row, col = divmod(i, 5)
                 slot = pygame.Rect(panel.x + pad + col * (slot_w + 8),
-                                   panel.y + 44 + row * (slot_h + 8), slot_w, slot_h)
+                                   panel.y + 38 + row * (slot_h + 6), slot_w, slot_h)
                 pygame.draw.rect(surface, CREAM, slot, border_radius=4)
                 pygame.draw.rect(surface, INK, slot, width=1, border_radius=4)
                 name = self.content["items"].get(iid, {}).get("name", iid)
@@ -247,68 +249,83 @@ class ImpelCardScene:
                       midleft=(slot.x + 8, slot.centery))
             if not items:
                 btext(surface, "(empty — visit the Tower Shop)", 26, GREY,
-                      topleft=(panel.x + pad, panel.y + 48))
+                      topleft=(panel.x + pad, panel.y + 44))
         elif tab == "Attributes":
             hero_id = self._hero(state)
             entry = state["roster"].get(hero_id, {})
-            btext(surface, "Chosen perks:", 26, INK, topleft=(panel.x + pad, panel.y + 10))
-            chosen = entry.get("perk_choices", {})
+            chosen = sorted(entry.get("perk_choices", {}).items())
+            extra = f"  (+{len(chosen) - 6} more)" if len(chosen) > 6 else ""
+            btext(surface, f"Chosen perks:{extra}", 26, INK,
+                  topleft=(panel.x + pad, panel.y + 8))
             if chosen:
                 by_id = {p["id"]: p for a in self.content["perks"].values()
                          for t in a.values() for p in t}
-                for i, (slot_key, pid) in enumerate(sorted(chosen.items())):
-                    perk = by_id[pid]
+                col_w = (panel.width - 2 * pad) // 2
+                shown = 0
+                for slot_key, pid in chosen:
+                    perk = by_id.get(pid)
+                    if perk is None:            # stale id from a content update
+                        continue
+                    if shown >= 6:
+                        break
+                    row, col = divmod(shown, 2)
                     attribute, tier = slot_key.split(":")
                     btext(surface, f"{attribute.title()} {tier}: {perk['name']} ({perk['blurb']})",
-                          24, INK, topleft=(panel.x + pad + 12, panel.y + 42 + i * 28))
+                          22, INK, topleft=(panel.x + pad + col * col_w,
+                                            panel.y + 36 + row * 24))
+                    shown += 1
             else:
                 btext(surface, "(none yet — train to rank 3)", 24, GREY,
-                      topleft=(panel.x + pad + 12, panel.y + 42))
+                      topleft=(panel.x + pad + 12, panel.y + 38))
             banked = entry.get("attribute_xp", {})
             summary = "   ".join(f"{a[:3].upper()} {banked.get(a, 0)}xp"
                                  for a in config.ATTRIBUTES)
             btext(surface, "Banked XP:  " + summary, 22, INK,
-                  topleft=(panel.x + pad, panel.bottom - 34))
+                  topleft=(panel.x + pad, panel.bottom - 28))
         elif tab == "Social":
-            btext(surface, "Bonds", 28, INK, topleft=(panel.x + pad, panel.y + 10))
-            y = panel.y + 44
+            y = panel.y + 12
             for char_id in sorted(state.get("roster", {})):
                 char = self.content["characters"][char_id]
                 bond = bonds.ensure_bond(state, char_id)
                 level = bonds.bond_level(bond["points"])
                 birthday = char["birthday"]
-                btext(surface, f"{char['name']} — Bond {level}  "
-                      f"({bond['points']} pts)   birthday: Issue {birthday['issue']} "
-                      f"Day {birthday['day']}", 24, INK, topleft=(panel.x + pad, y))
+                btext(surface, f"{char['name']} — Bond {level}  ({bond['points']} pts)   "
+                      f"birthday: Issue {birthday['issue']} Day {birthday['day']}",
+                      24, INK, topleft=(panel.x + pad, y))
                 into = bond["points"] - level * config.BOND_POINTS_PER_LEVEL
                 frac = 1.0 if level >= config.BOND_LEVEL_MAX else into / config.BOND_POINTS_PER_LEVEL
-                bar = pygame.Rect(panel.x + pad, y + 26, 300, 8)
+                bar = pygame.Rect(panel.right - pad - 280, y + 2, 280, 12)
                 pygame.draw.rect(surface, CREAM, bar)
                 pygame.draw.rect(surface, BAR_PINK,
                                  pygame.Rect(bar.x, bar.y, int(bar.width * frac), bar.height))
                 pygame.draw.rect(surface, INK, bar, width=1)
-                y += 46
+                y += 38
         elif tab == "Tasks":
-            btext(surface, "Assignment Board (today)", 28, INK,
-                  topleft=(panel.x + pad, panel.y + 10))
-            y = panel.y + 44
+            half = panel.width // 2
+            btext(surface, "Assignment Board (today)", 26, INK,
+                  topleft=(panel.x + pad, panel.y + 8))
+            y = panel.y + 38
             for task in activities.assignment_tasks_today(state, self.content["assignments"]):
                 done = task["id"] in state.get("assignments_done", [])
                 mark = "[x]" if done else "[ ]"
-                btext(surface, f"{mark} {task['name']} — {task['credits']} cr", 24,
+                btext(surface, f"{mark} {task['name']} — {task['credits']} cr", 22,
                       GREY if done else INK, topleft=(panel.x + pad, y))
-                y += 30
-            quests = state.get("quests", {})
-            btext(surface, "Quests", 28, INK, topleft=(panel.x + pad, y + 8))
-            y += 42
+                y += 26
+            qx = panel.x + half + pad
+            btext(surface, "Quests", 26, INK, topleft=(qx, panel.y + 8))
+            quests = sorted(state.get("quests", {}).items())
             if quests:
-                for qid, q in sorted(quests.items()):
-                    btext(surface, f"- {q.get('name', qid)}: {q.get('status', '?')}", 24,
-                          INK, topleft=(panel.x + pad, y))
-                    y += 28
+                col_w = (half - 2 * pad) // 2
+                for i, (qid, q) in enumerate(quests[:8]):
+                    col, row = divmod(i, 4)
+                    done = q.get("status") == "done"
+                    mark = "[x]" if done else "[>]"
+                    btext(surface, f"{mark} {q.get('name', qid)}", 22,
+                          GREY if done else INK,
+                          topleft=(qx + col * col_w, panel.y + 38 + row * 24))
             else:
-                btext(surface, "(no active quests)", 24, GREY,
-                      topleft=(panel.x + pad, y))
+                btext(surface, "(no active quests)", 22, GREY,
+                      topleft=(qx, panel.y + 38))
         elif tab == "Map":
             btext(surface, "WORLD MAP — coming in a later issue", 32, GREY,
                   center=panel.center)
@@ -320,3 +337,4 @@ class ImpelCardScene:
                       topleft=(panel.x + pad, panel.y + 50))
             if self.message:
                 btext(surface, self.message, 26, RED, topleft=(panel.x + pad, panel.y + 84))
+        surface.set_clip(None)

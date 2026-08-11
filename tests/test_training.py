@@ -62,17 +62,23 @@ def test_multi_rank_overflow(content):
     assert result["xp_banked"] == 50
 
 
-def test_effective_rank_caps_at_7(content):
+def test_effective_caps_at_7_but_training_continues(content):
+    # Trained ranks run 1..7 regardless of base (§6.3: 2,800 XP total);
+    # only the combat-effective rank is capped at 7.
     cap = content["characters"]["captain_america"]     # strength base 2
     e = entry()
     attrs.add_training_xp(cap["power_grid"], e, "strength",
-                          100 + 200 + 300 + 400 + 500)  # trained 5 -> effective 7
+                          100 + 200 + 300 + 400 + 500)  # trained 5
     assert attrs.effective_rank(cap["power_grid"], e, "strength") == 7
+    assert attrs.can_train(cap["power_grid"], e, "strength")   # perks/mastery ahead
+    attrs.add_training_xp(cap["power_grid"], e, "strength", 600 + 700)  # trained 7
+    assert e["trained_ranks"]["strength"] == 7
+    assert attrs.effective_rank(cap["power_grid"], e, "strength") == 7  # still capped
     assert not attrs.can_train(cap["power_grid"], e, "strength")
     banked_before = e["attribute_xp"]["strength"]
-    result = attrs.add_training_xp(cap["power_grid"], e, "strength", 600)
-    assert result["ranks_gained"] == []                # capped: XP banks, no rank
-    assert e["attribute_xp"]["strength"] == banked_before + 600
+    result = attrs.add_training_xp(cap["power_grid"], e, "strength", 500)
+    assert result["ranks_gained"] == []                # trained 7: XP banks, no rank
+    assert e["attribute_xp"]["strength"] == banked_before + 500
 
 
 # --- Perk tiers at trained ranks 3 and 6 ---
@@ -85,8 +91,10 @@ def test_perk_pending_at_3_and_6(content):
     result = attrs.choose_perk(e, "agility", 3, "precision", content["perks"])
     assert result["ok"]
     assert attrs.pending_perk_tier(e, "agility") is None
-    attrs.add_training_xp(im["power_grid"], e, "agility", 400 + 500 + 600)  # to rank 6? base 3 caps at trained 4
-    # agility base 3: trained 4 = effective 7, so tier 6 is unreachable — no pending
+    attrs.add_training_xp(im["power_grid"], e, "agility", 400 + 500 + 600)  # ranks 4..6
+    assert e["trained_ranks"]["agility"] == 6
+    assert attrs.pending_perk_tier(e, "agility") == 6            # tier 6 reachable
+    attrs.choose_perk(e, "agility", 6, "killer_instinct", content["perks"])
     assert attrs.pending_perk_tier(e, "agility") is None
 
 
@@ -130,8 +138,7 @@ def test_training_session_grants_xp(content):
 
 def test_training_maxed_attribute_refused_without_cost(content):
     state = game_state(content)
-    # Iron Man int base 5 + trained 2 = effective 7 (maxed)
-    state["roster"]["iron_man"]["trained_ranks"]["intelligence"] = 2
+    state["roster"]["iron_man"]["trained_ranks"]["intelligence"] = 7  # trained max
     result = activities.training_session(state, content, "iron_man", "intelligence")
     assert not result["ok"]
     assert state["energy"] == 100                       # nothing spent
@@ -190,13 +197,23 @@ def test_synergy_crit_bonus_applies(content):
 # --- Mastery stub ---
 
 def test_mastery_detection(content):
+    # Mastery = TRAINED rank 7 in all six attributes (GDD / §6.3)
     im = content["characters"]["iron_man"]
     e = entry()
     assert not mastery.update_mastery(im["power_grid"], e)
-    for attr, base in im["power_grid"].items():
-        e["trained_ranks"][attr] = config.RANK_MAX - base
+    for attr in config.ATTRIBUTES:
+        e["trained_ranks"][attr] = config.RANK_MAX
     assert mastery.update_mastery(im["power_grid"], e) is True
     assert e["mastered"]
     assert mastery.update_mastery(im["power_grid"], e) is False   # only fires once
     mastery.log_mastery_xp(e, 60)
     assert e["mastery_xp"] == 60
+
+
+def test_stale_perk_ids_are_sanitized_and_skipped(content):
+    e = entry()
+    e["perk_choices"] = {"strength:3": "haymaker", "speed:3": "removed_perk"}
+    fx = attrs.perk_effects(e, content["perks"])       # unknown id skipped
+    assert fx == {"basic_damage_pct": 10}
+    attrs.sanitize_perk_choices(e, content["perks"])
+    assert e["perk_choices"] == {"strength:3": "haymaker"}

@@ -65,6 +65,21 @@ def test_hub_task_costs_and_completes(content):
     assert state["quests"][task["id"]]["status"] == "done"
 
 
+def test_hub_task_activates_next_quest_entry(content):
+    # Review finding: the hub-task path must register the next quest in
+    # state["quests"] so the pause-screen Tasks tab shows the active objective.
+    state = fresh_run(content)
+    for quest in content["story"]:
+        if quest["kind"] != "hub_task":
+            state["quests"][quest["id"]] = {"name": quest["name"], "status": "done"}
+            continue
+        story.do_hub_task(state, quest, content["story"])
+        nxt = story.current_quest(state, content["story"])
+        if nxt:
+            assert nxt["id"] in state["quests"]
+            assert state["quests"][nxt["id"]]["status"] == "active"
+
+
 def test_hub_task_blocked_without_energy(content):
     state = fresh_run(content)
     state["energy"] = 5
