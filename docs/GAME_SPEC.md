@@ -961,6 +961,28 @@ else; read "+20 XP to Stamina" on the board before sending them.*
 *AC: open the board and watch the HUD clock hold still; read a payout with
 no tildes; see the footer name the next tier's threshold.*
 
+**M26 — Every board job is one-shot** *(added post-POC)*.
+- The M15 per-task `once` flag is gone; **being one-shot is now the rule**
+  (`requirements.is_done`). Completing a job records it in
+  `state["completed_tasks"]` and it never posts again. Recalling a job
+  pays nothing and does NOT retire it — the work is still there to do.
+- The board is therefore a **finite list of work, not an income tap**:
+  16 jobs worth 3,160 credits base (890 / 1,010 / 1,260 by tier) before
+  the M11 crew multiplier, plus one-shot bond from the four NPC requests.
+  Missions, ambush drops and zone loot become the only repeatable income
+  once it's cleared.
+- **A tier can now be finished**, and the footer says so, e.g. "Tier 2
+  jobs available, Tier 1 jobs complete. Tier 3 jobs unlocked at team
+  power 160 (currently 121)." — degrading to "Tier 1-3 jobs complete."
+  when the board is empty, with "Nothing posted today." where the
+  listings would be.
+- Consequence to design around: with no further content the board becomes
+  a dead station once cleared. Adding tiers (and item rewards) is the
+  intended answer.
+*AC: send a hero to sweep the hangar, finish it, and never see it posted
+again; recall a different job and find it still on the board; clear tier 1
+and read "Tier 1 jobs complete" in the footer.*
+
 ---
 
 ## 10. CLAUDE.md Starter (place at repo root)

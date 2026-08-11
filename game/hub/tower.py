@@ -959,8 +959,11 @@ class HubScene:
         tier = dispatch.roster_tier(self.content, state)     # card knows it
         power = dispatch.team_power(self.content, state)
         items = []
-        for task in activities.assignment_tasks_today(
-                state, self.content["assignments"], tier):
+        posted = activities.assignment_tasks_today(
+            state, self.content["assignments"], tier)
+        if not posted:      # M26: one-shot jobs run out
+            items.append(("Nothing posted today.", True, None))
+        for task in posted:
             under_way = dispatch.find(state, task["id"]) is not None
             label = f"{task['name']} - {self._crew_label(task)}"
             if under_way:
@@ -980,20 +983,39 @@ class HubScene:
             where = self._area_name(job.get("spot", [None])[0])
             items.append((f"Away: {names} - {where}, back in "
                           f"{job['days_left']} day(s)", True, None))
-        items.append((self._tier_status(tier, power), True, None))
+        items.append((self._tier_status(state, tier, power), True, None))
         items.append(("Close", False, None))
         self._open_submenu("Assignment Board", items)
 
     @staticmethod
-    def _tier_status(tier, power):
-        """The footer line (M25): what's open, and what opens next."""
-        if tier <= 1:
-            open_tiers = "Tier 1 jobs"
-        elif tier == 2:
-            open_tiers = "Tier 1 and Tier 2 jobs"
-        else:
-            open_tiers = f"Tier 1-{tier} jobs"
-        line = f"{open_tiers} available."
+    def _tier_phrase(tiers):
+        """'Tier 2' / 'Tier 1 and Tier 2' / 'Tier 1-3' for a run of tiers."""
+        tiers = sorted(tiers)
+        if len(tiers) == 1:
+            return f"Tier {tiers[0]}"
+        if len(tiers) == 2:
+            return f"Tier {tiers[0]} and Tier {tiers[1]}"
+        return f"Tier {tiers[0]}-{tiers[-1]}"
+
+    def _tier_status(self, state, tier, power):
+        """The footer (M25): what's open, what's finished, what opens next.
+        M26 made every job one-shot, so a tier really can be cleared out."""
+        from game.hub import requirements
+
+        open_tiers, done_tiers = [], []
+        for level in range(1, tier + 1):
+            jobs = [t for t in self.content["assignments"]
+                    if t.get("tier", 1) == level]
+            if jobs and all(requirements.is_done(state, t) for t in jobs):
+                done_tiers.append(level)
+            else:
+                open_tiers.append(level)
+        parts = []
+        if open_tiers:
+            parts.append(f"{self._tier_phrase(open_tiers)} jobs available")
+        if done_tiers:
+            parts.append(f"{self._tier_phrase(done_tiers)} jobs complete")
+        line = (", ".join(parts) + ".") if parts else "No jobs on the board."
         need = config.BOARD_TIER_POWER.get(tier + 1)
         if need:
             line += (f" Tier {tier + 1} jobs unlocked at team power "

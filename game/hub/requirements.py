@@ -93,15 +93,21 @@ def posting_chance(state, task):
     return ladder[min(level, len(ladder) - 1)]
 
 
+def is_done(state, task):
+    """M26: EVERY board job is one-shot. Finishing one retires it for good,
+    so the board is a finite list of work rather than an income tap."""
+    return task["id"] in state.get("completed_tasks", [])
+
+
 def gate_open(state, task):
-    """Story-flag / relationship / once-only / posting-chance gates. These
-    decide whether the job is even POSTED — unlike the hidden skill
+    """Story-flag / relationship / already-done / posting-chance gates.
+    These decide whether the job is even POSTED — unlike the hidden skill
     requirements, a job whose gate is shut simply isn't on the board."""
     requires = task.get("requires") or {}
     flag = requires.get("flag")
     if flag and not state.get("story_flags", {}).get(flag):
         return False
-    if task.get("once") and task["id"] in state.get("completed_tasks", []):
+    if is_done(state, task):
         return False
     bond_gate = requires.get("bond")
     if bond_gate:
@@ -120,7 +126,7 @@ def task_available(content, state, task):
     flag = requires.get("flag")
     if flag and not state.get("story_flags", {}).get(flag):
         return False, "That request isn't on my desk yet."
-    if task.get("once") and task["id"] in state.get("completed_tasks", []):
+    if is_done(state, task):
         return False, "That one's already been handled."
     bond_gate = requires.get("bond")
     if bond_gate:

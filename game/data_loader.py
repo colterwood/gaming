@@ -320,8 +320,6 @@ def load_assignments(data_dir=None):
                 raise DataError(f"{tw}: trains has unknown attributes {unknown}")
             if len(set(trains)) != len(trains):
                 raise DataError(f"{tw}: trains repeats an attribute")
-        if "once" in task and not isinstance(task["once"], bool):
-            raise DataError(f"{tw}: once must be a boolean")
         tier = _require(task, "tier", int, tw)          # board tiers (M11)
         if not 1 <= tier <= 3:
             raise DataError(f"{tw}: tier must be 1..3")

@@ -144,8 +144,6 @@ def send(content, state, task, hero_ids):
         job["bond"] = task.get("bond", 0)
     if task.get("spot"):                                # work site (M13):
         job["spot"] = list(task["spot"])                # they're findable there
-    if task.get("once"):                                # one-shot job (M15)
-        job["once"] = True
     active(state).append(job)
     names = " and ".join(content["characters"][h]["name"] for h in hero_ids)
     return True, (f"{names} head(s) out: {task['name']} "
@@ -181,8 +179,10 @@ def process_day(content, state):
         if job["days_left"] > 0:
             continue
         state["credits"] += job["credits"]
-        if job.get("once"):
-            state.setdefault("completed_tasks", []).append(job["task_id"])
+        # M26: every job is one-shot — finishing it takes it off the board.
+        done = state.setdefault("completed_tasks", [])
+        if job["task_id"] not in done:
+            done.append(job["task_id"])
         for hero_id in job["heroes"]:
             entry = state.get("roster", {}).get(hero_id)
             if entry and job["xp"]:

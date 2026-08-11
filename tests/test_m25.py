@@ -123,8 +123,11 @@ def test_payouts_drop_the_pays_prefix_and_the_tilde(content):
              "team power 160 (currently 121)."),
     (3, 210, "Tier 1-3 jobs available."),
 ])
-def test_the_footer_says_what_is_open_and_what_is_next(tier, power, expected):
-    assert HubScene._tier_status(tier, power) == expected
+def test_the_footer_says_what_is_open_and_what_is_next(content, tier, power,
+                                                      expected):
+    scene = HubScene(content)
+    state = FakeApp(content).game_state
+    assert scene._tier_status(state, tier, power) == expected
 
 
 def test_the_footer_is_the_last_line_before_close(content):

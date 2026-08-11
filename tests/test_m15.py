@@ -408,7 +408,8 @@ def test_hulk_task_posting_chance_warms_with_his_bond(content):
     state = state_with(["iron_man", "captain_america"],
                        ["iron_man", "captain_america"])
     task = task_by_id(content, "hulk_smash_therapy")
-    assert task["bond"] == 600 and task["once"] is True
+    assert task["bond"] == 600
+    assert "once" not in task       # M26: EVERY job is one-shot now
     assert _days_posted(state, task) == 0               # Hulk hasn't shown up
     state["story_flags"]["hulk_arrived"] = True
     assert _days_posted(state, task) == pytest.approx(5, abs=4)

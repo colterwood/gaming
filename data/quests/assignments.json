@@ -147,7 +147,6 @@
     "requested_by": "hulk",
     "bond": 600,
     "spot": ["training", 10, 12],
-    "once": true,
     "requires": {
       "flag": "hulk_arrived"
     },
