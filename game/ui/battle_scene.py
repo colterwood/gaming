@@ -63,8 +63,11 @@ class BattleScene:
         return disabled
 
     def _battle_items(self):
+        # Only consumables with a battle effect — rations (M10 "energy"
+        # items) are eaten outside combat and would waste the turn here.
         return [(iid, n) for iid, n in self.engine.inventory.items()
-                if n > 0 and self.content["items"].get(iid, {}).get("kind") == "consumable"]
+                if n > 0 and self.content["items"].get(iid, {}).get("kind") == "consumable"
+                and any(k in self.content["items"][iid] for k in ("heal", "battle_energy"))]
 
     def _targets_for_pending(self):
         if self.pending_action and self.pending_action.get("type") == "item":

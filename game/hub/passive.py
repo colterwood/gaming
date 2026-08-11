@@ -14,6 +14,8 @@ def assign(content, state, hero_id, kind, attribute=None):
     spec = content["passive"].get(kind)
     if spec is None:
         return False, "Unknown task."
+    if entry.get("dispatch"):
+        return False, "They're away on assignment."
     requirement = spec.get("requires")
     if requirement:
         char = content["characters"][hero_id]
@@ -66,6 +68,9 @@ def process_day(content, state):
         char = content["characters"][hero_id]
         if hero_id in party:
             entry["idle_days"] = 0
+            continue
+        if entry.get("dispatch"):       # away on a board job: no idling,
+            entry["idle_days"] = 0      # no atrophy (M10)
             continue
         assignment = entry.get("assignment")
         if not assignment:

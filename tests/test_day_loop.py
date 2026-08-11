@@ -152,14 +152,10 @@ def test_activity_blocked_without_energy():
     assert state["roster"]["iron_man"]["energy"] == 100  # nothing spent
 
 
-def test_assignments_rotate_and_complete(content):
+def test_assignments_rotate_daily(content):
     state = fresh_state()
     today = activities.assignment_tasks_today(state, content["assignments"])
     assert len(today) == 2
-    result = activities.do_assignment(state, today[0])
-    assert result["ok"]
-    assert state["credits"] == today[0]["credits"]
-    assert activities.do_assignment(state, today[0])["ok"] is False   # once per day
     state2 = fresh_state()
     state2["day"] = 2
     tomorrow = activities.assignment_tasks_today(state2, content["assignments"])
@@ -193,11 +189,14 @@ def test_three_consecutive_days(content):
 
 
 def test_save_reload_restores_mid_run(tmp_path, content):
+    from game.hub import dispatch
     state = fresh_state()
     activities.launch_mission(state)
     activities.training_session(state)
     today = activities.assignment_tasks_today(state, content["assignments"])
-    activities.do_assignment(state, today[1])
+    one_hero_task = next(t for t in today if t["heroes"] == 1)
+    ok, _ = dispatch.send(content, state, one_hero_task, ["iron_man"])
+    assert ok
     state["credits"] += 100
     save.save_game(state, 1, save_dir=str(tmp_path))
     assert save.load_game(1, save_dir=str(tmp_path)) == state

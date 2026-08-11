@@ -12,7 +12,7 @@ from game import config
 from game.core import calendar as cal
 from game.core import save
 from game.core.state_machine import GameState
-from game.hub import activities
+from game.hub import activities, dispatch
 from game.progression import attributes as attrs
 from game.social import bonds
 from game.ui import binder, pixelkit, sprites
@@ -298,14 +298,27 @@ class ImpelCardScene:
                 shown += 1
         elif tab == "Tasks":
             half = panel.width // 2
-            btext(surface, "Assignments (today)", 13, INK,
+            btext(surface, "Board (today)", 13, INK,
                   topleft=(panel.x + pad, panel.y + 5))
             y = panel.y + 20
             for task in activities.assignment_tasks_today(state, self.content["assignments"]):
-                done = task["id"] in state.get("assignments_done", [])
-                mark = "[x]" if done else "[ ]"
-                pixelkit.text(surface, f"{mark} {task['name']} - {task['credits']}cr",
-                              11, GREY if done else INK, topleft=(panel.x + pad, y))
+                job = dispatch.find(state, task["id"])
+                mark = "[>]" if job else "[ ]"
+                line = f"{mark} {task['name']} - {task['credits']}cr"
+                line += (f" (back in {job['days_left']}d)" if job
+                         else f" ({task['heroes']}h {task['days']}d)")
+                pixelkit.text(surface, line, 11, GREY if job else INK,
+                              topleft=(panel.x + pad, y))
+                y += 13
+            for job in dispatch.active(state):
+                if any(t["id"] == job["task_id"] for t in
+                       activities.assignment_tasks_today(state, self.content["assignments"])):
+                    continue        # already shown above
+                names = ", ".join(self.content["characters"][h]["name"]
+                                  for h in job["heroes"])
+                pixelkit.text(surface, f"[>] {job['name']}: {names} - "
+                              f"{job['days_left']}d left", 11, GREY,
+                              topleft=(panel.x + pad, y))
                 y += 13
             qx = panel.x + half + pad
             btext(surface, "Quests", 13, INK, topleft=(qx, panel.y + 5))

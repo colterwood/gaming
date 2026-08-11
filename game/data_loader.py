@@ -139,6 +139,10 @@ def _validate_item(item, where):
     if kind in ("weapon", "armor", "accessory"):
         _require(item, "slot", str, where)
         _require(item, "effects", dict, where)
+    if "energy" in item:            # edible ration (M10)
+        value = item["energy"]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise DataError(f"{where}: 'energy' must be a positive int, got {value!r}")
 
 
 def _load_json(path):
@@ -221,8 +225,14 @@ def load_assignments(data_dir=None):
         tw = f"assignments.json task '{task.get('id', '?')}'"
         _require(task, "id", str, tw)
         _require(task, "name", str, tw)
-        _require(task, "energy", int, tw)
         _require(task, "credits", int, tw)
+        heroes = _require(task, "heroes", int, tw)      # dispatch jobs (M10)
+        if heroes < 1:
+            raise DataError(f"{tw}: heroes must be >= 1")
+        days = _require(task, "days", int, tw)
+        if days < 1:
+            raise DataError(f"{tw}: days must be >= 1")
+        _require(task, "xp", int, tw)
         if task["id"] in seen:
             raise DataError(f"{tw}: duplicate id")
         seen.add(task["id"])
@@ -335,6 +345,20 @@ def load_zones(data_dir=None):
             point = _require(zone, key, list, zw)
             if len(point) != 2 or not all(isinstance(v, int) for v in point):
                 raise DataError(f"{zw}: {key} must be [x, y]")
+        loot = zone.get("loot")                         # search spots (M10)
+        if loot is not None:
+            if not isinstance(loot, dict):
+                raise DataError(f"{zw}: loot must be an object")
+            lo_hi = _require(loot, "credits", list, f"{zw} loot")
+            if (len(lo_hi) != 2 or not all(isinstance(v, int) for v in lo_hi)
+                    or lo_hi[0] > lo_hi[1] or lo_hi[0] < 0):
+                raise DataError(f"{zw}: loot.credits must be [lo, hi] with 0 <= lo <= hi")
+            for item_id in loot.get("items", []):
+                if not isinstance(item_id, str):
+                    raise DataError(f"{zw}: loot.items entries must be strings")
+            chance = loot.get("item_chance", 0.0)
+            if not isinstance(chance, (int, float)) or not 0.0 <= chance <= 1.0:
+                raise DataError(f"{zw}: loot.item_chance must be 0..1")
         if zone["id"] in seen:
             raise DataError(f"{zw}: duplicate id")
         seen.add(zone["id"])
@@ -383,6 +407,11 @@ def load_all(data_dir=None):
             raise DataError(f"bond_scenes.json: character '{scene['character']}' not found")
     story = load_story(data_dir)
     zones = load_zones(data_dir)
+    for zone in zones.values():
+        for item_id in zone.get("loot", {}).get("items", []):
+            if item_id not in items:
+                raise DataError(
+                    f"zones.json '{zone['id']}': loot item '{item_id}' not found in items.json")
     for quest in story:
         for enemy_id in quest.get("enemies", []):
             if enemy_id not in enemies:

@@ -28,7 +28,13 @@
   {"id": "bug_spray", "name": "Bug Spray", "kind": "gift",
    "price": 12, "sources": ["tower_shop"]},
   {"id": "med_kit", "name": "Med Kit", "kind": "consumable",
-   "price": 50, "sources": ["tower_shop"], "heal": 40},
+   "price": 50, "sources": ["tower_shop", "street_cart"], "heal": 40},
   {"id": "energy_bar", "name": "Energy Bar", "kind": "consumable",
-   "price": 30, "sources": ["tower_cafe"], "battle_energy": 10}
+   "price": 30, "sources": ["tower_cafe"], "battle_energy": 10},
+  {"id": "coffee", "name": "Cup of Coffee", "kind": "consumable",
+   "price": 20, "sources": ["tower_cafe", "street_cart"], "energy": 10},
+  {"id": "shawarma", "name": "Shawarma Wrap", "kind": "consumable",
+   "price": 60, "sources": ["tower_cafe", "street_cart"], "energy": 25},
+  {"id": "power_smoothie", "name": "Jarvis's Power Smoothie", "kind": "consumable",
+   "price": 110, "sources": ["tower_cafe"], "energy": 40}
 ]

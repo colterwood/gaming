@@ -14,7 +14,7 @@ from game import config
 from game.core import calendar as cal
 from game.core import clock, energy
 from game.core.state_machine import GameState
-from game.hub import activities, field, party as party_mod, passive, story
+from game.hub import activities, dispatch, field, party as party_mod, passive, story
 from game.social import bonds, events
 from game.ui import pixelkit, sprites, widgets
 
@@ -36,6 +36,7 @@ STATION_LABELS = {"elevator": "Elevator", "shop": "Tower Shop",
                   "board": "Assignment Board", "ops": "Ops Console",
                   "bed": "Sleep", "training": "Training Rack",
                   "helipad": "Return to Tower"}
+ZONE_STATION_KINDS = {"helipad", "shop"}    # what works in the field (M10)
 
 FLOORS = {
     "common": {
@@ -177,6 +178,8 @@ class HubScene:
         self.trail = []             # leader position history for followers
         self.facing_left = False
         self.walk_bob = 0.0
+        self._search_shade = pygame.Surface((TILE, TILE), pygame.SRCALPHA)
+        self._search_shade.fill((0, 0, 0, 110))     # dims rummaged crates
         self.messages = []
         self.tick_accum = 0.0
         self.ambush_accum = 0.0
@@ -270,6 +273,8 @@ class HubScene:
         for hero_id in sorted(roster):
             if hero_id in active:
                 continue
+            if roster[hero_id].get("dispatch"):     # away on a board job (M10)
+                continue
             assignment = roster[hero_id].get("assignment")
             kind = assignment["kind"] if assignment else None
             floor, tx, ty = ASSIGNMENT_SPOTS.get(kind, ASSIGNMENT_SPOTS[None])
@@ -296,8 +301,29 @@ class HubScene:
         for ty, row in enumerate(self._map()):
             for tx, ch in enumerate(row):
                 kind = STATION_KINDS.get(ch)
-                if kind and (self.area == "tower") == (kind != "helipad"):
+                if not kind:
+                    continue
+                if (kind in ZONE_STATION_KINDS) if self.area != "tower" \
+                        else (kind != "helipad"):
                     found.append((kind, tx * TILE + TILE // 2,
+                                  HUD_H + ty * TILE + TILE // 2))
+        return found
+
+    def _station_label(self, kind):
+        if kind == "shop" and self.area != "tower":
+            return "Street Cart"
+        return STATION_LABELS[kind]
+
+    def _crates_here(self, state):
+        """Unsearched crate tiles in the current zone (M10 search spots)."""
+        if self.area == "tower" or not self._zone().get("loot"):
+            return []
+        found = []
+        for ty, row in enumerate(self._map()):
+            for tx, ch in enumerate(row):
+                if ch == "x" and not activities.spot_searched(
+                        state, self.area, tx, ty):
+                    found.append((tx, ty, tx * TILE + TILE // 2,
                                   HUD_H + ty * TILE + TILE // 2))
         return found
 
@@ -312,7 +338,11 @@ class HubScene:
         for kind, x, y in self._stations_here():
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
-                best, best_d = ("station", kind, STATION_LABELS[kind]), d
+                best, best_d = ("station", kind, self._station_label(kind)), d
+        for tx, ty, x, y in self._crates_here(state):
+            d = (x - self.px) ** 2 + (y - self.py) ** 2
+            if d < best_d:
+                best, best_d = ("crate", (tx, ty), "Search"), d
         target = self._mission_target(state)
         if target:
             quest, x, y = target
@@ -402,6 +432,8 @@ class HubScene:
             hit = self._nearest_interaction(app.game_state)
             if hit:
                 self._interact(app, hit)
+        elif key == pygame.K_i:
+            self._open_rations(app)
         elif key in (pygame.K_p, pygame.K_ESCAPE):
             app.machine.transition(GameState.PAUSE)
 
@@ -438,6 +470,8 @@ class HubScene:
             self._interact_char(app, ident)
         elif kind == "target":
             self._engage_target(app)
+        elif kind == "crate":
+            self._search_crate(app, *ident)
         elif ident == "bed":
             app.go_to_sleep(passed_out=False)
         elif ident == "elevator":
@@ -496,6 +530,70 @@ class HubScene:
         if result.get("launch_battle"):
             app.start_battle(enemy_ids=quest["enemies"], quest=quest)
             return
+        self._after_action(app)
+
+    # ------------------------------------------------- zone searching (M10)
+
+    def _search_crate(self, app, tx, ty):
+        state = app.game_state
+        zone = self._zone()
+        activities.mark_spot_searched(state, self.area, tx, ty)
+        clock.advance(state, config.SEARCH_MINUTES)
+        result = field.search_loot(zone, self.rng)
+        if result["trap"]:
+            squad = field.trap_squad(zone["danger"], self.rng)
+            self.log(f"Booby-trapped! A HYDRA squad of {len(squad)} springs out!")
+            app.start_battle(enemy_ids=squad, ambush=True)
+            return
+        found = []
+        if result["credits"]:
+            state["credits"] += result["credits"]
+            found.append(f"{result['credits']} cr")
+        if result["item"]:
+            item = self.content["items"][result["item"]]
+            state["inventory"][item["id"]] = state["inventory"].get(item["id"], 0) + 1
+            found.append(item["name"])
+        self.log(("Found " + " + ".join(found) + ".") if found
+                 else "Nothing but rats and packing foam.")
+        self._after_action(app)
+
+    # -------------------------------------------------------- rations (M10)
+
+    def _open_rations(self, app):
+        state = app.game_state
+        foods = [(iid, n) for iid, n in sorted(state["inventory"].items())
+                 if n > 0 and self.content["items"].get(iid, {}).get("energy")]
+        if not foods:
+            self.log("No rations in the bag - the cafe and street carts sell food.")
+            return
+        items = []
+        for iid, n in foods:
+            item = self.content["items"][iid]
+            items.append((f"{item['name']} x{n}  (+{item['energy']} EN)", False,
+                          (lambda a, i=iid: self._open_eat_menu(a, i))))
+        items.append(("Never mind", False, None))
+        self._open_submenu("Rations", items)
+
+    def _open_eat_menu(self, app, item_id):
+        state = app.game_state
+        item = self.content["items"][item_id]
+        items = []
+        for hero_id in self._party(state):
+            en = energy.hero_energy(state, hero_id)
+            full = en >= config.DAILY_ENERGY
+            name = self.content["characters"][hero_id]["name"]
+            items.append((f"{name}  EN {en}" + ("  [full]" if full else ""),
+                          full, (lambda a, h=hero_id: self._eat(a, h, item_id))))
+        items.append(("Never mind", False, None))
+        self._open_submenu(f"{item['name']}: who eats?", items)
+
+    def _eat(self, app, hero_id, item_id):
+        result = activities.eat_food(app.game_state, self.content,
+                                     hero_id, item_id)
+        self.log(result["message"])
+        self.reset_modes()
+        if result["ok"]:
+            self._open_rations(app)     # keep feeding the team
         self._after_action(app)
 
     def _interact_char(self, app, char_id):
@@ -648,16 +746,19 @@ class HubScene:
     def _open_shop(self, app):
         state = app.game_state
         discount = activities.shop_discount(state, self.content["calendar"])
+        sources = (("tower_shop", "tower_cafe") if self.area == "tower"
+                   else ("street_cart",))
         stock = sorted((i for i in self.content["items"].values()
                         if i["kind"] in ("gift", "consumable")
-                        and any(s in ("tower_shop", "tower_cafe") for s in i["sources"])),
+                        and any(s in sources for s in i["sources"])),
                        key=lambda i: i["id"])
         items = [(f"{i['name']} - {int(i['price'] * discount)} cr", False,
                   (lambda a, it=i: self._buy(a, it)))
                  for i in stock]
         items.append(("Close", False, None))
         tag = "  (SALE!)" if discount < 1.0 else ""
-        self._open_submenu(f"Tower Shop - {state['credits']} cr{tag}", items)
+        title = "Tower Shop" if self.area == "tower" else "Street Cart"
+        self._open_submenu(f"{title} - {state['credits']} cr{tag}", items)
 
     def _buy(self, app, item):
         state = app.game_state
@@ -668,21 +769,66 @@ class HubScene:
         self.submenu["index"] = min(index, len(self.submenu["items"]) - 1)
 
     def _open_board(self, app):
+        """M10: board tasks are dispatches — pick heroes, send them away for
+        days; they can't rejoin the party until they return or are recalled."""
         state = app.game_state
         items = []
         for task in activities.assignment_tasks_today(state, self.content["assignments"]):
-            done = task["id"] in state.get("assignments_done", [])
-            label = f"{task['name']} ({task['energy']} EN, +{task['credits']} cr)"
-            if done:
-                label += "  [done]"
-            items.append((label, done, (lambda a, t=task: self._do_board_task(a, t))))
+            under_way = dispatch.find(state, task["id"]) is not None
+            label = (f"{task['name']} - {task['heroes']} hero(es), "
+                     f"{task['days']}d, +{task['credits']} cr")
+            if under_way:
+                label += "  [under way]"
+            items.append((label, under_way,
+                          (lambda a, t=task: self._open_dispatch_picker(a, t))))
+        for job in dispatch.active(state):
+            names = ", ".join(self.content["characters"][h]["name"]
+                              for h in job["heroes"])
+            items.append((f"Away: {names} - back in {job['days_left']}d "
+                          f"({job['name']})", True, None))
+            items.append((f"  Recall - abandon {job['name']}", False,
+                          (lambda a, tid=job["task_id"]:
+                           self._recall_dispatch(a, tid))))
         items.append(("Close", False, None))
         self._open_submenu("Assignment Board", items)
 
-    def _do_board_task(self, app, task):
-        self.log(activities.do_assignment(app.game_state, task)["message"])
+    def _open_dispatch_picker(self, app, task, picked=()):
+        state = app.game_state
+        picked = list(picked)
+        party = self._party(state)
+        remaining_party = [p for p in party if p not in picked]
+        items = []
+        for hero_id in sorted(state["roster"]):
+            if hero_id in picked or state["roster"][hero_id].get("dispatch"):
+                continue
+            name = self.content["characters"][hero_id]["name"]
+            en = energy.hero_energy(state, hero_id)
+            label = f"Send {name}  (EN {en})"
+            would_empty = hero_id in party and len(remaining_party) <= 1
+            if hero_id in party:
+                label += "  [on team]"
+            if would_empty:
+                label += "  [team would be empty]"
+            items.append((label, would_empty,
+                          (lambda a, h=hero_id:
+                           self._pick_dispatch_hero(a, task, picked + [h]))))
+        items.append(("Cancel", False, None))
+        need = task["heroes"] - len(picked)
+        self._open_submenu(f"{task['name']}: pick {need} hero(es)", items)
+
+    def _pick_dispatch_hero(self, app, task, picked):
+        if len(picked) < task["heroes"]:
+            self._open_dispatch_picker(app, task, picked)
+            return
+        ok, message = dispatch.send(self.content, app.game_state, task, picked)
+        self.log(message)
+        energy.sync(app.game_state)
         self.reset_modes()
-        self._after_action(app)
+
+    def _recall_dispatch(self, app, task_id):
+        ok, message = dispatch.recall(self.content, app.game_state, task_id)
+        self.log(message)
+        self.reset_modes()
 
     def _open_ops(self, app):
         state = app.game_state
@@ -839,13 +985,16 @@ class HubScene:
     def draw(self, surface, app):
         state = app.game_state
         surface.fill(pixelkit.color("ink"))
-        self._draw_map(surface)
+        self._draw_map(surface, state)
         self._draw_entities(surface, state)
         self._draw_hud(surface, state)
         self._draw_prompt(surface, state)
         for i, msg in enumerate(self.messages):
             pixelkit.text(surface, msg, 12, "white",
                           topleft=(6, config.HEIGHT - 42 + i * 13), shadow="ink")
+        if self.mode == "normal":
+            pixelkit.text(surface, "I: rations", 11, "grey",
+                          topright=(config.WIDTH - 6, config.HEIGHT - 14))
 
         if self.mode == "submenu" and self.submenu:
             self._draw_submenu(surface, self.submenu["title"],
@@ -867,11 +1016,15 @@ class HubScene:
         elif self.mode == "scene" and self.scene:
             self._draw_scene(surface)
 
-    def _draw_map(self, surface):
+    def _draw_map(self, surface, state):
+        in_zone = self.area != "tower"
         for ty, row in enumerate(self._map()):
             for tx in range(MAP_W):
                 surface.blit(sprites.tile(self._tile_name(row[tx])),
                              (tx * TILE, HUD_H + ty * TILE))
+                if (in_zone and row[tx] == "x"
+                        and activities.spot_searched(state, self.area, tx, ty)):
+                    surface.blit(self._search_shade, (tx * TILE, HUD_H + ty * TILE))
 
     def _draw_entities(self, surface, state):
         entities = [(cid, x, y, False, 0)

@@ -22,11 +22,12 @@ def new_game_state():
         "roster": {},          # hero id -> trained ranks, xp, perks, gear, energy
         "party": [],           # active team, max PARTY_SIZE_MAX (M9)
         "bonds": {},           # char id -> {points, gifts_this_week, talked_today}
-        "inventory": {"med_kit": 2, "energy_bar": 1},
+        "inventory": {"med_kit": 2, "energy_bar": 1, "shawarma": 1},
         "credits": 0,
         "story_flags": {},
         "quests": {},
-        "assignments_done": [],
+        "dispatches": [],      # board jobs under way (M10)
+        "searched_today": [],  # zone crates rummaged today (M10)
         "unspent_xp": 0,       # mission XP banked for progression systems
     }
 

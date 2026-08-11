@@ -185,6 +185,8 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Craft action | 15 energy, +60 min |
 | Small task | 10–20 energy |
 | Talk / gift | 0 energy, +20 min |
+| Eat a ration (M10) | 0 energy, +10 min; restores the item's `energy` EN to one party member, capped at 100 |
+| Search a zone crate (M10) | 0 energy, +15 min; daily-respawning loot, trap risk scales with danger |
 | Pass out (0 energy or 2 AM) | next day starts at 80 energy |
 
 ### 6.2 Bonds
@@ -269,7 +271,7 @@ Avengers Tower rooms and activities:
 
 | Room | Activities |
 |---|---|
-| Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating fetch/fight tasks per day) |
+| Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating tasks per day; since M10 these are dispatch jobs — see §9 M10) |
 | Training Floor | Attribute training (pick hero + attribute); upgrades to tier 2 via story flag after Ch. 1 boss |
 | Ops Floor | Launch story missions, view quest log |
 
@@ -411,6 +413,37 @@ interaction point; recruited heroes appear standing in the tower.*
 *AC: complete a mission end-to-end (fly, search, engage, win) with the
 party; fail one by deadline and see the cooldown; assign a benched hero
 and observe passive gains and post-grace atrophy; all text crisp.*
+
+**M10 — Field life & dispatch** *(added post-POC)*.
+- **Rations**: consumable items may carry an `"energy"` field (EN restored
+  to one hero). Press I anywhere (tower or zone) → pick a ration → pick a
+  party member; +10 min clock (EAT_MINUTES), no energy cost, capped at
+  daily 100. Sold at the Tower Café (`tower_cafe`) and zone street carts
+  (`street_cart`): coffee +10, shawarma +25, power smoothie +40.
+- **Zone activities**: crate tiles (`x`) in zones are daily-respawning
+  search spots (tracked in `state["searched_today"]`, cleared at sleep).
+  Searching takes 15 min (SEARCH_MINUTES) and rolls the zone's `loot`
+  table in zones.json (credit range + item chance); trap chance =
+  danger × SEARCH_TRAP_CHANCE (7%) springs a HYDRA squad (any size, no
+  outnumber rule) and forfeits the loot. Midtown has a street cart (`S`
+  tile) selling `street_cart` items mid-mission.
+- **Dispatch board**: board tasks are no longer done on the spot. Each
+  assignments.json task has `heroes` (1–2), `days` (1–2), `credits`, and
+  `xp`. At the board you pick which roster heroes to send; they leave the
+  party (at least one member must remain), stop appearing in the tower,
+  and can't rejoin the party, take passive tasks, or be swapped in until
+  the job ends. Jobs advance at sleep; on completion credits are paid and
+  each sent hero banks `xp` into `unspent_xp` (spent as training bonus,
+  like battle XP). Recalling a job frees the heroes with no reward. Away
+  heroes neither idle-atrophy nor gain passively.
+- **No teleport home**: winning a mission battle no longer returns the
+  team to the tower — they stay in the zone and must walk back to the
+  helipad to take the Quinjet. Losing still drags the team home with the
+  pass-out penalty.
+*AC: feed a hero mid-zone and see EN rise; search a crate, get loot, and
+have it respawn next day; spring at least one trap; dispatch a hero, see
+them refuse party re-entry until they return with rewards; win a mission
+and walk back to the helipad yourself.*
 
 ---
 

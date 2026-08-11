@@ -43,7 +43,7 @@ def sleep(state, passed_out=False):
     for entry in state.get("roster", {}).values():          # per-hero (M9)
         entry["energy"] = morning
     state["energy"] = morning
-    state["assignments_done"] = []
+    state["searched_today"] = []                            # crates respawn (M10)
     for bond in state.get("bonds", {}).values():
         bond["talked_today"] = False
         if is_gift_week_reset_day(state["day"]):

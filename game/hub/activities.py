@@ -83,7 +83,8 @@ def launch_mission(state, mission_id="hydra_patrol"):
 
 
 def assignment_tasks_today(state, assignments):
-    """Two rotating tasks per day from the assignment pool (§7)."""
+    """Two rotating tasks per day from the assignment pool (§7). Doing them
+    is a dispatch now — see game.hub.dispatch (M10)."""
     pool = sorted(assignments, key=lambda a: a["id"])
     if not pool:
         return []
@@ -91,15 +92,43 @@ def assignment_tasks_today(state, assignments):
     return [pool[base % len(pool)], pool[(base + 1) % len(pool)]]
 
 
-def do_assignment(state, task):
-    if task["id"] in state.get("assignments_done", []):
-        return {"ok": False, "message": "Already done today."}
-    result = _spend(state, task["energy"], task.get("minutes", 60))
-    if result["ok"]:
-        state.setdefault("assignments_done", []).append(task["id"])
-        state["credits"] += task["credits"]
-        result["message"] = f"{task['name']} done: +{task['credits']} credits."
-    return result
+def eat_food(state, content, hero_id, item_id):
+    """Eat a ration (M10): restores the item's EN to one hero, costs a few
+    minutes, no energy. Anywhere — tower or field."""
+    item = content["items"].get(item_id, {})
+    restore = item.get("energy", 0)
+    if not restore:
+        return {"ok": False, "message": "That's not edible."}
+    if state["inventory"].get(item_id, 0) <= 0:
+        return {"ok": False, "message": f"No {item['name']} left."}
+    if state["roster"].get(hero_id) is None:
+        return {"ok": False, "message": "They're not on the roster."}
+    before = energy.hero_energy(state, hero_id)
+    if before >= config.DAILY_ENERGY:
+        name = content["characters"][hero_id]["name"]
+        return {"ok": False, "message": f"{name} is already at full energy."}
+    state["inventory"][item_id] -= 1
+    if state["inventory"][item_id] <= 0:
+        del state["inventory"][item_id]
+    energy.set_hero_energy(state, hero_id, before + restore)
+    gained = energy.hero_energy(state, hero_id) - before
+    energy.sync(state)
+    hit_end = clock.advance(state, config.EAT_MINUTES)
+    name = content["characters"][hero_id]["name"]
+    return {"ok": True, "hit_day_end": hit_end,
+            "message": f"{name} eats the {item['name']}: +{gained} EN."}
+
+
+def search_spot_key(zone_id, tx, ty):
+    return f"{zone_id}:{tx},{ty}"
+
+
+def spot_searched(state, zone_id, tx, ty):
+    return search_spot_key(zone_id, tx, ty) in state.get("searched_today", [])
+
+
+def mark_spot_searched(state, zone_id, tx, ty):
+    state.setdefault("searched_today", []).append(search_spot_key(zone_id, tx, ty))
 
 
 def shop_discount(state, calendar_data):

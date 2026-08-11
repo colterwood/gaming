@@ -44,6 +44,8 @@ def can_swap_in(content, state, incoming_id, outgoing_id):
         return False, "They're not on the team."
     if incoming_id not in state["roster"]:
         return False, "Not on the roster."
+    if state["roster"][incoming_id].get("dispatch"):
+        return False, "They're away on assignment."
     requirement = task_requirement(content, state["roster"][incoming_id])
     if requirement and not meets_requirement(content, state, outgoing_id, requirement):
         name = content["characters"][outgoing_id]["name"]
@@ -81,6 +83,8 @@ def add_to_party(content, state, hero_id):
         return False, "Already on the team."
     if len(party) >= config.PARTY_SIZE_MAX:
         return False, "The team is full - swap someone out."
+    if state["roster"][hero_id].get("dispatch"):
+        return False, "They're away on assignment."
     state["roster"][hero_id].pop("assignment", None)
     state["roster"][hero_id]["idle_days"] = 0
     state["party"].append(hero_id)

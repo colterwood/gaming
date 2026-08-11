@@ -31,3 +31,26 @@ def roll_ambush(danger, party_size, rng):
         return None
     pool = _POOLS.get(danger, _POOLS[1])
     return [pool[rng.randrange(len(pool))] for _ in range(size)]
+
+
+def search_loot(zone, rng):
+    """Rummage one crate (M10): returns {"credits", "item", "trap"}. A trap
+    forfeits the loot — the caller starts a battle with trap_squad(). Loot
+    tables live in zones.json; searched spots respawn daily."""
+    if rng.random() < zone["danger"] * config.SEARCH_TRAP_CHANCE:
+        return {"credits": 0, "item": None, "trap": True}
+    loot = zone.get("loot", {})
+    lo, hi = loot.get("credits", [0, 0])
+    item = None
+    items = loot.get("items", [])
+    if items and rng.random() < loot.get("item_chance", 0.0):
+        item = items[rng.randrange(len(items))]
+    return {"credits": rng.randint(lo, hi), "item": item, "trap": False}
+
+
+def trap_squad(danger, rng):
+    """The squad sprung by a booby-trapped crate — any size; no outnumber
+    rule, you walked right into it."""
+    pool = _POOLS.get(danger, _POOLS[1])
+    size = rng.randint(2, config.AMBUSH_MAX_SIZE)
+    return [pool[rng.randrange(len(pool))] for _ in range(size)]

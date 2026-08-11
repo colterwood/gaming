@@ -220,3 +220,83 @@ def test_maps_are_wellformed(content):
             assert len(row) == 40, f"bad row width in {floor['name']}: {len(row)}"
         sx, sy = floor["spawn"]
         assert floor["map"][sy][sx] == "."      # spawn tile walkable
+
+
+# --- M10: rations, dispatch board, zone searching, street cart ---
+
+def test_rations_menu_feeds_party_member(content):
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    state["roster"]["iron_man"]["energy"] = 50
+    scene.handle_key(app, pygame.K_i)
+    assert scene.mode == "submenu" and scene.submenu["title"] == "Rations"
+    choose(scene, app, "Shawarma Wrap")         # starter ration
+    choose(scene, app, "Iron Man")
+    assert state["roster"]["iron_man"]["energy"] == 75
+    assert "shawarma" not in state["inventory"]
+    assert any("+25 EN" in m for m in scene.messages)
+
+
+def test_board_dispatch_and_recall(content):
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    put_player_at(scene, 34, 12)                # next to the board (35, 12)
+    scene.handle_key(app, pygame.K_RETURN)
+    assert scene.submenu["title"] == "Assignment Board"
+    choose(scene, app, "Calibrate Tower Sensors")     # day-1 task, 1 hero 2d
+    choose(scene, app, "Send Iron Man")
+    assert state["roster"]["iron_man"]["dispatch"] == "calibrate_sensors"
+    assert state["party"] == ["captain_america"]
+    # away heroes don't stand around the tower
+    ids = [cid for cid, _, _ in scene._characters_here(state)]
+    assert "iron_man" not in ids
+    # board shows the job under way and offers a recall
+    scene.handle_key(app, pygame.K_RETURN)
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any("[under way]" in l for l in labels)
+    choose(scene, app, "  Recall")
+    assert "dispatch" not in state["roster"]["iron_man"]
+    assert state["dispatches"] == []
+
+
+def test_dispatch_cannot_empty_the_party(content):
+    scene, app = scene_with_app(content)
+    app.game_state["party"] = ["captain_america"]
+    put_player_at(scene, 34, 12)
+    scene.handle_key(app, pygame.K_RETURN)
+    choose(scene, app, "Calibrate Tower Sensors")
+    blocked = [i for i in scene.submenu["items"]
+               if i[0].startswith("Send Captain America")]
+    assert blocked and blocked[0][1] is True    # disabled: last team member
+
+
+def test_crate_search_marks_spot_and_pays(content):
+    import random
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    scene.area = "docks"
+    scene.rng = random.Random(1)                # first roll > trap chance
+    put_player_at(scene, 2, 3)                  # beside the crate at (3, 3)
+    hit = scene._nearest_interaction(state)
+    assert hit[0] == "crate" and hit[1] == (3, 3)
+    scene.handle_key(app, pygame.K_RETURN)
+    assert 8 <= state["credits"] <= 20          # docks loot table
+    assert state["time_minutes"] == 360 + config.SEARCH_MINUTES
+    # (3,3) is spent for the day; the prompt moves on to the next crate
+    hit = scene._nearest_interaction(state)
+    assert hit[0] == "crate" and hit[1] != (3, 3)
+    assert app.battles == []                    # no trap on this seed
+
+
+def test_street_cart_stocks_field_food(content):
+    scene, app = scene_with_app(content)
+    scene.area = "midtown"
+    put_player_at(scene, 18, 11)                # below the cart at (18, 10)
+    hit = scene._nearest_interaction(app.game_state)
+    assert hit == ("station", "shop", "Street Cart")
+    scene.handle_key(app, pygame.K_RETURN)
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any(l.startswith("Cup of Coffee") for l in labels)
+    assert any(l.startswith("Shawarma Wrap") for l in labels)
+    assert any(l.startswith("Med Kit") for l in labels)
+    assert not any("Vintage Vinyl" in l for l in labels)   # tower-only stock

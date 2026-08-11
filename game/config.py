@@ -125,6 +125,11 @@ ATROPHY_XP_PER_DAY = 20             # XP drained per unworked attribute
 MISSION_FAIL_COOLDOWN_DAYS = 2
 TRAVEL_MINUTES = 30                 # Quinjet hop tower <-> zone
 
+# --- Field life (M10) ---
+EAT_MINUTES = 10                    # eating a ration advances the clock
+SEARCH_MINUTES = 15                 # rummaging a crate/dumpster
+SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
+
 # --- Attributes & Training (§6.3) ---
 ATTRIBUTE_XP_PER_RANK = 100         # XP to gain trained rank N = 100 * N
 TRAINING_XP_BASIC = 40

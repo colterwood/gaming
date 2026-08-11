@@ -80,8 +80,9 @@ class App:
 
     def go_to_sleep(self, passed_out=False):
         from game.core import energy
-        from game.hub import activities, passive, story
+        from game.hub import activities, dispatch, passive, story
         messages = passive.process_day(self.content, self.game_state)
+        messages += dispatch.process_day(self.content, self.game_state)
         result = activities.go_to_sleep(self.game_state, passed_out=passed_out)
         messages += story.check_deadlines(self.game_state, self.content["story"])
         energy.sync(self.game_state)
@@ -158,7 +159,9 @@ class App:
                         self.hub.log(msg)
                 story.init(state, self.content["story"])
                 if self.hub:
-                    self.hub.return_to_tower()      # fly home victorious
+                    # No teleport home (M10): the team stays in the field —
+                    # walk back to the helipad and take the Quinjet.
+                    self.hub.log("Zone clear. The Quinjet is waiting at the helipad.")
         elif state:
             from game.hub import story
             if quest:

@@ -1,14 +1,14 @@
 [
   {"id": "sweep_hangar", "name": "Sweep the Quinjet Hangar", "kind": "fetch",
-   "energy": 10, "minutes": 60, "credits": 25},
+   "heroes": 1, "days": 1, "credits": 60, "xp": 20},
   {"id": "inventory_armory", "name": "Inventory the Armory", "kind": "fetch",
-   "energy": 15, "minutes": 60, "credits": 35},
+   "heroes": 1, "days": 1, "credits": 70, "xp": 20},
   {"id": "calibrate_sensors", "name": "Calibrate Tower Sensors", "kind": "fetch",
-   "energy": 15, "minutes": 90, "credits": 40},
+   "heroes": 1, "days": 2, "credits": 150, "xp": 50},
   {"id": "spar_rookies", "name": "Spar with S.H.I.E.L.D. Rookies", "kind": "fight",
-   "energy": 20, "minutes": 90, "credits": 50},
+   "heroes": 2, "days": 1, "credits": 130, "xp": 40},
   {"id": "escort_convoy", "name": "Escort a Supply Convoy", "kind": "fight",
-   "energy": 20, "minutes": 120, "credits": 55},
+   "heroes": 2, "days": 2, "credits": 280, "xp": 80},
   {"id": "debug_jarvis", "name": "Debug a JARVIS Subroutine", "kind": "fetch",
-   "energy": 10, "minutes": 60, "credits": 30}
+   "heroes": 1, "days": 1, "credits": 65, "xp": 25}
 ]
