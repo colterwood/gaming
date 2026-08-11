@@ -959,17 +959,18 @@ class HubScene:
         for task in activities.assignment_tasks_today(
                 state, self.content["assignments"], tier):
             under_way = dispatch.find(state, task["id"]) is not None
-            label = (f"{task['name']} - {self._crew_label(task)}, "
-                     f"~{task['credits']} cr")
+            label = f"{task['name']} - {self._crew_label(task)}"
             if under_way:
                 label += "  [under way]"
             items.append((label, under_way,
                           (lambda a, t=task: self._open_dispatch_picker(a, t))))
+            # M23: every reward a job pays, spelled out — credits were the
+            # only one on the board, so XP and bond were invisible.
+            items.append((f"   pays {self._reward_label(task)}", True, None))
             requester = task.get("requested_by")
             if requester and not under_way:
                 requester_name = self.content["characters"][requester]["name"]
-                items.append((f"   requested by {requester_name}: "
-                              f"+{task.get('bond', 0)} bond", True, None))
+                items.append((f"   requested by {requester_name}", True, None))
         next_tier = tier + 1
         if next_tier in config.BOARD_TIER_POWER:
             need = config.BOARD_TIER_POWER[next_tier]
@@ -989,6 +990,20 @@ class HubScene:
         heroes, days = task["heroes"], task["days"]
         return (f"{heroes} Hero{'es' if heroes != 1 else ''} / "
                 f"{days} Day{'s' if days != 1 else ''}")
+
+    def _reward_label(self, task):
+        """Everything a board job pays out (M23). XP is quoted per stat
+        because M21 splits it across the six; the '~' is the M11 crew-power
+        multiplier, which isn't known until you pick who goes."""
+        parts = [f"~{task['credits']} cr"]
+        if task.get("xp"):
+            per_stat = task["xp"] // len(config.ATTRIBUTES)
+            parts.append(f"~{task['xp']} XP (+{per_stat}/stat)"
+                         if per_stat else f"~{task['xp']} XP")
+        if task.get("bond") and task.get("requested_by"):
+            name = self.content["characters"][task["requested_by"]]["name"]
+            parts.append(f"+{task['bond']} bond with {name}")
+        return ", ".join(parts)     # no job pays items yet — add them here
 
     def _area_name(self, area):
         if area in FLOORS:
@@ -1109,8 +1124,8 @@ class HubScene:
                 total = len(arc["search_groves"])
                 rows.append((f"  Searched: {len(unlocks.searched(state, arc))}"
                              f"/{total} stands of trees", True, None))
-            rows.append((f"  Fly to {where} now", False,
-                         (lambda a, z=arc["location"]: self._travel(a, z))))
+            # M23: same rule as a mission briefing — the console tells you
+            # where, it doesn't drive you there.
         return rows
 
     def _accept_quest(self, app, quest):

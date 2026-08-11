@@ -5,7 +5,7 @@
     "desc": "Something came down in the Midtown trees. Search the stands - and bring someone who can lift it.",
     "requires": {
       "flags": ["ch2_complete"],
-      "hero_min_rank": {"captain_america": 2}
+      "hero_min_rank": {"captain_america": 3}
     },
     "location": "midtown",
     "zone_hint": "The air over the park still tastes like a struck match.",

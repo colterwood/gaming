@@ -358,8 +358,9 @@ def test_board_shows_tier_teaser_and_request_label(content):
     assert scene.submenu["title"] == "Assignment Board - Tier 1"
     labels = [i[0] for i in scene.submenu["items"]]
     assert any("Tier 2 jobs at team power 90 (now 37)" in l for l in labels)
-    # NPC request shows who wants it and the bond payout (M13 wording)
-    assert any(l.strip().startswith("requested by ") and "bond" in l
+    # M23: the payout line carries the bond; the request line names who
+    assert any(l.strip().startswith("requested by ") for l in labels)
+    assert any(l.strip().startswith("pays ") and "bond with " in l
                for l in labels)
 
 

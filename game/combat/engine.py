@@ -122,6 +122,8 @@ class BattleEngine:
         events = []
         fired_ultimate = False
 
+        actor.defended_last_turn = action["type"] == "defend"   # M23
+
         if action["type"] == "defend":
             actor.defending = True
             events.append({"kind": "defend", "actor": actor.id})

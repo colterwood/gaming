@@ -27,6 +27,7 @@ class Combatant:
         # M15: ultimate charge carries over between battles.
         self.ult_charge = min(config.ULT_CHARGE_MAX, ult_charge)
         self.defending = False
+        self.defended_last_turn = False      # M23: stops the AI turtling
         self.statuses = {}          # e.g. {"burn": 3, "stun": 1} -> turns remaining
         self.crit_bonus = self.perk_effects.get("crit_bonus", 0) + synergy_crit
 

@@ -360,7 +360,14 @@ enrages below 30% HP (+50% damage).
 ### 6.5 Enemy AI (POC)
 
 - `aggressive`: highest-damage available action at lowest-HP target
-- `defensive`: Defend below 40% HP, else basic attack
+- `defensive`: guards below `AI_DEFENSIVE_HP_THRESHOLD` (40%) HP — but
+  never two turns running, and not at all once below
+  `AI_DEFENSIVE_LAST_STAND_HP` (15%), where it swings with everything it
+  has left (M23). When it isn't guarding it attacks with its best
+  available ability, not a token basic. Before M23 it simply guarded every
+  turn below the threshold, which turned any wounded defensive enemy into
+  a damage sponge that never fought back — unbearable on a high-level
+  enemy with a deep HP pool.
 - `support`: heal/buff ally if one is below 50% HP, else basic attack
 
 ---
@@ -737,7 +744,8 @@ get refused sending Cap to calibrate the sensors at Intelligence rank 1.*
   there's room, the roster otherwise), take their property back out of
   the inventory, and set the arc's `flags`.
 - **Ch. 2 content**: "Something Strange in Midtown" — Crossbones down
-  plus Captain America at rank 2 in all six opens it; Stormbreaker is in
+  plus Captain America at rank 3 in all six opens it (raised from 2 in
+  M23 — rank 2 arrives on its own by that point); Stormbreaker is in
   one of five stands of Midtown trees; only Cap can lift it; Thor joins
   and sets `thor_joined`, the hook the next HYDRA chapter gates on.
 *AC: beat Crossbones, train Cap to a rounded 2, and get woken by thunder
@@ -871,6 +879,26 @@ already spent.*
 *AC: send two qualifying heroes to spar and see all six attributes move
 by ~20 each; accept a mission at Ops and find no way to leave the room
 from that menu.*
+
+**M23 — Defensive AI, reward transparency & a harder Stormbreaker gate**
+*(added post-POC)*.
+- **Defensive enemies stop turtling** — see §6.5. A `defended_last_turn`
+  flag on the Combatant (set in `take_turn`) drives `should_defend`, so a
+  wounded enemy alternates guard/attack and abandons guarding entirely
+  once cornered.
+- **Board jobs advertise every reward.** The board listed credits only, so
+  XP and bond were invisible at the moment you choose. Each job now
+  carries a "pays ~N cr, ~N XP (+N/stat), +N bond with <name>" line
+  (`HubScene._reward_label`), and the card's Tasks tab shows the same in
+  compact form. XP is quoted per stat because M21 splits it six ways; the
+  `~` is the M11 crew-power multiplier, unknown until you pick who goes.
+- **The Ops console never offers a ride** — the side-arc signal loses its
+  "Fly to <zone> now" row too, matching M22's mission briefings.
+- **Stormbreaker wants a rank-3 Captain America** in all six, up from 2,
+  which arrives on its own by Chapter 2's end.
+*AC: fight a HYDRA Enforcer down past 40% and watch it trade blows
+instead of guarding every turn; open the board and read what each job
+pays before sending anyone.*
 
 ---
 

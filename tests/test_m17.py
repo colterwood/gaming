@@ -50,11 +50,18 @@ def train_cap_to(state, content, rank):
                                                     boosts[attribute]))
 
 
-def ready_state(content, party=("iron_man", "captain_america")):
-    """A save one night away from the signal: Crossbones down, Cap at 2."""
+def required_rank(arc):
+    """Read the gate out of the data rather than hardcoding it here, so
+    retuning unlocks.json doesn't silently rot these tests."""
+    return arc["requires"]["hero_min_rank"]["captain_america"]
+
+
+def ready_state(content, arc, party=("iron_man", "captain_america")):
+    """A save one night away from the signal: Crossbones down, Cap trained
+    to the arc's required rank across the board."""
     state = fresh_run(content)
     state["story_flags"]["ch2_complete"] = True
-    train_cap_to(state, content, 2)
+    train_cap_to(state, content, required_rank(arc))
     state["party"] = list(party)
     return state
 
@@ -67,25 +74,30 @@ def night(content, state):
 # --- the gate ---
 
 def test_signal_needs_crossbones_and_a_rounded_cap(content, arc):
+    need = required_rank(arc)
     state = fresh_run(content)
     assert not unlocks.requirements_met(content, state, arc)
 
     state["story_flags"]["ch2_complete"] = True         # boss down, Cap at 1
     assert not unlocks.requirements_met(content, state, arc)
 
-    train_cap_to(state, content, 2)                     # ...but only in one
-    entry = state["roster"]["captain_america"]          # attribute is no good
-    entry["trained_ranks"]["agility"] = 0
-    assert attrs.rank(entry, "agility") == 1
+    train_cap_to(state, content, need - 1)              # one short everywhere
     assert not unlocks.requirements_met(content, state, arc)
 
-    entry["trained_ranks"]["agility"] = 1
+    train_cap_to(state, content, need)                  # ...but a single
+    entry = state["roster"]["captain_america"]          # gap still blocks it
+    entry["trained_ranks"]["agility"] = need - 1 - config.RANK_START
+    assert attrs.rank(entry, "agility") == need - 1
+    assert not unlocks.requirements_met(content, state, arc)
+
+    entry["trained_ranks"]["agility"] = need - config.RANK_START
+    assert attrs.rank(entry, "agility") == need
     assert unlocks.requirements_met(content, state, arc)
 
 
-def test_cap_at_rank_2_without_the_boss_stays_quiet(content, arc):
+def test_a_trained_cap_without_the_boss_stays_quiet(content, arc):
     state = fresh_run(content)
-    train_cap_to(state, content, 2)
+    train_cap_to(state, content, required_rank(arc))
     assert night(content, state) == []
     assert unlocks.status(state, arc) is None
 
@@ -93,7 +105,7 @@ def test_cap_at_rank_2_without_the_boss_stays_quiet(content, arc):
 # --- the night signal ---
 
 def test_night_signal_fires_once_with_thunder(content, arc):
-    state = ready_state(content)
+    state = ready_state(content, arc)
     messages = night(content, state)
     assert "Something strange happened in Midtown..." in messages
     assert unlocks.status(state, arc) == "searching"
@@ -108,7 +120,7 @@ def test_night_signal_fires_once_with_thunder(content, arc):
 
 
 def test_hidden_stand_is_stable_across_a_save_round_trip(content, arc, tmp_path):
-    state = ready_state(content)
+    state = ready_state(content, arc)
     night(content, state)
     save.save_game(state, 1, save_dir=str(tmp_path))
     reloaded = save.load_game(1, save_dir=str(tmp_path))
@@ -118,7 +130,7 @@ def test_hidden_stand_is_stable_across_a_save_round_trip(content, arc, tmp_path)
 # --- searching the trees ---
 
 def test_searching_costs_energy_and_time_until_the_axe_turns_up(content, arc):
-    state = ready_state(content)
+    state = ready_state(content, arc)
     night(content, state)
     hidden = state["unlocks"][ARC_ID]["hidden"]
     empty = [i for i in range(len(arc["search_groves"])) if i != hidden]
@@ -139,7 +151,7 @@ def test_searching_costs_energy_and_time_until_the_axe_turns_up(content, arc):
 
 
 def test_only_the_worthy_can_pick_it_up(content, arc):
-    state = ready_state(content, party=("iron_man",))    # Cap benched at home
+    state = ready_state(content, arc, party=("iron_man",))    # Cap benched at home
     night(content, state)
     unlocks.pop_scene(state)                            # the 2:41 AM alert
     hidden = state["unlocks"][ARC_ID]["hidden"]
@@ -172,7 +184,7 @@ def test_only_the_worthy_can_pick_it_up(content, arc):
 
 
 def test_searching_blocked_without_energy(content, arc):
-    state = ready_state(content)
+    state = ready_state(content, arc)
     night(content, state)
     for entry in state["roster"].values():
         entry["energy"] = 2
@@ -183,7 +195,7 @@ def test_searching_blocked_without_energy(content, arc):
 # --- the morning after ---
 
 def test_thor_arrives_the_next_morning_and_takes_it_back(content, arc):
-    state = ready_state(content)
+    state = ready_state(content, arc)
     night(content, state)
     unlocks.pop_scene(state)
     hidden = state["unlocks"][ARC_ID]["hidden"]
@@ -207,7 +219,7 @@ def test_thor_arrives_the_next_morning_and_takes_it_back(content, arc):
 
 
 def test_full_team_gets_thor_on_the_roster_not_the_field(content, arc):
-    state = ready_state(content)
+    state = ready_state(content, arc)
     for hero_id in ("ant_man", "hulk"):
         state["roster"][hero_id] = {"trained_ranks": {}, "attribute_xp": {},
                                     "perks": [], "perk_choices": {}, "gear": {},
@@ -256,7 +268,7 @@ def test_trees_are_searchable_on_foot(content, arc):
     from tests.test_tower_scene import FakeApp
 
     hub, app = HubScene(content), FakeApp(content)
-    app.game_state = ready_state(content)
+    app.game_state = ready_state(content, arc)
     state = app.game_state
     hub.area = arc["location"]
     assert hub._grove_targets(state) == []          # nothing before the signal
@@ -293,7 +305,7 @@ def test_ops_console_lists_the_signal(content, arc):
     from tests.test_tower_scene import FakeApp
 
     hub, app = HubScene(content), FakeApp(content)
-    app.game_state = ready_state(content)
+    app.game_state = ready_state(content, arc)
     night(content, app.game_state)
     hub.floor = "ops"
     put_player_at(hub, 8, 5)
@@ -301,4 +313,5 @@ def test_ops_console_lists_the_signal(content, arc):
     labels = [i[0] for i in hub.submenu["items"]]
     assert any(l.startswith("SIGNAL - ") for l in labels)
     assert any("0/5 stands of trees" in l for l in labels)
-    assert any(l.strip() == "Fly to Midtown now" for l in labels)
+    # M23: the console briefs, it does not fly you there
+    assert not any("Fly to" in l for l in labels)

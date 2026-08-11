@@ -251,7 +251,10 @@ BURN_TURNS = 3
 STUN_TURNS = 1
 
 # --- Enemy AI (§6.5) ---
-AI_DEFENSIVE_HP_THRESHOLD = 0.40    # defensive: Defend below 40% HP
+AI_DEFENSIVE_HP_THRESHOLD = 0.40    # defensive: start guarding below 40% HP
+# ...but never twice running, and not at all once cornered (M23). Without
+# these a wounded defensive enemy guarded every single turn forever.
+AI_DEFENSIVE_LAST_STAND_HP = 0.15   # below this it stops guarding entirely
 AI_SUPPORT_HP_THRESHOLD = 0.50     # support: heal/buff ally below 50% HP
 
 # --- Save (§5.4) ---

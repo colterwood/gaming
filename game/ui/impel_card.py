@@ -403,8 +403,12 @@ class ImpelCardScene:
                 heroes, days = task["heroes"], task["days"]
                 crew = (f"{heroes}H/{days}D" if job is None else
                         f"back {job['days_left']}d")
-                rows.append((f"{mark} {task['name']} -{task['credits']}cr {crew}",
-                            bool(job)))
+                pay = f"{task['credits']}cr"        # M23: XP was invisible
+                if task.get("xp"):
+                    pay += f"/{task['xp']}xp"
+                if task.get("bond") and task.get("requested_by"):
+                    pay += f"/{task['bond']}bond"
+                rows.append((f"{mark} {task['name']} -{pay} {crew}", bool(job)))
             for job in dispatch.active(state):
                 if job["task_id"] in today_ids:
                     continue         # already shown above

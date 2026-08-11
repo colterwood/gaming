@@ -1,7 +1,8 @@
 """Enemy AI (spec §6.5). Pure Python — no pygame.
 
 - aggressive: highest-damage available action at lowest-HP target
-- defensive:  Defend below 40% HP, else basic attack
+- defensive:  guards when hurt, but never twice running, and fights flat
+              out once cornered (M23) — see should_defend
 - support:    heal/buff ally if one is below 50% HP, else basic attack
 """
 
@@ -26,11 +27,26 @@ def _damage_abilities(enemy):
     return usable
 
 
+def should_defend(enemy):
+    """M23: a defensive enemy used to guard EVERY turn once it dropped below
+    the threshold, which turned a wounded enforcer into a damage sponge that
+    never fought back — and would only get worse on a high-level enemy with
+    a big HP pool. Now it guards at most every other turn, and stops
+    entirely once it's cornered: below AI_DEFENSIVE_LAST_STAND_HP it swings
+    with everything it has left."""
+    hurt = enemy.hp_fraction()
+    if hurt >= config.AI_DEFENSIVE_HP_THRESHOLD:
+        return False                        # not hurt enough to bother
+    if hurt < config.AI_DEFENSIVE_LAST_STAND_HP:
+        return False                        # cornered: go down swinging
+    return not enemy.defended_last_turn     # never two guards running
+
+
 def choose_action(enemy, allies, opponents):
     ai = enemy.data["ai"]
     target = _lowest_hp(opponents)
 
-    if ai == "defensive" and enemy.hp_fraction() < config.AI_DEFENSIVE_HP_THRESHOLD:
+    if ai == "defensive" and should_defend(enemy):
         return {"type": "defend"}
 
     if ai == "support":
@@ -51,6 +67,10 @@ def choose_action(enemy, allies, opponents):
                        target.rank("durability"), ab["type"]))
         return {"type": "ability", "ability_id": best["id"], "target_id": target.id}
 
-    # defensive above threshold falls through to a basic attack
-    basic = enemy.abilities_of_type("basic")[0]
-    return {"type": "ability", "ability_id": basic["id"], "target_id": target.id}
+    # A defensive enemy that isn't guarding this turn still hits back, and
+    # hits with the best thing it has rather than a token jab (M23).
+    best = max(_damage_abilities(enemy) or enemy.abilities_of_type("basic"),
+               key=lambda ab: formulas.ability_damage(
+                   ab["power"], enemy.rank(ab["scales_with"]),
+                   target.rank("durability"), ab["type"]))
+    return {"type": "ability", "ability_id": best["id"], "target_id": target.id}
