@@ -64,8 +64,9 @@ class App:
             return False
         self.game_state = save.load_game(self.SAVE_SLOT)
         story.init(self.game_state, self.content["story"])
-        from game.hub import dispatch
+        from game.hub import activities, dispatch
         dispatch.backfill_spots(self.content, self.game_state)  # pre-M13 jobs
+        activities.migrate_training_locks(self.game_state)      # pre-M16 locks
         for entry in self.game_state["roster"].values():
             attrs.sanitize_perk_choices(entry, self.content["perks"])
             entry.setdefault("energy", self.game_state.get("energy", config.DAILY_ENERGY))

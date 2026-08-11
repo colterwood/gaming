@@ -286,7 +286,7 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
   |---|---|---|---|---|---|---|---|---|---|
   | XP | 25 | 35 | 50 | 80 | 135 | 225 | 400 | 700 | 1,200 |
   | lockout (min) | 50 | 70 | 100 | 160 | 270 | 450 | 800 | 1,400 | 2,400 |
-  | sessions to rank up | 4 | 6 | 8 | 10 | 12 | 15 | 16 | 19 | 22 |
+  | sessions to rank up (boost 5) | 4 | 5 | 5 | 5 | 4 | 4 | 3 | 3 | 3 |
 
   The facility multiplies the yield: ×1 basic, ×2 upgraded (after the
   Ch. 1 boss), ×3 during a training event. Training costs energy and a
@@ -609,7 +609,7 @@ different registers; get a "loves it!" and a "hates it!" reaction.*
   starting a session pulls the trainee off the team — they stand at the
   mats, can't be swapped/assigned/dispatched, and return automatically
   (rejoining the party if there's room) when the in-game clock passes the
-  session length: TRAINING_MINUTES_BASE 30 + 30 × rank (rank 1 = 1 h).
+  session length: TRAINING_MINUTES_BY_LEVEL (M16), 50 min at level 1.
   EN cost unchanged (15 + 5 × rank, paid at start); XP (facility + banked
   double-dip, snapshotted at start) lands on completion. Unfinished
   sessions complete at sleep. The last party member can't train. The
@@ -678,8 +678,8 @@ decrypt a data cache.*
 
 **M16 — XP economy & posting chances** *(added post-POC)*.
 - **Geometric rank costs, level-keyed sessions, enemy XP tiers** — see
-  §6.3 and §6.4. Rank 10 is now a long-campaign goal (roughly 82 in-game
-  days for one attribute, energy- and time-bound), not a week's work.
+  §6.3 and §6.4. Rank 10 is a campaign-scale goal (17–30 in-game days for
+  one attribute depending on the hero's talent for it), not a week's work.
 - **Multi-day training lockouts** (§6.3): a session is a number of waking
   minutes, so high-level training genuinely takes the hero off the team
   for days. The rack and the character menu show "2d 0h to go".

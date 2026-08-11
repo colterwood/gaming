@@ -75,8 +75,10 @@ def start_training(state, content, hero_id, attribute):
         party.remove(hero_id)
     entry.pop("assignment", None)
     entry["idle_days"] = 0
+    # "ends_abs" (not the old within-day "ends") so a pre-M16 save's lock is
+    # distinguishable and can be migrated — see migrate_training_locks.
     entry["training"] = {"attribute": attribute,
-                         "ends": clock.absolute_minutes(state) + minutes,
+                         "ends_abs": clock.absolute_minutes(state) + minutes,
                          "xp": xp + banked, "banked": banked}
     energy.sync(state)
     return {"ok": True, "minutes": minutes,
@@ -120,9 +122,21 @@ def finish_training(state, content, hero_id, rejoin=True):
     return {"ok": True, "message": message, **gain}
 
 
+def migrate_training_locks(state):
+    """Save migration (M16): pre-M16 locks stored "ends" as a minute-of-day
+    (360..1560); M16 stores "ends_abs" in campaign-wide waking minutes.
+    Carry the remaining time over so an in-flight session isn't cancelled
+    or stretched by decades."""
+    for entry in state.get("roster", {}).values():
+        lock = entry.get("training")
+        if lock and "ends_abs" not in lock:
+            owed = max(0, lock.pop("ends", 0) - state["time_minutes"])
+            lock["ends_abs"] = clock.absolute_minutes(state) + owed
+
+
 def training_remaining(state, lock):
     """Waking minutes still owed on a session (M16), never negative."""
-    return max(0, lock["ends"] - clock.absolute_minutes(state))
+    return max(0, lock["ends_abs"] - clock.absolute_minutes(state))
 
 
 def finish_due_training(state, content, force=False, rejoin=True):
