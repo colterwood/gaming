@@ -106,6 +106,47 @@ def test_training_ceiling_is_rank_ten(content):
     assert e["trained_ranks"]["speed"] == config.TRAINED_MAX
 
 
+# --- M16b: training with the grain is cheaper ---
+
+def test_boost_weighted_rank_costs(content):
+    im = content["characters"]["iron_man"]["boosts"]     # STR 6, AGI 3
+    cap = content["characters"]["captain_america"]["boosts"]  # STR 2, AGI 5
+    # Iron Man climbs Strength cheaper than Cap does...
+    assert (attrs.xp_for_rank(5, im["strength"])
+            < attrs.xp_for_rank(5, cap["strength"]))
+    # ...and Cap climbs Agility cheaper than Iron Man does.
+    assert (attrs.xp_for_rank(5, cap["agility"])
+            < attrs.xp_for_rank(5, im["agility"]))
+    # boost 5 is the neutral point, and the tax/discount is bounded
+    assert attrs.xp_for_rank(5, 5) == config.XP_TO_NEXT_RANK[5]
+    assert attrs.boost_weight(0) == pytest.approx(1.5)
+    assert attrs.boost_weight(config.BOOST_MAX) == pytest.approx(0.8)
+
+
+def test_boost_weighting_applies_when_ranking_up(content):
+    boosts = content["characters"]["hulk"]["boosts"]     # STR 7, SPD 2
+    strong, slow = entry(), entry()
+    cheap = attrs.xp_for_rank(1, boosts["strength"])
+    attrs.add_training_xp(boosts, strong, "strength", cheap)
+    assert strong["trained_ranks"]["strength"] == 1      # exactly enough
+    attrs.add_training_xp(boosts, slow, "speed", cheap)
+    assert slow["trained_ranks"].get("speed", 0) == 0    # not enough for Speed
+    assert slow["attribute_xp"]["speed"] == cheap
+
+
+def test_mastery_is_reachable_inside_a_campaign(content):
+    # M16b sanity: the whole roster should master in the low hundreds of
+    # days, not the ~490 the pure-doubling curve implied.
+    for char in content["characters"].values():
+        if char["recruit"]["method"] == "npc":
+            continue
+        total = sum(attrs.xp_for_rank(level, char["boosts"][attribute])
+                    for attribute in config.ATTRIBUTES
+                    for level in range(1, config.TRAINED_MAX + 1))
+        # 0.5 XP per training minute x 1200 waking minutes = 600 XP/day ceiling
+        assert 20_000 < total < 70_000, (char["id"], total)
+
+
 # --- signature spread attacks ---
 
 def _spread_hits(content, hero_id, ability_id, enemy_count, rng, target_index=2):
@@ -270,14 +311,21 @@ def test_open_tasks_take_anyone(content):
 
 
 def test_intelligence_gate_accepts_boost_or_rank(content):
+    # M16: the boost thresholds were raised so these gates actually bite.
+    # Iron Man (INT boost 5) walks in; Cap (boost 3) has to train first.
     state = state_with(["iron_man", "captain_america"], ["iron_man"])
-    calibrate = task_by_id(content, "calibrate_sensors")   # INT 2 OR any boost
-    # Cap has an intelligence boost of 3, so he qualifies at rank 1
-    ok, _ = requirements.check(content, state, calibrate, ["captain_america"])
-    assert ok
-    debug = task_by_id(content, "debug_jarvis")            # INT 2 OR boost 2+
-    ok, _ = requirements.check(content, state, debug, ["captain_america"])
-    assert ok                                              # boost 3 >= 2
+    calibrate = task_by_id(content, "calibrate_sensors")   # INT 2 OR boost 4+
+    assert requirements.check(content, state, calibrate, ["iron_man"])[0]
+    ok, reason = requirements.check(content, state, calibrate,
+                                    ["captain_america"])
+    assert not ok and "Intelligence" in reason
+    debug = task_by_id(content, "debug_jarvis")            # INT 2 OR boost 5+
+    assert requirements.check(content, state, debug, ["iron_man"])[0]
+    assert not requirements.check(content, state, debug, ["captain_america"])[0]
+    # one rank of training opens both for Cap
+    state["roster"]["captain_america"] = entry(intelligence=2)
+    assert requirements.check(content, state, calibrate, ["captain_america"])[0]
+    assert requirements.check(content, state, debug, ["captain_america"])[0]
 
 
 def test_decrypt_cache_needs_real_intelligence(content):
@@ -286,9 +334,12 @@ def test_decrypt_cache_needs_real_intelligence(content):
     # Cap: INT rank 1, boost 3 -> fails rank 3 / (2 and boost 3) / (1 and boost 6)
     ok, reason = requirements.check(content, state, task, ["captain_america"])
     assert not ok and "Intelligence" in reason
-    state["roster"]["captain_america"] = entry(intelligence=2)
+    state["roster"]["captain_america"] = entry(intelligence=3)
     ok, _ = requirements.check(content, state, task, ["captain_america"])
-    assert ok                                   # rank 2 + boost 3 clears it
+    assert ok                                   # plain rank 3 clears it
+    # Iron Man's INT boost 5 lets him in a whole rank earlier
+    state["roster"]["iron_man"] = entry(intelligence=2)
+    assert requirements.check(content, state, task, ["iron_man"])[0]
 
 
 def test_deep_recon_needs_rank_two_everywhere(content):
@@ -325,26 +376,56 @@ def test_every_sent_hero_must_qualify(content):
     state = state_with(["iron_man", "captain_america", "ant_man"],
                        ["iron_man", "captain_america", "ant_man"])
     task = task_by_id(content, "train_recruits")     # needs rank/boost muscle
-    # Ant-Man has agility boost 5 (>=4 at rank 1) so he clears it; Cap has
-    # agility boost 5 too -> both fine
-    ok, message = requirements.check(content, state, task,
-                                     ["ant_man", "captain_america"])
-    assert ok, message
+    # M16: at rank 1 neither Cap nor Ant-Man is muscular enough
+    ok, reason = requirements.check(content, state, task,
+                                    ["ant_man", "captain_america"])
+    assert not ok and ("Ant-Man" in reason or "Captain America" in reason)
+    # train ONE of them and the crew is still refused - every hero must clear
+    state["roster"]["ant_man"] = entry(agility=3)
+    ok, reason = requirements.check(content, state, task,
+                                    ["ant_man", "captain_america"])
+    assert not ok and "Captain America" in reason
+    state["roster"]["captain_america"] = entry(agility=3)
+    assert requirements.check(content, state, task,
+                              ["ant_man", "captain_america"])[0]
 
 
 # --- Hulk's one-shot bond job ---
 
-def test_hulk_task_hidden_until_he_arrives_then_fires_once(content):
+def _days_posted(state, task, days=200):
+    posted = 0
+    for i in range(days):
+        state["issue"], state["day"] = 1 + i // 28, 1 + i % 28
+        posted += requirements.gate_open(state, task)
+    state["issue"], state["day"] = 1, 1
+    return 100.0 * posted / days
+
+
+def test_hulk_task_posting_chance_warms_with_his_bond(content):
+    # M16: 5% of days at Bond 0, 25% at Bond 1, 80% at Bond 2+
     state = state_with(["iron_man", "captain_america"],
                        ["iron_man", "captain_america"])
     task = task_by_id(content, "hulk_smash_therapy")
     assert task["bond"] == 600 and task["once"] is True
-    assert not requirements.gate_open(state, task)      # Hulk hasn't shown up
+    assert _days_posted(state, task) == 0               # Hulk hasn't shown up
     state["story_flags"]["hulk_arrived"] = True
-    assert requirements.gate_open(state, task)
+    assert _days_posted(state, task) == pytest.approx(5, abs=4)
+    bonds.add_points(state, "hulk", config.BOND_POINTS_PER_LEVEL)
+    assert _days_posted(state, task) == pytest.approx(25, abs=8)
+    bonds.add_points(state, "hulk", config.BOND_POINTS_PER_LEVEL)
+    assert _days_posted(state, task) == pytest.approx(80, abs=8)
+    # the roll is stable within a day - reopening the board can't reroll it
+    assert len({requirements.gate_open(state, task) for _ in range(20)}) == 1
+
+
+def test_hulk_task_pays_600_bond_once(content):
+    state = state_with(["iron_man", "captain_america"],
+                       ["iron_man", "captain_america"])
+    task = task_by_id(content, "hulk_smash_therapy")
+    state["story_flags"]["hulk_arrived"] = True
     ok, message = dispatch.send(content, state, task, ["iron_man"])
     assert ok, message
     dispatch.process_day(content, state)
     assert state["bonds"]["hulk"]["points"] == 600     # most of the way to 4
     assert "hulk_smash_therapy" in state["completed_tasks"]
-    assert not requirements.gate_open(state, task)     # never posted again
+    assert _days_posted(state, task) == 0              # never posted again

@@ -125,20 +125,26 @@ def test_atrophy_after_grace_days(content):
     im = state["roster"]["iron_man"]
     im["attribute_xp"]["strength"] = 30
     im["trained_ranks"]["speed"] = 1
+    im["attribute_xp"]["speed"] = 0
     passive.assign(content, state, "iron_man", "train", "agility")
     for _ in range(2):                                 # grace period
         passive.process_day(content, state)
     assert im["attribute_xp"]["strength"] == 30        # untouched so far
     passive.process_day(content, state)                # day 3: decay starts
     assert im["attribute_xp"]["strength"] == 10        # -20
-    # trained attribute keeps growing: 3 x 40 = 120 -> rank 1 (100) + 20 banked
+    # the worked attribute keeps growing: 3 days x 40 XP clears rank 1, whose
+    # cost is boost-weighted for this hero (M16b)
+    from game.progression import attributes as attrs
+    boosts = content["characters"]["iron_man"]["boosts"]
+    agility_rank_1 = attrs.xp_for_rank(1, boosts["agility"])
     assert im["trained_ranks"]["agility"] == 1
-    assert im["attribute_xp"]["agility"] == 20
+    assert im["attribute_xp"]["agility"] == 120 - agility_rank_1
     passive.process_day(content, state)                # day 4
     passive.process_day(content, state)                # day 5: strength bank dry
     assert im["attribute_xp"]["strength"] == 0
     # speed rank 1 eventually breaks down into a refunded, draining bank
-    for _ in range(4):
+    refund = attrs.xp_for_rank(1, boosts["speed"])
+    for _ in range(refund // config.ATROPHY_XP_PER_DAY + 2):
         passive.process_day(content, state)
     assert im["trained_ranks"]["speed"] == 0
 

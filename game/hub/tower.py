@@ -660,10 +660,11 @@ class HubScene:
         entry = state["roster"].get(char_id)
         if entry is not None and entry.get("training"):
             lock = entry["training"]                # mid-workout: info only
+            left = activities.training_remaining(state, lock)
             self._open_submenu(
                 char["name"],
-                [(f"Training {lock['attribute'].title()} - done "
-                  f"{clock.format_time(lock['ends'])}", True, None),
+                [(f"Training {lock['attribute'].title()} - "
+                  f"{clock.format_duration(left)} to go", True, None),
                  ("Never mind", False, None)])
             return
         if entry is not None and entry.get("dispatch"):
@@ -1025,14 +1026,12 @@ class HubScene:
         state = app.game_state
         if self._open_pending_perk(state, None):
             return
-        from game.progression import attributes as attrs
-        xp = attrs.session_xp(state, self.content["calendar"])
         party = self._party(state)
         items = []
         for hid in party:
             en = energy.hero_energy(state, hid)
             last = len(party) <= 1
-            label = f"Train {self.content['characters'][hid]['name']} (EN {en}, +{xp} XP)"
+            label = f"Train {self.content['characters'][hid]['name']} (EN {en})"
             if last:
                 label += "  [team would be empty]"
             items.append((label, last,
@@ -1040,9 +1039,11 @@ class HubScene:
         for hid in sorted(state.get("roster", {})):
             lock = state["roster"][hid].get("training")
             if lock:
+                left = activities.training_remaining(state, lock)
                 items.append((f"{self.content['characters'][hid]['name']} - "
-                              f"{lock['attribute'].title()}, done "
-                              f"{clock.format_time(lock['ends'])}", True, None))
+                              f"{lock['attribute'].title()}, "
+                              f"{clock.format_duration(left)} to go",
+                              True, None))
         items.append(("Close", False, None))
         self._open_submenu("Training Rack (team only)", items)
 
@@ -1091,15 +1092,15 @@ class HubScene:
             rank = attrs.rank(entry, attribute)
             eff = attrs.effective_rank(hero["boosts"], entry, attribute)
             head = f"{attribute.title()}  {rank}/{config.RANK_MAX} ({eff:.1f})"
-            trained = entry.get("trained_ranks", {}).get(attribute, 0)
             if not attrs.can_train(hero["boosts"], entry, attribute):
                 labels.append(f"{head}  [MAX]")
             else:
                 banked = entry.get("attribute_xp", {}).get(attribute, 0)
-                cost = attrs.xp_for_rank(trained + 1)
-                en_cost, minutes = activities.training_cost(trained + 1)
-                labels.append(f"{head}  {banked}/{cost}xp"
-                              f"  ({en_cost}EN {minutes}m)")
+                cost = attrs.xp_for_rank(rank, hero["boosts"].get(attribute, 0))
+                gain = attrs.session_xp(state, self.content["calendar"], rank)
+                en_cost, minutes = activities.training_cost(rank)
+                labels.append(f"{head}  {banked}/{cost}xp  (+{gain}xp, "
+                              f"{en_cost}EN, {clock.format_duration(minutes)})")
         return labels
 
     def _train_attr_key(self, app, key):

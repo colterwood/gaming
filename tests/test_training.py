@@ -42,16 +42,25 @@ def game_state(content):
 # --- XP thresholds (§6.3): rank N costs 100 × N ---
 
 def test_xp_for_rank_thresholds():
-    # M15: trained ranks run 1..9 (rank 2..10), so the ladder is longer
-    assert [attrs.xp_for_rank(n) for n in range(1, 10)] == [
-        100, 200, 300, 400, 500, 600, 700, 800, 900]
+    # M16: the cost to climb grows 1.5x per level, and M16b scales it by the
+    # hero's innate talent for that attribute.
+    assert [attrs.xp_for_rank(n, 5) for n in range(1, 10)] == [
+        100, 150, 225, 340, 510, 760, 1140, 1710, 2560]     # boost 5 = neutral
+    assert attrs.boost_weight(5) == pytest.approx(1.0)
+    assert attrs.boost_weight(7) < 1.0 < attrs.boost_weight(0)
+    # talent is a real discount, no talent is a real tax
+    assert attrs.xp_for_rank(9, 7) == round(2560 * 0.8)
+    assert attrs.xp_for_rank(9, 0) == round(2560 * 1.5)
 
 
 def test_rank_up_consumes_exact_xp(content):
     cap = content["characters"]["captain_america"]     # strength boost 2
     e = entry()
-    result = attrs.add_training_xp(cap["boosts"], e, "strength", 99)
-    assert result["ranks_gained"] == [] and result["xp_banked"] == 99
+    # M16b: Cap has little Strength talent, so his first rank costs 1.3x
+    cost = attrs.xp_for_rank(1, cap["boosts"]["strength"])
+    assert cost == 130
+    result = attrs.add_training_xp(cap["boosts"], e, "strength", cost - 1)
+    assert result["ranks_gained"] == [] and result["xp_banked"] == cost - 1
     result = attrs.add_training_xp(cap["boosts"], e, "strength", 1)
     assert result["ranks_gained"] == [1]
     assert result["rank"] == 2                          # rank 1 -> 2
@@ -62,8 +71,11 @@ def test_rank_up_consumes_exact_xp(content):
 
 def test_multi_rank_overflow(content):
     cap = content["characters"]["captain_america"]
+    boosts = cap["boosts"]
     e = entry()
-    result = attrs.add_training_xp(cap["boosts"], e, "strength", 100 + 200 + 50)
+    two = (attrs.xp_for_rank(1, boosts["strength"])
+           + attrs.xp_for_rank(2, boosts["strength"]))
+    result = attrs.add_training_xp(boosts, e, "strength", two + 50)
     assert result["ranks_gained"] == [1, 2]
     assert result["xp_banked"] == 50
 
@@ -90,12 +102,13 @@ def test_rank_tops_out_at_ten_and_xp_then_banks(content):
 def test_perk_pending_at_3_and_6(content):
     im = content["characters"]["iron_man"]              # agility boost 3
     e = entry()
-    attrs.add_training_xp(im["boosts"], e, "agility", 600)       # trained 1..3
+    to = lambda a, b: sum(attrs.xp_for_rank(n) for n in range(a, b))
+    attrs.add_training_xp(im["boosts"], e, "agility", to(1, 4))  # trained 1..3
     assert attrs.pending_perk_tier(e, "agility") == 3
     result = attrs.choose_perk(e, "agility", 3, "precision", content["perks"])
     assert result["ok"]
     assert attrs.pending_perk_tier(e, "agility") is None
-    attrs.add_training_xp(im["boosts"], e, "agility", 400 + 500 + 600)  # trained 4..6
+    attrs.add_training_xp(im["boosts"], e, "agility", to(4, 7))  # trained 4..6
     assert e["trained_ranks"]["agility"] == 6
     assert attrs.pending_perk_tier(e, "agility") == 6            # tier 6 reachable
     attrs.choose_perk(e, "agility", 6, "killer_instinct", content["perks"])
@@ -124,19 +137,24 @@ def test_perk_effects_sum(content):
 # --- Session XP tiers: 40 basic / 80 upgraded / 120 event ---
 
 def test_session_xp_tiers(content):
+    # M16: the base yield comes from the level table, the facility multiplies it
     state = game_state(content)
-    assert attrs.session_xp(state, content["calendar"]) == 40
+    base = config.TRAINING_XP_BY_LEVEL[1]               # 25 at level 1
+    assert attrs.session_xp(state, content["calendar"], 1) == base
     state["story_flags"]["training_upgraded"] = True
-    assert attrs.session_xp(state, content["calendar"]) == 80
+    assert attrs.session_xp(state, content["calendar"], 1) == base * 2
     state["day"] = 12                                   # S.H.I.E.L.D. Supply Drop
-    assert attrs.session_xp(state, content["calendar"]) == 120
+    assert attrs.session_xp(state, content["calendar"], 1) == base * 3
+    # and it scales with the level being trained
+    assert attrs.session_xp(state, content["calendar"], 5) == \
+        config.TRAINING_XP_BY_LEVEL[5] * 3
 
 
 def test_training_lockout_grants_xp_on_completion(content):
     # M12: training is a lockout — EN up front, XP when the clock runs out.
     state = game_state(content)
     result = activities.start_training(state, content, "captain_america", "strength")
-    assert result["ok"] and result["minutes"] == 60             # rank 1 = 1 h
+    assert result["ok"] and result["minutes"] == 50             # M16: level 1 = 50 min
     cap = state["roster"]["captain_america"]
     assert cap["energy"] == 80                          # trainee pays 20 EN now
     assert state["roster"]["iron_man"]["energy"] == 100  # teammates untouched
@@ -144,29 +162,33 @@ def test_training_lockout_grants_xp_on_completion(content):
     assert cap["attribute_xp"] == {}                    # nothing granted yet
     # too early: nothing completes
     assert activities.finish_due_training(state, content) == []
-    state["time_minutes"] += 60
+    state["time_minutes"] += 50
     messages = activities.finish_due_training(state, content)
     assert len(messages) == 1 and "Strength" in messages[0]
-    assert cap["attribute_xp"]["strength"] == 40
+    assert cap["attribute_xp"]["strength"] == config.TRAINING_XP_BY_LEVEL[1]
     assert "training" not in cap
     assert state["party"] == ["iron_man", "captain_america"]    # auto-rejoin
 
 
 def test_training_costs_scale_with_rank(content):
-    assert activities.training_cost(1) == (20, 60)      # M12: 1 h lockout
-    assert activities.training_cost(2) == (25, 90)      # original §6.1 values
-    assert activities.training_cost(7) == (50, 240)     # substantially more
+    # M16: EN still linear, minutes from the table — level 8/9 sessions run
+    # longer than a single 1200-minute day.
+    assert activities.training_cost(1) == (20, 50)
+    assert activities.training_cost(2) == (25, 70)
+    assert activities.training_cost(7) == (50, 800)
+    assert activities.training_cost(9) == (60, 2400)
 
 
 def test_banked_battle_xp_double_dips(content):
     state = game_state(content)
     cap = state["roster"]["captain_america"]
     cap["unspent_xp"] = 100
+    session = config.TRAINING_XP_BY_LEVEL[1]            # 25 at level 1
     activities.start_training(state, content, "captain_america", "strength")
-    assert cap["unspent_xp"] == 60                      # banked slice reserved
+    assert cap["unspent_xp"] == 100 - session           # banked slice reserved
     activities.finish_due_training(state, content, force=True)
-    # session grants 40 facility XP + 40 banked battle XP alongside it
-    assert cap["attribute_xp"]["strength"] == 80       # rank 1 costs 100: banked
+    # a session grants its yield plus an equal slice of banked battle XP
+    assert cap["attribute_xp"]["strength"] == session * 2
     assert cap["trained_ranks"].get("strength", 0) == 0
 
 
@@ -209,12 +231,13 @@ def test_training_completed_in_zone_waits_at_tower(content):
     # not teleport the hero into the field.
     state = game_state(content)
     activities.start_training(state, content, "captain_america", "strength")
-    state["time_minutes"] += 60
+    state["time_minutes"] += 50
     messages = activities.finish_due_training(state, content, rejoin=False)
     assert any("Waiting at the tower" in m for m in messages)
     assert state["party"] == ["iron_man"]               # benched, not fielded
     assert "training" not in state["roster"]["captain_america"]
-    assert state["roster"]["captain_america"]["attribute_xp"]["strength"] == 40
+    assert (state["roster"]["captain_america"]["attribute_xp"]["strength"]
+            == config.TRAINING_XP_BY_LEVEL[1])
 
 
 def test_training_locks_out_everything(content):

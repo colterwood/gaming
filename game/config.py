@@ -70,14 +70,11 @@ TICK_REAL_SECONDS = 7               # ...per 7 real seconds
 DAILY_ENERGY = 100
 PASS_OUT_NEXT_DAY_ENERGY = 80
 
-# Training costs scale with the rank being trained (M9): rank 2 matches the
-# original §6.1 flat costs (25 EN / 90 min). Since M12 the minutes are a
-# LOCKOUT (the trainee leaves the party for that long), not a clock jump:
-# rank 1 takes an hour, each further rank +30 min.
+# Training energy scales with the level being trained (M9). Minutes come
+# from TRAINING_MINUTES_BY_LEVEL (M16) and are a LOCKOUT, not a clock jump
+# — a high-level session legitimately spans more than one day.
 TRAINING_ENERGY_BASE = 15
 TRAINING_ENERGY_PER_RANK = 5
-TRAINING_MINUTES_BASE = 30
-TRAINING_MINUTES_PER_RANK = 30
 MISSION_ENERGY = 40
 MISSION_MINUTES = 180
 CRAFT_ENERGY = 15
@@ -178,11 +175,30 @@ DISPATCH_POWER_BONUS = 0.01         # pay multiplier step per point of avg power
 DISPATCH_MULT_MIN = 0.8
 DISPATCH_MULT_MAX = 1.5
 
-# --- Attributes & Training (§6.3) ---
-ATTRIBUTE_XP_PER_RANK = 100         # XP to gain trained rank N = 100 * N
-TRAINING_XP_BASIC = 40
-TRAINING_XP_UPGRADED = 80
-TRAINING_XP_EVENT = 120
+# --- Attributes & Training (§6.3; XP economy reworked M16) ---
+# Rank costs grow 1.5x per level: each rank is a real investment, but a
+# hero can be mastered inside a campaign rather than a dozen issues.
+# Keyed by the level you are training FROM (1 -> 2 costs 100).
+XP_TO_NEXT_RANK = {1: 100, 2: 150, 3: 225, 4: 340, 5: 510,
+                   6: 760, 7: 1140, 8: 1710, 9: 2560}
+# Training with the grain is cheaper than fighting your own nature: the
+# rank cost is scaled by BASE - STEP x boost, so a boost-7 attribute costs
+# 0.8x and a boost-0 one costs 1.5x (boost 5 is the neutral point).
+BOOST_XP_WEIGHT_BASE = 1.5
+BOOST_XP_WEIGHT_STEP = 0.1
+# What one rack session yields and how long the trainee is locked out,
+# also keyed by the level being trained.
+TRAINING_XP_BY_LEVEL = {1: 25, 2: 35, 3: 50, 4: 80, 5: 135,
+                        6: 225, 7: 400, 8: 700, 9: 1200}
+TRAINING_MINUTES_BY_LEVEL = {1: 50, 2: 70, 3: 100, 4: 160, 5: 270,
+                             6: 450, 7: 800, 8: 1400, 9: 2400}
+# Facility multipliers on the session yield (was flat 40/80/120).
+TRAINING_XP_MULT_BASIC = 1
+TRAINING_XP_MULT_UPGRADED = 2       # after the Ch.1 boss
+TRAINING_XP_MULT_EVENT = 3          # during a training event
+# Battle XP per enemy defeated, keyed by the enemy's level.
+ENEMY_XP_BY_LEVEL = {1: 12, 2: 24, 3: 36, 4: 54, 5: 72,
+                     6: 90, 7: 114, 8: 138, 9: 162, 10: 192}
 PERK_CHOICE_RANKS = (3, 6)
 
 # --- Combat formulas (§6.4) ---

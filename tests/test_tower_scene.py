@@ -424,7 +424,8 @@ def test_rack_is_party_only_and_locks_the_trainee(content):
     scene.handle_key(app, pygame.K_RETURN)              # rack again
     labels = [i[0] for i in scene.submenu["items"]]
     assert not any(l.startswith("Train Captain America") for l in labels)
-    assert any("Captain America - Strength, done" in l for l in labels)
+    assert any("Captain America - Strength," in l and "to go" in l
+               for l in labels)
     # while they're on the mats the dispatch picker refuses them too
     scene.reset_modes()
     scene.floor = "common"
@@ -434,7 +435,7 @@ def test_rack_is_party_only_and_locks_the_trainee(content):
     rows = [i for i in scene.submenu["items"] if "Captain America" in i[0]]
     assert rows and rows[0][1] is True and "[training]" in rows[0][0]
     # the clock passing the session end brings them back mid-play
-    state["time_minutes"] += 60
+    state["time_minutes"] += 50
     scene.reset_modes()
     scene._move = lambda dt, a: None                    # headless: no key poll
     scene.update(0.016, app)

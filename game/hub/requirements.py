@@ -21,6 +21,8 @@ Rank means the plain trainable level 1..RANK_MAX; boost means innate
 talent 0..BOOST_MAX. Every hero being sent must qualify.
 """
 
+import zlib
+
 from game import config
 from game.progression import attributes as attrs
 from game.social import bonds
@@ -71,10 +73,30 @@ def hero_qualifies(content, state, task, hero_id):
     return True, ""
 
 
+def daily_roll(state, task_id):
+    """A stable [0, 1) roll for this task on this date (M16). Deterministic
+    so the board doesn't reshuffle every time the player opens it."""
+    key = f"{task_id}:{state['issue']}:{state['day']}".encode()
+    return (zlib.crc32(key) % 10000) / 10000.0
+
+
+def posting_chance(state, task):
+    """Probability this job is on today's board. Tasks with a `posting`
+    block get warmer as the requester's bond grows (M16); everything else
+    is always posted once its gates are open."""
+    posting = task.get("posting")
+    if not posting:
+        return 1.0
+    ladder = posting["chance_by_bond_level"]
+    level = bonds.bond_level(
+        bonds.ensure_bond(state, posting["bond_character"])["points"])
+    return ladder[min(level, len(ladder) - 1)]
+
+
 def gate_open(state, task):
-    """Story-flag / relationship / once-only gates. These decide whether the
-    job is even POSTED — unlike the hidden skill requirements, a job whose
-    gate is shut simply isn't on the board."""
+    """Story-flag / relationship / once-only / posting-chance gates. These
+    decide whether the job is even POSTED — unlike the hidden skill
+    requirements, a job whose gate is shut simply isn't on the board."""
     requires = task.get("requires") or {}
     flag = requires.get("flag")
     if flag and not state.get("story_flags", {}).get(flag):
@@ -87,6 +109,8 @@ def gate_open(state, task):
             bonds.ensure_bond(state, bond_gate["character"])["points"])
         if level < bond_gate["level"]:
             return False
+    if daily_roll(state, task["id"]) >= posting_chance(state, task):
+        return False
     return True
 
 

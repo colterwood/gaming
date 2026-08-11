@@ -30,7 +30,7 @@
     }
   ],
   "ai": "aggressive",
-  "xp_reward": 200,
+  "level": 8,
   "credit_reward": 150,
   "boss": true,
   "enrage": {

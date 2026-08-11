@@ -97,5 +97,5 @@ def test_training_completes_at_sleep(app):
     app.go_to_sleep()                               # session runs into the night
     cap = state["roster"]["captain_america"]
     assert "training" not in cap
-    assert cap["attribute_xp"]["strength"] == 40
+    assert cap["attribute_xp"]["strength"] == config.TRAINING_XP_BY_LEVEL[1]
     assert "captain_america" in state["party"]      # rejoined by morning

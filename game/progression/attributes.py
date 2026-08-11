@@ -11,9 +11,19 @@ from game.combat import formulas
 from game.core import calendar as cal
 
 
-def xp_for_rank(n):
-    """XP required to gain trained rank N: 100 × N (§6.3)."""
-    return config.ATTRIBUTE_XP_PER_RANK * n
+def boost_weight(boost):
+    """Cost multiplier for training an attribute you have `boost` talent in
+    (M16b). Talent makes the climb cheaper; no talent makes it a slog."""
+    return max(0.1, config.BOOST_XP_WEIGHT_BASE
+               - config.BOOST_XP_WEIGHT_STEP * boost)
+
+
+def xp_for_rank(n, boost=0):
+    """XP to climb FROM level n to n+1 (§6.3, 1.5x growth since M16),
+    scaled by the hero's innate talent for that attribute (M16b).
+    `n` is the level being trained, 1..TRAINED_MAX."""
+    base = config.XP_TO_NEXT_RANK[max(1, min(config.TRAINED_MAX, n))]
+    return int(round(base * boost_weight(boost)))
 
 
 def rank(roster_entry, attribute):
@@ -40,14 +50,22 @@ def can_train(boosts, roster_entry, attribute):
     return roster_entry.get("trained_ranks", {}).get(attribute, 0) < config.TRAINED_MAX
 
 
-def session_xp(state, calendar_data):
-    """40 basic / 80 upgraded facility / 120 during a training event (§6.3)."""
+def facility_multiplier(state, calendar_data):
+    """×1 basic / ×2 upgraded facility / ×3 during a training event (§6.3)."""
     for ev in cal.active_events(state, calendar_data):
         if "training_xp_bonus" in ev.get("effects", {}):
-            return config.TRAINING_XP_EVENT
+            return config.TRAINING_XP_MULT_EVENT
     if state.get("story_flags", {}).get("training_upgraded"):
-        return config.TRAINING_XP_UPGRADED
-    return config.TRAINING_XP_BASIC
+        return config.TRAINING_XP_MULT_UPGRADED
+    return config.TRAINING_XP_MULT_BASIC
+
+
+def session_xp(state, calendar_data, level=1):
+    """XP one rack session yields at the given level (M16 table), scaled by
+    the facility multiplier."""
+    level = max(1, min(config.TRAINED_MAX, level))
+    return (config.TRAINING_XP_BY_LEVEL[level]
+            * facility_multiplier(state, calendar_data))
 
 
 def add_training_xp(boosts, roster_entry, attribute, xp):
@@ -57,9 +75,10 @@ def add_training_xp(boosts, roster_entry, attribute, xp):
     ranks = roster_entry.setdefault("trained_ranks", {})
     xp_bank[attribute] = xp_bank.get(attribute, 0) + xp
     gained = []
+    talent = boost(boosts, attribute)
     while ranks.get(attribute, 0) < config.TRAINED_MAX:
         next_rank = ranks.get(attribute, 0) + 1
-        cost = xp_for_rank(next_rank)
+        cost = xp_for_rank(next_rank, talent)
         if xp_bank[attribute] < cost:
             break
         xp_bank[attribute] -= cost

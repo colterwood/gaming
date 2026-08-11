@@ -20,11 +20,13 @@ def _spend(state, energy_cost, minutes):
     return {"ok": True, "hit_day_end": hit_end}
 
 
-def training_cost(next_rank):
-    """M9: EN and time scale with the rank being trained toward."""
-    en = config.TRAINING_ENERGY_BASE + config.TRAINING_ENERGY_PER_RANK * next_rank
-    minutes = config.TRAINING_MINUTES_BASE + config.TRAINING_MINUTES_PER_RANK * next_rank
-    return en, minutes
+def training_cost(level):
+    """EN and lockout minutes for one rack session (M9 energy scaling, M16
+    minute table). `level` is the level being trained FROM, 1..TRAINED_MAX;
+    a high-level session legitimately runs longer than a single day."""
+    level = max(1, min(config.TRAINED_MAX, level))
+    en = config.TRAINING_ENERGY_BASE + config.TRAINING_ENERGY_PER_RANK * level
+    return en, config.TRAINING_MINUTES_BY_LEVEL[level]
 
 
 def training_session(state):
@@ -38,9 +40,10 @@ def training_session(state):
 
 def start_training(state, content, hero_id, attribute):
     """M12: training is a lockout, not a clock jump. The trainee pays the
-    EN up front, leaves the party, and is unavailable until the in-game
-    clock passes the session length (rank 1 = 1 h, +30 min per rank). XP
-    (facility + banked battle XP double-dip) is granted on completion."""
+    EN up front, leaves the party, and is unavailable until they have put
+    in the session's hours (M16: measured in WAKING minutes, so a
+    high-level session genuinely spans several days). XP (facility +
+    banked battle XP double-dip) is granted on completion."""
     from game.progression import attributes as attrs
 
     character = content["characters"][hero_id]
@@ -57,14 +60,14 @@ def start_training(state, content, hero_id, attribute):
                 "message": f"{character['name']} isn't on the team."}
     if len(party) <= 1:
         return {"ok": False, "message": "Someone has to stay on the team."}
-    next_rank = entry.get("trained_ranks", {}).get(attribute, 0) + 1
-    en_cost, minutes = training_cost(next_rank)
+    level = attrs.rank(entry, attribute)
+    en_cost, minutes = training_cost(level)
     # Strictly more EN than the cost: a session must not zero the trainee out
     # (they'd rejoin at 0 and instantly pass the team out).
     if energy.hero_energy(state, hero_id) <= en_cost:
         return {"ok": False, "message": f"{character['name']} is too exhausted."}
     energy.spend_hero(state, hero_id, en_cost)
-    xp = attrs.session_xp(state, content["calendar"])
+    xp = attrs.session_xp(state, content["calendar"], level)
     banked = min(entry.get("unspent_xp", 0), xp)        # battle XP double-dips
     if banked:
         entry["unspent_xp"] = entry.get("unspent_xp", 0) - banked
@@ -73,12 +76,13 @@ def start_training(state, content, hero_id, attribute):
     entry.pop("assignment", None)
     entry["idle_days"] = 0
     entry["training"] = {"attribute": attribute,
-                         "ends": state["time_minutes"] + minutes,
+                         "ends": clock.absolute_minutes(state) + minutes,
                          "xp": xp + banked, "banked": banked}
     energy.sync(state)
     return {"ok": True, "minutes": minutes,
             "message": (f"{character['name']} hits the mats: "
-                        f"{attribute.title()}, {minutes} min.")}
+                        f"{attribute.title()}, "
+                        f"{clock.format_duration(minutes)}.")}
 
 
 def finish_training(state, content, hero_id, rejoin=True):
@@ -116,14 +120,21 @@ def finish_training(state, content, hero_id, rejoin=True):
     return {"ok": True, "message": message, **gain}
 
 
+def training_remaining(state, lock):
+    """Waking minutes still owed on a session (M16), never negative."""
+    return max(0, lock["ends"] - clock.absolute_minutes(state))
+
+
 def finish_due_training(state, content, force=False, rejoin=True):
-    """Complete every training lockout whose time has passed (or all of
-    them with force=True, used at sleep). Pass rejoin=False while the team
+    """Complete every training lockout whose hours are served. M16: a
+    session spans as many days as its length demands — sleeping banks the
+    rest of that day's waking hours rather than short-circuiting it. Pass
+    force=True to settle everything regardless, rejoin=False while the team
     is out in a zone. Returns messages."""
     messages = []
     for hero_id in sorted(state.get("roster", {})):
         lock = state["roster"][hero_id].get("training")
-        if lock and (force or state["time_minutes"] >= lock["ends"]):
+        if lock and (force or training_remaining(state, lock) <= 0):
             messages.append(finish_training(state, content, hero_id,
                                             rejoin=rejoin)["message"])
     return messages
@@ -157,8 +168,13 @@ def assignment_tasks_today(state, assignments, tier=1):
     base = ((state["issue"] - 1) * config.DAYS_PER_ISSUE + state["day"] - 1) * 2
     today = []
     for level in range(1, tier + 1):
-        pool = sorted((a for a in assignments if a.get("tier", 1) == level
-                       and requirements.gate_open(state, a)),
+        open_here = [a for a in assignments if a.get("tier", 1) == level
+                     and requirements.gate_open(state, a)]
+        # M16: a job with its own posting chance already won a dice roll to
+        # be here — it doesn't also have to win the rotation lottery.
+        today.extend(sorted((a for a in open_here if a.get("posting")),
+                            key=lambda a: a["id"]))
+        pool = sorted((a for a in open_here if not a.get("posting")),
                       key=lambda a: a["id"])
         if not pool:
             continue

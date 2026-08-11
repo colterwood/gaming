@@ -74,9 +74,11 @@ class BattleEngine:
             self.outcome = "lose"
 
     def rewards(self):
+        """M16: XP per enemy defeated comes from the enemy's level tier."""
         if self.outcome != "win":
             return {"xp": 0, "credits": 0}
-        return {"xp": sum(e.data["xp_reward"] for e in self.enemies),
+        return {"xp": sum(config.ENEMY_XP_BY_LEVEL[e.data["level"]]
+                          for e in self.enemies),
                 "credits": sum(e.data["credit_reward"] for e in self.enemies)}
 
     # --- turn resolution ---

@@ -29,6 +29,6 @@
     }
   ],
   "ai": "aggressive",
-  "xp_reward": 20,
+  "level": 2,
   "credit_reward": 15
 }

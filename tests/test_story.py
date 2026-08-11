@@ -119,8 +119,9 @@ def test_battle_quest_recruits_and_flags(content):
     boss = next(q for q in content["story"] if q.get("flags", {}).get("training_upgraded"))
     story.complete_battle_quest(state, boss, content)
     assert state["story_flags"]["training_upgraded"] is True
-    # upgraded facility now grants 80 XP sessions (§6.3)
-    assert attrs.session_xp(state, content["calendar"]) == config.TRAINING_XP_UPGRADED
+    # M16: the upgraded facility doubles the level's session yield
+    assert (attrs.session_xp(state, content["calendar"], 1)
+            == config.TRAINING_XP_BY_LEVEL[1] * config.TRAINING_XP_MULT_UPGRADED)
 
 
 def test_recruit_is_idempotent(content):

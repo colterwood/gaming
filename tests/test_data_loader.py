@@ -34,7 +34,7 @@ MINIMAL_ENEMY = {
          "power": 8, "scales_with": "strength", "target": "single"},
     ],
     "ai": "aggressive",
-    "xp_reward": 10,
+    "level": 2,
     "credit_reward": 5,
 }
 

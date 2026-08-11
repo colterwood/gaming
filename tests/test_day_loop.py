@@ -120,12 +120,13 @@ def test_supply_drop_event_active_days_12_13(content):
 # --- activities (§6.1 costs) ---
 
 def test_training_costs():
-    # generic session = rank-2 equivalent costs (25 EN / 90 min, the old §6.1 flat)
+    # legacy generic session: level-2 costs from the M16 tables (25 EN / 70 min)
     state = fresh_state()
     result = activities.training_session(state)
     assert result["ok"]
-    assert state["energy"] == config.DAILY_ENERGY - 25
-    assert state["time_minutes"] == 360 + 90
+    en, minutes = activities.training_cost(2)
+    assert state["energy"] == config.DAILY_ENERGY - en
+    assert state["time_minutes"] == 360 + minutes
 
 
 def test_mission_costs_and_launches():

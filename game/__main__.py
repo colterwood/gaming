@@ -83,12 +83,13 @@ class App:
     def go_to_sleep(self, passed_out=False):
         from game.core import energy
         from game.hub import activities, dispatch, passive, story
-        # unfinished rack sessions run into the night and complete (M12)
-        messages = activities.finish_due_training(self.game_state, self.content,
-                                                  force=True)
-        messages += passive.process_day(self.content, self.game_state)
+        messages = passive.process_day(self.content, self.game_state)
         messages += dispatch.process_day(self.content, self.game_state)
         result = activities.go_to_sleep(self.game_state, passed_out=passed_out)
+        # M16: rack sessions are measured in WAKING hours and may span days.
+        # Settle them after the calendar advances, so the night banks the
+        # rest of the day the hero spent on the mats.
+        messages += activities.finish_due_training(self.game_state, self.content)
         messages += story.check_deadlines(self.game_state, self.content["story"])
         energy.sync(self.game_state)
         self.autosave()

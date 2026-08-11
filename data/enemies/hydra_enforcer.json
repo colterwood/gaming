@@ -2,14 +2,24 @@
   "id": "hydra_enforcer",
   "name": "HYDRA Enforcer",
   "power_grid": {
-    "strength": 3, "speed": 2, "agility": 2,
-    "stamina": 3, "durability": 3, "intelligence": 2
+    "strength": 3,
+    "speed": 2,
+    "agility": 2,
+    "stamina": 3,
+    "durability": 3,
+    "intelligence": 2
   },
   "abilities": [
-    {"id": "riot_baton", "name": "Riot Baton", "type": "basic",
-     "power": 12, "scales_with": "strength", "target": "single"}
+    {
+      "id": "riot_baton",
+      "name": "Riot Baton",
+      "type": "basic",
+      "power": 12,
+      "scales_with": "strength",
+      "target": "single"
+    }
   ],
   "ai": "defensive",
-  "xp_reward": 30,
+  "level": 3,
   "credit_reward": 20
 }

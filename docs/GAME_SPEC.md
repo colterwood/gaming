@@ -145,15 +145,19 @@ plugs into it.
 > `boosts` are the innate-talent table (M15), transcribed from the printed
 > ratings on the real 1991 card backs — Iron Man's above are his actual
 > Series II ratings. They run 0..`BOOST_MAX` (7); 0 means no natural talent.
-> Note the card-derived roster has at least 1 in every attribute, so a
-> board requirement of `min_boost: 1` accepts every current hero. They are NOT the hero's
-> rank: every hero starts at rank 1 in all six and trains toward
-> `RANK_MAX` (10). See §6.3 for how the two combine.
+> Boosts are NOT the hero's rank: every hero starts at rank 1 in all six and
+> trains toward `RANK_MAX` (10). See §6.3 for how the two combine, both in
+> combat and in what a rank costs to train.
+>
+> Note the card-derived roster has at least 1 in every attribute, so a board
+> requirement of `min_boost: 1` would accept every current hero — M16 raised
+> the shipped thresholds accordingly.
 
 ### 5.2 Enemy (`data/enemies/hydra_grunt.json`)
 
 Same shape as character minus gifts/birthday/synergies, plus:
-`"ai": "aggressive" | "defensive" | "support"` and `"xp_reward"`, `"credit_reward"`.
+`"ai": "aggressive" | "defensive" | "support"`, `"level"` (1–10, the XP
+tier — M16 replaced the old per-enemy `xp_reward`), and `"credit_reward"`.
 Enemies keep a flat `power_grid` (no boosts) whose values ARE their effective
 ranks, valid 1..`ENEMY_RANK_MAX` (20) so bosses can sit above the hero ladder.
 
@@ -186,7 +190,7 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Day span | 6:00 → 26:00 (2 AM) |
 | Tick | 10 in-game minutes per 7 real seconds (cosmetic in POC; activities also advance the clock in fixed jumps) |
 | Daily energy | 100 |
-| Training session | trainee EN 15+5/rank; M12: a LOCKOUT of 30+30/rank min (rank 1 = 1 h) — the trainee leaves the party for that time; no clock jump |
+| Training session | trainee EN 15+5/level; a LOCKOUT of TRAINING_MINUTES_BY_LEVEL (level 1 = 50 min, level 9 = 2,400) measured in WAKING minutes, so high-level sessions span days — see §6.3 |
 | Battle (ambush/trap, won) | +1 h clock (M12 BATTLE_MINUTES) |
 | Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
 | Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
@@ -250,10 +254,48 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
   Cap keeps his Agility edge. Both constants are single-line tunables.
 - Enemies have no boosts — their `power_grid` IS the effective rank, and
   bosses may be written above the hero ladder up to `ENEMY_RANK_MAX` (20).
-- Attribute XP to gain trained rank N: `100 × N` (100 … 900; 4,500 per
-  attribute to max).
-- Training XP per session: 40 (basic facility) / 80 (upgraded) / 120 (event).
-  Training costs energy and a time lockout — it never costs XP (M12).
+- **Rank costs grow 1.5× per level** (M16, `XP_TO_NEXT_RANK`), keyed by the
+  level you are climbing FROM:
+
+  | from level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | XP | 100 | 150 | 225 | 340 | 510 | 760 | 1,140 | 1,710 | 2,560 |
+
+- **Costs are boost-weighted** (M16b): the table above is multiplied by
+  `BOOST_XP_WEIGHT_BASE - BOOST_XP_WEIGHT_STEP × boost` (1.5 - 0.1 × boost),
+  so training with the grain is cheap and fighting your own nature is a
+  slog. Boost 5 is the neutral point; boost 7 pays 0.8× and boost 0 pays
+  1.5×. Atrophy refunds the same weighted amount when a rank decays.
+
+  | boost | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
+  |---|---|---|---|---|---|---|---|---|
+  | cost × | 1.50 | 1.40 | 1.30 | 1.20 | 1.10 | 1.00 | 0.90 | 0.80 |
+  | days for that attribute 1→10 | 30 | 27 | 26 | 24 | 23 | 21 | 18 | 17 |
+
+  Mastery (all six at rank 10) therefore costs ~46k–54k XP and lands at
+  **125–146 in-game days per hero**, character-shaped: Hulk masters
+  Strength in 17 days and Speed in 26, Iron Man the reverse. Because
+  benched heroes train in parallel (party caps at 4, the rest can all be
+  on the mats), a full roster masters in roughly the same calendar time as
+  one hero.
+- **A rack session yields and costs** by the level being trained (M16,
+  `TRAINING_XP_BY_LEVEL` / `TRAINING_MINUTES_BY_LEVEL`; energy stays
+  `15 + 5 × level`):
+
+  | level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | XP | 25 | 35 | 50 | 80 | 135 | 225 | 400 | 700 | 1,200 |
+  | lockout (min) | 50 | 70 | 100 | 160 | 270 | 450 | 800 | 1,400 | 2,400 |
+  | sessions to rank up | 4 | 6 | 8 | 10 | 12 | 15 | 16 | 19 | 22 |
+
+  The facility multiplies the yield: ×1 basic, ×2 upgraded (after the
+  Ch. 1 boss), ×3 during a training event. Training costs energy and a
+  lockout — it never costs XP (M12).
+- **Lockouts are measured in WAKING minutes and may span days** (M16). A
+  day holds 1,200 usable minutes (6:00–26:00), so a level-8 session runs
+  1d 3h and a level-9 session exactly 2 days. `clock.absolute_minutes`
+  counts elapsed waking time; sleeping banks the rest of that day rather
+  than short-circuiting the session.
 - Perk choice at trained ranks 3 and 6: two options per attribute, flat effects
   in POC. Define perk tables in `data/perks.json`.
 - Mastery (all six at rank 10) is a stub in POC: detect it, show the foil
@@ -272,6 +314,10 @@ basic_damage  = ability.power + scaling_rank*4 - target.durability*2   (min 1)
 special_damage= ability.power + scaling_rank*5 - target.durability*2   (min 1)
 crit_chance   = agility*4  (percent; crit = damage × 1.5)
 dodge_chance  = agility*3  (percent; roll after hit roll, before crit)
+battle XP     = per enemy DEFEATED, from its level (M16 ENEMY_XP_BY_LEVEL):
+                lvl 1-10 -> 12, 24, 36, 54, 72, 90, 114, 138, 162, 192.
+                Banked per participating hero; KO'd participants get
+                KO_XP_MULT (50%). No XP on a loss.
 ultimate      = +20 charge per turn taken, +10 per hit received; fires at 100
                 (M15: charge CARRIES OVER between battles — banked to the
                  roster entry on finish_battle, restored on the next one)
@@ -629,6 +675,29 @@ wins Agility at both; walk into a battle with a part-charged ultimate; watch
 Unibeam splash the neighbours and Pym Barrage hit three; lose to Crossbones at
 rank 1 and beat him at rank 2; get refused by Coulson for sending Cap to
 decrypt a data cache.*
+
+**M16 — XP economy & posting chances** *(added post-POC)*.
+- **Geometric rank costs, level-keyed sessions, enemy XP tiers** — see
+  §6.3 and §6.4. Rank 10 is now a long-campaign goal (roughly 82 in-game
+  days for one attribute, energy- and time-bound), not a week's work.
+- **Multi-day training lockouts** (§6.3): a session is a number of waking
+  minutes, so high-level training genuinely takes the hero off the team
+  for days. The rack and the character menu show "2d 0h to go".
+- **Posting chances** (`posting` in assignments.json): a board job may
+  appear only on a dice roll that warms as its requester's bond grows.
+  Hulk's "Spot Hulk at the Heavy Bags" is posted on 5% of days at Bond 0,
+  25% at Bond 1 and 80% at Bond 2+. The roll is a deterministic hash of
+  (task, issue, day) so reopening the board never rerolls it, and such a
+  job bypasses the 2-per-tier rotation — it already won a roll to be there.
+- **Boost thresholds raised** so the M15 hidden gates actually discriminate
+  against the card-derived roster (every hero has at least boost 1 in
+  every attribute, which made `min_boost: 1` a tautology): Calibrate wants
+  INT rank 2 or boost 4+, Debug JARVIS rank 2 or boost 5+, Spar rank 2 or
+  boost 6+, and the tier-2 jobs step up from there.
+*AC: watch a level-1 attribute take four sessions and a level-9 one take
+22; start a level-9 session and find the hero still on the mats two days
+later; see Hulk's job show up roughly four days in five once he likes you;
+get refused sending Cap to calibrate the sensors at Intelligence rank 1.*
 
 ---
 

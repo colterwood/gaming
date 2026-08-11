@@ -39,9 +39,10 @@ def clear(state, hero_id):
     state["roster"][hero_id]["idle_days"] = 0
 
 
-def _atrophy(entry, base_grid, exclude=None):
+def _atrophy(entry, boosts, exclude=None):
     """Drain XP from unworked attributes; drop a trained rank when the bank
-    runs dry (§M9: 'slowly start to decrease')."""
+    runs dry (§M9: 'slowly start to decrease'). The refund matches what the
+    rank cost this hero, boost weighting included (M16b)."""
     xp_bank = entry.setdefault("attribute_xp", {})
     ranks = entry.setdefault("trained_ranks", {})
     decayed = False
@@ -53,7 +54,7 @@ def _atrophy(entry, base_grid, exclude=None):
             rank = ranks.get(attribute, 0)
             if rank > 0:
                 ranks[attribute] = rank - 1
-                bank += attrs.xp_for_rank(rank)
+                bank += attrs.xp_for_rank(rank, attrs.boost(boosts, attribute))
                 decayed = True
             else:
                 bank = 0

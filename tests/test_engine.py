@@ -83,7 +83,8 @@ def test_full_battle_to_win(content):
             break
         drive(engine, basic_at_first_enemy)
     assert engine.outcome == "win"
-    assert engine.rewards() == {"xp": 60, "credits": 45}  # 3 grunts: 3*20 xp, 3*15 credits
+    # M16: 3 level-2 grunts -> 3 x 24 XP; credits unchanged
+    assert engine.rewards() == {"xp": 72, "credits": 45}
 
 
 def test_special_costs_battle_energy(content):

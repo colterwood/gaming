@@ -150,7 +150,10 @@ def _validate_enemy(enemy, where):
     ai = _require(enemy, "ai", str, where)
     if ai not in ("aggressive", "defensive", "support"):
         raise DataError(f"{where}: ai must be aggressive|defensive|support, got '{ai}'")
-    _require(enemy, "xp_reward", int, where)
+    level = _require(enemy, "level", int, where)        # XP tier (M16)
+    if level not in config.ENEMY_XP_BY_LEVEL:
+        raise DataError(f"{where}: level must be "
+                        f"1..{max(config.ENEMY_XP_BY_LEVEL)}, got {level}")
     _require(enemy, "credit_reward", int, where)
 
 
@@ -326,6 +329,18 @@ def load_assignments(data_dir=None):
                            for v in spot[1:])):
             raise DataError(f"{tw}: spot must be [area, x, y]")
         _validate_task_requires(task.get("requires"), tw)    # M15
+        posting = task.get("posting")                        # M16
+        if posting is not None:
+            if not isinstance(posting, dict):
+                raise DataError(f"{tw}: posting must be an object")
+            _require(posting, "bond_character", str, f"{tw} posting")
+            ladder = _require(posting, "chance_by_bond_level", list,
+                              f"{tw} posting")
+            if not ladder or not all(isinstance(c, (int, float))
+                                     and not isinstance(c, bool)
+                                     and 0.0 <= c <= 1.0 for c in ladder):
+                raise DataError(f"{tw}: posting.chance_by_bond_level must be "
+                                f"a non-empty list of 0..1 chances")
         if task["id"] in seen:
             raise DataError(f"{tw}: duplicate id")
         seen.add(task["id"])
@@ -549,6 +564,10 @@ def load_all(data_dir=None):
         if gate and gate["character"] not in characters:
             raise DataError(f"assignments.json '{task['id']}': requires.bond "
                             f"character '{gate['character']}' not found")
+        posting = task.get("posting")
+        if posting and posting["bond_character"] not in characters:
+            raise DataError(f"assignments.json '{task['id']}': posting "
+                            f"character '{posting['bond_character']}' not found")
     dialogue = load_dialogue(data_dir)
     for char_id in dialogue:
         if char_id not in characters:

@@ -149,9 +149,14 @@ def test_send_validates_count_and_party_floor(content):
     ok, message = dispatch.send(content, state, two_hero,
                                 ["iron_man", "captain_america"])
     assert not ok and "stay on the team" in message             # party floor
+    # M16: spar_rookies wants rank 2 or a boost 6+ in a physical stat, so
+    # Ant-Man needs a rank of training before he can be sent
     state["roster"]["ant_man"] = entry()
-    ok, _ = dispatch.send(content, state, two_hero, ["iron_man", "ant_man"])
-    assert ok
+    ok, message = dispatch.send(content, state, two_hero, ["iron_man", "ant_man"])
+    assert not ok and "COULSON" in message
+    state["roster"]["ant_man"]["trained_ranks"] = {"agility": 1}
+    ok, message = dispatch.send(content, state, two_hero, ["iron_man", "ant_man"])
+    assert ok, message
     assert state["party"] == ["captain_america"]
 
 
