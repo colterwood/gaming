@@ -78,16 +78,22 @@ def test_search_loot_within_zone_table(content):
     rng = random.Random(11)
     lo, hi = zone["loot"]["credits"]
     saw_item = False
-    for _ in range(300):
+    empties = finds = 0
+    for _ in range(600):
         result = field.search_loot(zone, rng)
         if result["trap"]:
             assert result["credits"] == 0 and result["item"] is None
             continue
+        if result["credits"] == 0 and result["item"] is None:
+            empties += 1                # M12: most crates hold nothing
+            continue
+        finds += 1
         assert lo <= result["credits"] <= hi
         if result["item"]:
             assert result["item"] in zone["loot"]["items"]
             saw_item = True
     assert saw_item
+    assert empties > finds              # find_chance 0.30 at the docks
 
 
 def test_trap_rate_scales_with_danger(content):

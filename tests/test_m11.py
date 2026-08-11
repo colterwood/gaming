@@ -213,8 +213,9 @@ def test_gift_reactions_show_relevance(content):
     state["inventory"] = {"forties_memorabilia": 1, "hydra_propaganda": 1,
                           "med_kit": 1}
     assert "loves it!" in bonds.give_gift(state, cap, "forties_memorabilia")["message"]
+    state["day"] = 2                    # M12: one gift per receiver per day
     assert "hates it!" in bonds.give_gift(state, cap, "hydra_propaganda")["message"]
-    state["bonds"]["captain_america"]["gifts_this_week"] = 0
+    state["day"] = 7                    # both earlier gifts age out of the window
     result = bonds.give_gift(state, cap, "med_kit")
     assert "accepts it politely" in result["message"]
     assert result["category"] == "neutral"

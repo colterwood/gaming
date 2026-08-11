@@ -366,9 +366,11 @@ def load_zones(data_dir=None):
             for item_id in loot.get("items", []):
                 if not isinstance(item_id, str):
                     raise DataError(f"{zw}: loot.items entries must be strings")
-            chance = loot.get("item_chance", 0.0)
-            if not isinstance(chance, (int, float)) or not 0.0 <= chance <= 1.0:
-                raise DataError(f"{zw}: loot.item_chance must be 0..1")
+            for key in ("item_chance", "find_chance"):
+                chance = loot.get(key, 0.0)
+                if not isinstance(chance, (int, float)) or isinstance(chance, bool) \
+                        or not 0.0 <= chance <= 1.0:
+                    raise DataError(f"{zw}: loot.{key} must be 0..1")
         if zone["id"] in seen:
             raise DataError(f"{zw}: duplicate id")
         seen.add(zone["id"])

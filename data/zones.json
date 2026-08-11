@@ -5,7 +5,7 @@
     "danger": 1,
     "spawn": [3, 16],
     "target_spot": [33, 5],
-    "loot": {"credits": [8, 20], "items": ["tech_scrap", "coffee"], "item_chance": 0.35},
+    "loot": {"find_chance": 0.3, "credits": [8, 20], "items": ["tech_scrap", "coffee"], "item_chance": 0.35},
     "map": [
       "########################################",
       "#ww##ww####ww##ww####ww##ww####ww##ww###",
@@ -37,7 +37,7 @@
     "danger": 2,
     "spawn": [3, 16],
     "target_spot": [30, 4],
-    "loot": {"credits": [15, 35], "items": ["vintage_vinyl", "sketchbook", "shawarma"], "item_chance": 0.35},
+    "loot": {"find_chance": 0.35, "credits": [15, 35], "items": ["vintage_vinyl", "sketchbook", "shawarma"], "item_chance": 0.35},
     "map": [
       "########################################",
       "#ww##ww##ww##ww##ww##ww##ww##ww##ww##ww#",
@@ -69,7 +69,7 @@
     "danger": 3,
     "spawn": [3, 16],
     "target_spot": [34, 3],
-    "loot": {"credits": [25, 60], "items": ["hydra_propaganda", "rare_alloy"], "item_chance": 0.4},
+    "loot": {"find_chance": 0.4, "credits": [25, 60], "items": ["hydra_propaganda", "rare_alloy"], "item_chance": 0.4},
     "map": [
       "########################################",
       "#ww##ww##ww##ww##ww##ww##ww##ww##ww##ww#",

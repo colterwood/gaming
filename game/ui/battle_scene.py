@@ -271,12 +271,12 @@ class BattleScene:
                          center=(int(p["x"]), int(p["y"])), shadow="ink", bold=True)
 
     def _target_arrow(self, surface, pos):
+        """Gold arrowhead pointing DOWN at the targeted enemy."""
         x, y = pos
+        pygame.draw.line(surface, widgets.INK, (x - 4, y - 1), (x + 4, y - 1))
         for i in range(5):
             pygame.draw.line(surface, widgets.GOLD,
-                             (x - (4 - i), y - i), (x + (4 - i), y - i))
-        pygame.draw.line(surface, widgets.INK, (x - 4, y), (x, y + 4))
-        pygame.draw.line(surface, widgets.INK, (x + 4, y), (x, y + 4))
+                             (x - (4 - i), y + i), (x + (4 - i), y + i))
 
     def _draw_turn_strip(self, surface):
         pixelkit.text(surface, f"Round {self.engine.round_number}", 14, "cream",

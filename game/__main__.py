@@ -81,7 +81,10 @@ class App:
     def go_to_sleep(self, passed_out=False):
         from game.core import energy
         from game.hub import activities, dispatch, passive, story
-        messages = passive.process_day(self.content, self.game_state)
+        # unfinished rack sessions run into the night and complete (M12)
+        messages = activities.finish_due_training(self.game_state, self.content,
+                                                  force=True)
+        messages += passive.process_day(self.content, self.game_state)
         messages += dispatch.process_day(self.content, self.game_state)
         result = activities.go_to_sleep(self.game_state, passed_out=passed_out)
         messages += story.check_deadlines(self.game_state, self.content["story"])
@@ -128,6 +131,7 @@ class App:
         self.machine.transition(GameState.BATTLE)
 
     def finish_battle(self, engine):
+        from game.core import clock, energy
         quest = getattr(self, "battle_quest", None)
         ambush = getattr(self, "battle_ambush", False)
         state = self.game_state
@@ -135,6 +139,8 @@ class App:
             from game.hub import activities, story
             from game.progression import mastery
             from game.social import bonds
+            if ambush:      # M12: an unplanned fight still takes time
+                clock.advance(state, config.BATTLE_MINUTES)
             rewards = engine.rewards()
             credits = rewards["credits"] if ambush else \
                 activities.mission_credits(state, rewards["credits"])
@@ -168,10 +174,20 @@ class App:
                 message = story.fail_mission(state, quest)
                 if self.hub:
                     self.hub.log(message)
+            # M12: defeat costs 3 hours and CAPS the team at 10 EN back at
+            # the tower — it no longer ends the day. A cap, never a raise:
+            # losing on fumes must not beat winning on fumes.
+            clock.advance(state, config.DEFEAT_RECOVERY_MINUTES)
+            for hero_id in energy.party(state):
+                energy.set_hero_energy(state, hero_id, min(
+                    energy.hero_energy(state, hero_id), config.DEFEAT_ENERGY))
+            energy.sync(state)
+            if self.hub:
+                self.hub.log("Beaten. The team limps back to the Tower to regroup.")
+                self.hub.return_to_tower()
             self.battle_quest = None
             self.battle = None
             self.machine.transition(GameState.HUB)
-            self.go_to_sleep(passed_out=True)       # dragged home; costly night
             return
         self.battle_quest = None
         self.battle = None

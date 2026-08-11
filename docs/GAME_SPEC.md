@@ -64,7 +64,7 @@ secret-wars-poc/
 │   │   ├── entities.py        # Combatant built from character JSON + trained ranks
 │   │   └── enemy_ai.py        # simple AI (see §7)
 │   ├── social/
-│   │   ├── bonds.py           # bond points, levels, weekly gift limits
+│   │   ├── bonds.py           # bond points, levels, gift limits (M12 rolling window)
 │   │   └── events.py          # bond-event triggering
 │   ├── progression/
 │   │   ├── attributes.py      # training XP, ranks, perk choices
@@ -166,7 +166,8 @@ Equipment adds `"slot"` and `"effects"` (flat stat mods only in POC).
 
 One JSON per slot: current day/issue/time, energy, roster (per hero: trained
 ranks, attribute XP, chosen perks, equipped gear, ultimate charge), bond points +
-weekly gift counts per character, inventory, credits, story flags, quest states.
+gift history (gift_days/last_gift) per character, inventory, credits, story
+flags, quest states.
 Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 
 ---
@@ -180,7 +181,9 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Day span | 6:00 → 26:00 (2 AM) |
 | Tick | 10 in-game minutes per 7 real seconds (cosmetic in POC; activities also advance the clock in fixed jumps) |
 | Daily energy | 100 |
-| Training session | 25 energy, +90 min clock |
+| Training session | trainee EN 15+5/rank; M12: a LOCKOUT of 30+30/rank min (rank 1 = 1 h) — the trainee leaves the party for that time; no clock jump |
+| Battle (ambush/trap, won) | +1 h clock (M12 BATTLE_MINUTES) |
+| Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
 | Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
 | Craft action | 15 energy, +60 min |
 | Small task | 10–20 energy |
@@ -204,8 +207,10 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Personal quest | +150 to +250 |
 
 - 250 points per Bond Level; 10 levels; 2,500 lifetime max.
-- Max 2 gifts per character per calendar week (weeks are 7-day rows of the
-  28-day Issue).
+- Gift limits (M12, replaces the weekly cap): 1 gift per receiver per day,
+  max 2 per receiver per rolling 5 days (GIFT_WINDOW_DAYS/GIFTS_PER_WINDOW);
+  repeating yesterday's gift to the same receiver costs 5 points
+  (GIFT_REPEAT_PENALTY, applied after the birthday multiplier).
 - Level gates: 2 = bond scene, 4 = relationship recruit, 6 = synergy passive,
   8 = exclusive gear quest, 10 = signature scene + costume.
 - POC content: Cap's Level-2 bond scene; Ant-Man recruit is quest-based (story),
@@ -275,8 +280,9 @@ Avengers Tower rooms and activities:
 | Training Floor | Attribute training (pick hero + attribute); upgrades to tier 2 via story flag after Ch. 1 boss |
 | Ops Floor | Launch story missions, view quest log |
 
-Sleep sequence: fade out → advance calendar → reset energy/talk flags → weekly
-gift-counter reset on day 1/8/15/22 → autosave → fade in.
+Sleep sequence: fade out → advance calendar → reset energy/talk flags →
+autosave → fade in. (Gift limits are the M12 rolling window — nothing weekly
+to reset.)
 
 Calendar POC content: Issue 1 (28 days), Cap's birthday on Issue 1 Day 20, one
 2-day mini-event ("S.H.I.E.L.D. Supply Drop": shop discount + bonus training XP).
@@ -334,7 +340,8 @@ battles from the Ops Floor.
 *AC: play three consecutive in-game days; energy and clock enforce limits;
 save/reload restores mid-run state.*
 
-**M3 — Bonds.** Talk/gift interactions with §6.2 math, weekly gift limits,
+**M3 — Bonds.** Talk/gift interactions with §6.2 math, gift limits (weekly
+at M3; replaced by the M12 rolling window),
 bond-level display, Cap's Level-2 bond scene (simple dialogue boxes), same-party
 mission points.
 *AC: reach Cap Bond 2 through play; gift-week limit enforced across a week
@@ -438,8 +445,8 @@ and observe passive gains and post-grace atrophy; all text crisp.*
   heroes neither idle-atrophy nor gain passively.
 - **No teleport home**: winning a mission battle no longer returns the
   team to the tower — they stay in the zone and must walk back to the
-  helipad to take the Quinjet. Losing still drags the team home with the
-  pass-out penalty.
+  helipad to take the Quinjet. Losing drags the team home (superseded by
+  M12: +3 h recovery, party capped at 10 EN, the day continues).
 *AC: feed a hero mid-zone and see EN rise; search a crate, get loot, and
 have it respawn next day; spring at least one trap; dispatch a hero, see
 them refuse party re-entry until they return with rewards; win a mission
@@ -483,6 +490,36 @@ watch board tiers unlock as the roster's top-4 power crosses 70/110; send
 a strong hero and see a bigger payout than a weak one; complete an NPC
 request and see the bond gain; talk to an NPC at bond 0 and 4+ and hear
 different registers; get a "loves it!" and a "hates it!" reaction.*
+
+**M12 — Time, defeat & discipline** *(added post-POC)*.
+- **Target arrow** points down at the selected enemy; the dialogue-box
+  portrait sits fully above the box frame.
+- **Mostly-empty crates**: zone loot tables gain `find_chance` (docks 0.30,
+  midtown 0.35, HYDRA district 0.40) rolled after the trap check — most
+  searches find nothing.
+- **Battle time standard**: engaging a mission costs MISSION_ENERGY /
+  MISSION_MINUTES up front (unchanged). A won ambush/trap fight now costs
+  BATTLE_MINUTES (60). A DEFEAT (any battle) costs DEFEAT_RECOVERY_MINUTES
+  (180), caps every party member at DEFEAT_ENERGY (10 — never a raise, so
+  losing on fumes can't beat winning on fumes), and drags the team
+  back to the tower — the day continues (failed missions still cool down
+  2 days). Passing 2 AM during recovery passes out as usual.
+- **Training lockout**: only active party members can use the rack, and
+  starting a session pulls the trainee off the team — they stand at the
+  mats, can't be swapped/assigned/dispatched, and return automatically
+  (rejoining the party if there's room) when the in-game clock passes the
+  session length: TRAINING_MINUTES_BASE 30 + 30 × rank (rank 1 = 1 h).
+  EN cost unchanged (15 + 5 × rank, paid at start); XP (facility + banked
+  double-dip, snapshotted at start) lands on completion. Unfinished
+  sessions complete at sleep. The last party member can't train. The
+  benched passive "train" assignment (M9) is unchanged.
+- **Gift limits**: see §6.2 — 1/day per receiver, 2 per rolling 5 days,
+  −5 for repeating yesterday's gift.
+*AC: arrow points at the enemy; most crate searches come up empty; lose a
+fight at noon and be back in the tower at 3 PM with 10 EN; start a rank-1
+session, watch the hero leave the party and return an hour later ranked
+up; get gift-blocked on the second same-day gift and see −5 for a lazy
+repeat.*
 
 ---
 

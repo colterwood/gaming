@@ -80,23 +80,15 @@ def test_sleep_advances_day_and_resets(content):
     state = fresh_state()
     state["energy"] = 5
     state["time_minutes"] = 1500
-    state["bonds"] = {"captain_america": {"points": 100, "gifts_this_week": 2,
-                                          "talked_today": True}}
+    state["bonds"] = {"captain_america": {"points": 100, "talked_today": True,
+                                          "gift_days": [1], "last_gift": None}}
     cal.sleep(state)
     assert state["day"] == 2
     assert state["energy"] == config.DAILY_ENERGY
     assert state["time_minutes"] == config.DAY_START_MINUTES
     assert state["bonds"]["captain_america"]["talked_today"] is False
-    assert state["bonds"]["captain_america"]["gifts_this_week"] == 2   # day 2: no reset
-
-
-def test_gift_counter_resets_on_week_boundary():
-    state = fresh_state()
-    state["day"] = 7
-    state["bonds"] = {"iron_man": {"points": 0, "gifts_this_week": 2, "talked_today": True}}
-    cal.sleep(state)                                  # day 7 -> 8, week boundary
-    assert state["day"] == 8
-    assert state["bonds"]["iron_man"]["gifts_this_week"] == 0
+    # M12: gift history is a rolling window (bonds.gift_allowed), untouched here
+    assert state["bonds"]["captain_america"]["gift_days"] == [1]
 
 
 def test_issue_wraps_after_28_days():

@@ -7,7 +7,7 @@ import pytest
 from game import config, data_loader
 from game.core import energy, save
 from game.core.state_machine import GameState
-from game.hub import story
+from game.hub import activities, story
 from game.hub.tower import FLOORS, HUD_H, TILE, HubScene
 
 
@@ -284,7 +284,7 @@ def test_crate_search_marks_spot_and_pays(content):
     scene, app = scene_with_app(content)
     state = app.game_state
     scene.area = "docks"
-    scene.rng = random.Random(1)                # first roll > trap chance
+    scene.rng = random.Random(4)                # no trap, and the find succeeds
     put_player_at(scene, 2, 3)                  # beside the crate at (3, 3)
     hit = scene._nearest_interaction(state)
     assert hit[0] == "crate" and hit[1] == (3, 3)
@@ -372,6 +372,53 @@ def test_engage_at_low_energy_fights_first_sleeps_after(content):
     scene._move = lambda dt, a: None                # (headless: no key polling)
     scene.update(0.016, app)
     assert app.slept == [True]                      # the collapse comes after
+
+
+def test_rack_is_party_only_and_locks_the_trainee(content):
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    state["roster"]["ant_man"] = {"trained_ranks": {}, "attribute_xp": {},
+                                  "perks": [], "perk_choices": {}, "gear": {},
+                                  "ult_charge": 0, "energy": 100, "unspent_xp": 0}
+    scene.floor = "training"
+    put_player_at(scene, 35, 7)                 # beside the rack (36-37, 6-7)
+    scene.handle_key(app, pygame.K_RETURN)
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert not any("Ant-Man" in l for l in labels)      # benched: not trainable
+    choose(scene, app, "Train Captain America")
+    assert scene.mode == "train_attr"
+    scene.handle_key(app, pygame.K_RETURN)              # strength
+    cap = state["roster"]["captain_america"]
+    assert cap["training"]["attribute"] == "strength"
+    assert state["party"] == ["iron_man"]               # pulled off the team
+    assert scene.mode == "normal"
+    scene.handle_key(app, pygame.K_RETURN)              # rack again
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert not any(l.startswith("Train Captain America") for l in labels)
+    assert any("Captain America - Strength, done" in l for l in labels)
+    # while they're on the mats the dispatch picker refuses them too
+    scene.reset_modes()
+    scene.floor = "common"
+    put_player_at(scene, 34, 12)
+    scene.handle_key(app, pygame.K_RETURN)              # board
+    choose(scene, app, "Calibrate Tower Sensors")
+    rows = [i for i in scene.submenu["items"] if "Captain America" in i[0]]
+    assert rows and rows[0][1] is True and "[training]" in rows[0][0]
+    # the clock passing the session end brings them back mid-play
+    state["time_minutes"] += 60
+    scene.reset_modes()
+    scene._move = lambda dt, a: None                    # headless: no key poll
+    scene.update(0.016, app)
+    assert "training" not in cap
+    assert state["party"] == ["iron_man", "captain_america"]
+    # but a session ending in the FIELD leaves them benched at the tower
+    result = activities.start_training(state, content, "captain_america",
+                                       "strength")
+    assert result["ok"]
+    scene.area = "docks"
+    state["time_minutes"] += 200
+    scene.update(0.016, app)
+    assert state["party"] == ["iron_man"]               # no field teleport
 
 
 def test_talk_at_2am_sleeps_without_dialogue_box(content):

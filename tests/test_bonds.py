@@ -41,6 +41,7 @@ def test_gift_categories_and_points(content):
     result = bonds.give_gift(state, cap, "forties_memorabilia")
     assert result["ok"] and result["points"] == config.GIFT_POINTS["loved"] == 80
     assert "forties_memorabilia" not in state["inventory"]          # consumed
+    state["day"] = 2                            # M12: one gift per day
     result = bonds.give_gift(state, cap, "hydra_propaganda")
     assert result["points"] == 80 - 40                               # hated: -40, floor 0 not hit
 
@@ -53,18 +54,37 @@ def test_negative_bond_floors_at_zero(content):
     assert result["points"] == 0                                     # not negative
 
 
-def test_weekly_gift_limit_and_reset(content):
+def test_gift_limits_one_per_day_two_per_five(content):
+    # M12: 1 gift per receiver per day, 2 per rolling 5 days
     cap = content["characters"]["captain_america"]
     state = fresh_state()
-    state["day"] = 7
-    state["inventory"] = {"sketchbook": 3}
+    state["inventory"] = {"sketchbook": 2, "vintage_vinyl": 2}
     assert bonds.give_gift(state, cap, "sketchbook")["ok"]
-    assert bonds.give_gift(state, cap, "sketchbook")["ok"]
+    second = bonds.give_gift(state, cap, "vintage_vinyl")
+    assert second["ok"] is False                            # 1/day
+    assert "today" in second["message"]
+    assert state["inventory"]["vintage_vinyl"] == 2         # not consumed
+    state["day"] = 2
+    assert bonds.give_gift(state, cap, "vintage_vinyl")["ok"]
+    state["day"] = 4                                        # 2 already in window
     third = bonds.give_gift(state, cap, "sketchbook")
-    assert third["ok"] is False                                      # max 2 per week
-    assert state["inventory"]["sketchbook"] == 1                     # not consumed
-    cal.sleep(state)                                                 # day 7 -> 8: new week row
+    assert third["ok"] is False and "lately" in third["message"]
+    state["day"] = 6                                        # day-1 gift ages out
     assert bonds.give_gift(state, cap, "sketchbook")["ok"]
+
+
+def test_repeat_gift_next_day_costs_five(content):
+    cap = content["characters"]["captain_america"]
+    state = fresh_state()
+    state["inventory"] = {"sketchbook": 3}
+    assert bonds.give_gift(state, cap, "sketchbook")["points"] == 45    # liked
+    state["day"] = 2
+    result = bonds.give_gift(state, cap, "sketchbook")      # same, back-to-back
+    assert result["repeated"] is True
+    assert result["points"] == 45 + 45 - config.GIFT_REPEAT_PENALTY     # 85
+    state["day"] = 6                                        # window clear, and a
+    result = bonds.give_gift(state, cap, "sketchbook")      # DAY GAP: no penalty
+    assert result["repeated"] is False
 
 
 def test_gift_requires_item(content):

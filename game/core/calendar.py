@@ -1,7 +1,8 @@
 """Issues, days, weeks, birthdays, events, and the sleep sequence (spec §6.1,
 §6.2, §7). Pure Python — no pygame.
 
-An Issue is 28 days; weeks are the four 7-day rows (reset days 1/8/15/22).
+An Issue is 28 days; weeks are the four 7-day rows. (Gift limits are the
+M12 rolling window in bonds.gift_allowed — nothing resets weekly anymore.)
 """
 
 from game import config
@@ -29,7 +30,8 @@ def active_events(state, calendar_data):
 
 def sleep(state, passed_out=False):
     """End the day (§7 sleep sequence, minus rendering): advance the calendar,
-    reset energy and daily flags, reset weekly gift counters on week boundaries.
+    reset energy and daily flags. Gift limits are enforced by the rolling
+    window in bonds.gift_allowed (M12) — nothing weekly happens here.
     Autosave is the caller's job (it owns the save slot)."""
     state["day"] += 1
     if state["day"] > config.DAYS_PER_ISSUE:
@@ -46,6 +48,6 @@ def sleep(state, passed_out=False):
     state["searched_today"] = []                            # crates respawn (M10)
     for bond in state.get("bonds", {}).values():
         bond["talked_today"] = False
-        if is_gift_week_reset_day(state["day"]):
-            bond["gifts_this_week"] = 0
+        # Gift limits are a rolling window since M12 (bonds.gift_allowed);
+        # nothing weekly to reset.
     return state

@@ -6,7 +6,27 @@ from game import config
 
 def ensure_bond(state, char_id):
     return state.setdefault("bonds", {}).setdefault(
-        char_id, {"points": 0, "gifts_this_week": 0, "talked_today": False})
+        char_id, {"points": 0, "talked_today": False,
+                  "gift_days": [], "last_gift": None})
+
+
+def _abs_day(state):
+    return (state["issue"] - 1) * config.DAYS_PER_ISSUE + state["day"]
+
+
+def gift_allowed(state, char_id):
+    """M12 limits: 1 gift per receiver per day, GIFTS_PER_WINDOW per rolling
+    GIFT_WINDOW_DAYS. Returns (ok, reason); also trims the day log."""
+    bond = ensure_bond(state, char_id)
+    today = _abs_day(state)
+    days = [d for d in bond.setdefault("gift_days", [])
+            if today - d < config.GIFT_WINDOW_DAYS]
+    bond["gift_days"] = days
+    if today in days:
+        return False, "already got a gift today"
+    if len(days) >= config.GIFTS_PER_WINDOW:
+        return False, "has had plenty of gifts lately"
+    return True, ""
 
 
 def bond_level(points):
@@ -58,26 +78,40 @@ def is_birthday(state, character):
 
 
 def give_gift(state, character, item_id):
-    """Give one inventory item as a gift (§6.2): category points, ×8 on the
-    character's birthday, max 2 gifts per character per calendar week."""
+    """Give one inventory item as a gift: category points, ×8 on the
+    character's birthday. M12 limits: 1/day per receiver, GIFTS_PER_WINDOW
+    per rolling GIFT_WINDOW_DAYS, and repeating yesterday's gift costs
+    GIFT_REPEAT_PENALTY points."""
     char_id = character["id"]
     bond = ensure_bond(state, char_id)
     if state["inventory"].get(item_id, 0) <= 0:
         return {"ok": False, "message": "You don't have that."}
-    if bond["gifts_this_week"] >= config.GIFTS_PER_WEEK_MAX:
-        return {"ok": False, "message": f"{character['name']} has had enough gifts this week."}
+    ok, reason = gift_allowed(state, char_id)
+    if not ok:
+        return {"ok": False, "message": f"{character['name']} {reason}."}
     state["inventory"][item_id] -= 1
     if state["inventory"][item_id] <= 0:
         del state["inventory"][item_id]
-    bond["gifts_this_week"] += 1
+    today = _abs_day(state)
+    bond["gift_days"].append(today)
     category = gift_category(character, item_id)
     points = config.GIFT_POINTS[category]
     if is_birthday(state, character):
         points *= config.BIRTHDAY_GIFT_MULTIPLIER
+    last = bond.get("last_gift")
+    repeated = bool(last and last["item"] == item_id
+                    and last["day"] == today - 1)
+    if repeated:
+        points -= config.GIFT_REPEAT_PENALTY
+    bond["last_gift"] = {"item": item_id, "day": today}
     result = add_points(state, char_id, points)
-    result.update(ok=True, category=category,
-                  message=f"{GIFT_REACTIONS[category]} {points:+d} bond"
-                  + (" (birthday!)" if is_birthday(state, character) else ""))
+    message = f"{GIFT_REACTIONS[category]} {points:+d} bond"
+    if repeated:
+        message += " (the same again?)"
+    if is_birthday(state, character):
+        message += " (birthday!)"
+    result.update(ok=True, category=category, repeated=repeated,
+                  message=message)
     return result
 
 

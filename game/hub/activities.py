@@ -27,44 +27,105 @@ def training_cost(next_rank):
     return en, minutes
 
 
-def training_session(state, content=None, hero_id=None, attribute=None):
-    """A supervised training session: drains the TRAINEE's energy (scaled by
-    the rank being trained, M9), advances the clock, grants §6.3 facility XP
-    plus any banked battle XP the hero has."""
-    from game.progression import attributes as attrs
-    from game.progression import mastery
+def training_session(state):
+    """Legacy generic session (M2 tests): rank-2 equivalent team costs.
+    In-game training is the M12 lockout — start_training/finish_training."""
+    result = _spend(state, *training_cost(2))
+    if result["ok"]:
+        result["message"] = "Training session complete."
+    return result
 
-    if not (content and hero_id and attribute):
-        # legacy generic session (rank-2 equivalent costs)
-        result = _spend(state, *training_cost(2))
-        if result["ok"]:
-            result["message"] = "Training session complete."
-        return result
+
+def start_training(state, content, hero_id, attribute):
+    """M12: training is a lockout, not a clock jump. The trainee pays the
+    EN up front, leaves the party, and is unavailable until the in-game
+    clock passes the session length (rank 1 = 1 h, +30 min per rank). XP
+    (facility + banked battle XP double-dip) is granted on completion."""
+    from game.progression import attributes as attrs
 
     character = content["characters"][hero_id]
     entry = state["roster"][hero_id]
+    if entry.get("training"):
+        return {"ok": False, "message": f"{character['name']} is already training."}
+    if entry.get("dispatch"):
+        return {"ok": False, "message": f"{character['name']} is away on assignment."}
     if not attrs.can_train(character["power_grid"], entry, attribute):
         return {"ok": False, "message": f"{attribute.title()} is already at max."}
+    party = state.get("party", [])
+    if hero_id not in party:                # M12: rack is party-only, even via
+        return {"ok": False,                # the perk-chooser fall-through
+                "message": f"{character['name']} isn't on the team."}
+    if len(party) <= 1:
+        return {"ok": False, "message": "Someone has to stay on the team."}
     next_rank = entry.get("trained_ranks", {}).get(attribute, 0) + 1
     en_cost, minutes = training_cost(next_rank)
-    if not energy.spend_hero(state, hero_id, en_cost):
+    # Strictly more EN than the cost: a session must not zero the trainee out
+    # (they'd rejoin at 0 and instantly pass the team out).
+    if energy.hero_energy(state, hero_id) <= en_cost:
         return {"ok": False, "message": f"{character['name']} is too exhausted."}
-    hit_end = clock.advance(state, minutes)
-
+    energy.spend_hero(state, hero_id, en_cost)
     xp = attrs.session_xp(state, content["calendar"])
     banked = min(entry.get("unspent_xp", 0), xp)        # battle XP double-dips
     if banked:
         entry["unspent_xp"] = entry.get("unspent_xp", 0) - banked
-    gain = attrs.add_training_xp(character["power_grid"], entry, attribute,
-                                 xp + banked)
-    message = f"{character['name']} trains {attribute.title()}: +{xp} XP"
-    if banked:
-        message += f" (+{banked} banked)"
+    if hero_id in party:
+        party.remove(hero_id)
+    entry.pop("assignment", None)
+    entry["idle_days"] = 0
+    entry["training"] = {"attribute": attribute,
+                         "ends": state["time_minutes"] + minutes,
+                         "xp": xp + banked, "banked": banked}
+    energy.sync(state)
+    return {"ok": True, "minutes": minutes,
+            "message": (f"{character['name']} hits the mats: "
+                        f"{attribute.title()}, {minutes} min.")}
+
+
+def finish_training(state, content, hero_id, rejoin=True):
+    """Complete a training lockout: grant the XP, rejoin the party if there
+    is room. rejoin=False when the team is away in a zone — the hero waits
+    benched at the tower instead of teleporting into the field. Returns the
+    result dict (with perk_pending when a choice waits)."""
+    from game.progression import attributes as attrs
+    from game.progression import mastery
+
+    character = content["characters"][hero_id]
+    entry = state["roster"][hero_id]
+    lock = entry.pop("training", None)
+    if not lock:
+        return {"ok": False, "message": "They're not training."}
+    gain = attrs.add_training_xp(character["power_grid"], entry,
+                                 lock["attribute"], lock["xp"])
+    entry["idle_days"] = 0
+    message = (f"{character['name']} finishes training "
+               f"{lock['attribute'].title()}: +{lock['xp']} XP")
+    if lock.get("banked"):
+        message += f" ({lock['banked']} banked)"
     if gain["ranks_gained"]:
         message += f" - rank up! ({gain['effective_rank']}/{config.RANK_MAX})"
     if mastery.update_mastery(character["power_grid"], entry):
         message += "  MASTERED - the card goes foil!"
-    return {"ok": True, "hit_day_end": hit_end, "message": message, **gain}
+    party = state.setdefault("party", [])
+    if rejoin and hero_id not in party and len(party) < config.PARTY_SIZE_MAX:
+        party.append(hero_id)
+        message += "  Back on the team."
+    elif not rejoin:
+        message += "  Waiting at the tower."
+    energy.sync(state)
+    return {"ok": True, "message": message, **gain}
+
+
+def finish_due_training(state, content, force=False, rejoin=True):
+    """Complete every training lockout whose time has passed (or all of
+    them with force=True, used at sleep). Pass rejoin=False while the team
+    is out in a zone. Returns messages."""
+    messages = []
+    for hero_id in sorted(state.get("roster", {})):
+        lock = state["roster"][hero_id].get("training")
+        if lock and (force or state["time_minutes"] >= lock["ends"]):
+            messages.append(finish_training(state, content, hero_id,
+                                            rejoin=rejoin)["message"])
+    return messages
 
 
 def craft(state):

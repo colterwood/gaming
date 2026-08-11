@@ -59,11 +59,13 @@ DAILY_ENERGY = 100
 PASS_OUT_NEXT_DAY_ENERGY = 80
 
 # Training costs scale with the rank being trained (M9): rank 2 matches the
-# original §6.1 flat costs (25 EN / 90 min).
+# original §6.1 flat costs (25 EN / 90 min). Since M12 the minutes are a
+# LOCKOUT (the trainee leaves the party for that long), not a clock jump:
+# rank 1 takes an hour, each further rank +30 min.
 TRAINING_ENERGY_BASE = 15
 TRAINING_ENERGY_PER_RANK = 5
-TRAINING_MINUTES_BASE = 60
-TRAINING_MINUTES_PER_RANK = 15
+TRAINING_MINUTES_BASE = 30
+TRAINING_MINUTES_PER_RANK = 30
 MISSION_ENERGY = 40
 MISSION_MINUTES = 180
 CRAFT_ENERGY = 15
@@ -90,7 +92,7 @@ BIRTHDAY_GIFT_MULTIPLIER = 8
 BOND_POINTS_PER_LEVEL = 250
 BOND_LEVEL_MAX = 10
 BOND_LIFETIME_MAX = 2500
-GIFTS_PER_WEEK_MAX = 2
+# (weekly gift cap replaced by the M12 rolling window — see GIFT_WINDOW_DAYS)
 BOND_GATE_SCENE = 2                 # bond scene
 BOND_GATE_RECRUIT = 4               # relationship recruit
 BOND_GATE_SYNERGY = 6               # synergy passive
@@ -129,6 +131,20 @@ TRAVEL_MINUTES = 30                 # Quinjet hop tower <-> zone
 EAT_MINUTES = 10                    # eating a ration advances the clock
 SEARCH_MINUTES = 15                 # rummaging a crate/dumpster
 SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
+
+# --- Battle time & defeat (M12) ---
+# Engaging a mission costs MISSION_ENERGY/MISSION_MINUTES up front (§6.1).
+# An ambush/trap fight you WIN eats BATTLE_MINUTES; a DEFEAT (any battle)
+# costs DEFEAT_RECOVERY_MINUTES, sets every party member to DEFEAT_ENERGY,
+# and drags the team back to the tower — the day does NOT end.
+BATTLE_MINUTES = 60
+DEFEAT_RECOVERY_MINUTES = 180
+DEFEAT_ENERGY = 10
+
+# --- Gifts (M12 rework; replaces the §6.2 weekly cap) ---
+GIFT_WINDOW_DAYS = 5                # rolling window...
+GIFTS_PER_WINDOW = 2                # ...allowing this many gifts per receiver
+GIFT_REPEAT_PENALTY = 5             # same gift two days in a row: -5 points
 
 # --- Board tiers & dispatch scaling (M11) ---
 # Team power = sum of the top-4 roster heroes' effective grid totals

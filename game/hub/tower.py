@@ -136,9 +136,11 @@ for _floor in FLOORS.values():
 
 # Talk lines live in data/dialogue.json, tiered by relationship (M11).
 
-# Benched heroes stand where their assignment happens
+# Benched heroes stand where their assignment happens. The train spot sits
+# on the big mats, clear of the rack tiles, so a trainee never outranks the
+# rack in the interaction-prompt distance check.
 ASSIGNMENT_SPOTS = {
-    "train": ("training", 34, 8),
+    "train": ("training", 24, 12),
     "support": ("ops", 10, 6),
     "socialize": ("common", 22, 12),
     None: ("common", 8, 15),        # idle: loafing by the bunks
@@ -256,8 +258,11 @@ class HubScene:
                 continue
             if roster[hero_id].get("dispatch"):     # away on a board job (M10)
                 continue
-            assignment = roster[hero_id].get("assignment")
-            kind = assignment["kind"] if assignment else None
+            if roster[hero_id].get("training"):     # on the mats (M12)
+                kind = "train"
+            else:
+                assignment = roster[hero_id].get("assignment")
+                kind = assignment["kind"] if assignment else None
             floor, tx, ty = ASSIGNMENT_SPOTS.get(kind, ASSIGNMENT_SPOTS[None])
             if floor == self.floor:
                 put(hero_id, tx + bench_offsets, ty)
@@ -354,6 +359,10 @@ class HubScene:
         if self.tick_accum >= config.TICK_REAL_SECONDS:
             self.tick_accum -= config.TICK_REAL_SECONDS
             clock.advance(state, config.TICK_GAME_MINUTES)
+        for msg in activities.finish_due_training(
+                state, self.content, rejoin=(self.area == "tower")):
+            self.log(msg)                           # sessions ending (M12);
+                                                    # no teleporting into zones
         if activities.should_pass_out(state):
             self.log("The team passes out...")
             app.go_to_sleep(passed_out=True)
@@ -598,14 +607,22 @@ class HubScene:
         state = app.game_state
         char = self.content["characters"][char_id]
         entry = state["roster"].get(char_id)
+        if entry is not None and entry.get("training"):
+            lock = entry["training"]                # mid-workout: info only
+            self._open_submenu(
+                char["name"],
+                [(f"Training {lock['attribute'].title()} - done "
+                  f"{clock.format_time(lock['ends'])}", True, None),
+                 ("Never mind", False, None)])
+            return
         items = []
         if bonds.bondable(char):
             bond = bonds.ensure_bond(state, char_id)
-            capped = bond["gifts_this_week"] >= config.GIFTS_PER_WEEK_MAX
+            can_gift, _ = bonds.gift_allowed(state, char_id)
             items.append(("Talk", bond["talked_today"],
                           lambda a: self._talk(a, char_id)))
-            items.append(("Give Gift" + ("  [week limit]" if capped else ""),
-                          capped, lambda a: self._open_gift_menu(a, char_id)))
+            items.append(("Give Gift" + ("" if can_gift else "  [limit]"),
+                          not can_gift, lambda a: self._open_gift_menu(a, char_id)))
         else:
             items.append(("Chat", False, lambda a: self._flavor(a, char_id)))
         if entry is not None and not party_mod.in_party(state, char_id):
@@ -834,12 +851,15 @@ class HubScene:
             en = energy.hero_energy(state, hero_id)
             power = dispatch.hero_power(self.content, state, hero_id)
             label = f"Send {name}  (EN {en}, PWR {power})"
+            training = bool(state["roster"][hero_id].get("training"))
             would_empty = hero_id in party and len(remaining_party) <= 1
             if hero_id in party:
                 label += "  [on team]"
             if would_empty:
                 label += "  [team would be empty]"
-            items.append((label, would_empty,
+            if training:
+                label += "  [training]"
+            items.append((label, would_empty or training,
                           (lambda a, h=hero_id:
                            self._pick_dispatch_hero(a, task, picked + [h]))))
         items.append(("Cancel", False, None))
@@ -902,19 +922,31 @@ class HubScene:
         self._after_action(app)
 
     def _open_training(self, app):
+        """M12: only ACTIVE party members can start a session, and starting
+        one pulls the hero off the team until the clock runs out."""
         state = app.game_state
         if self._open_pending_perk(state, None):
             return
         from game.progression import attributes as attrs
         xp = attrs.session_xp(state, self.content["calendar"])
+        party = self._party(state)
         items = []
-        for hid in sorted(state.get("roster", {})):
+        for hid in party:
             en = energy.hero_energy(state, hid)
-            items.append((f"Train {self.content['characters'][hid]['name']} "
-                          f"(EN {en}, +{xp} XP)", False,
+            last = len(party) <= 1
+            label = f"Train {self.content['characters'][hid]['name']} (EN {en}, +{xp} XP)"
+            if last:
+                label += "  [team would be empty]"
+            items.append((label, last,
                           (lambda a, h=hid: self._pick_train_hero(a, h))))
+        for hid in sorted(state.get("roster", {})):
+            lock = state["roster"][hid].get("training")
+            if lock:
+                items.append((f"{self.content['characters'][hid]['name']} - "
+                              f"{lock['attribute'].title()}, done "
+                              f"{clock.format_time(lock['ends'])}", True, None))
         items.append(("Close", False, None))
-        self._open_submenu("Training Rack", items)
+        self._open_submenu("Training Rack (team only)", items)
 
     def _pick_train_hero(self, app, hero_id):
         self.train_hero_id = hero_id
@@ -979,16 +1011,11 @@ class HubScene:
             self.submenu_index = (self.submenu_index + 1) % len(config.ATTRIBUTES)
         elif key == pygame.K_RETURN:
             attribute = config.ATTRIBUTES[self.submenu_index % len(config.ATTRIBUTES)]
-            result = activities.training_session(state, self.content,
-                                                 self.train_hero_id, attribute)
+            result = activities.start_training(state, self.content,
+                                               self.train_hero_id, attribute)
             self.log(result["message"])
-            energy.sync(state)
-            if result.get("perk_pending"):
-                self._open_pending_perk(state, self.train_hero_id)
-            elif activities.should_pass_out(state):
-                self.log("The team passes out...")
-                self.reset_modes()
-                app.go_to_sleep(passed_out=True)
+            if result["ok"]:
+                self.reset_modes()      # they're off the team, on the mats
 
     def _perk_choice_key(self, app, key):
         from game.progression import attributes as attrs
@@ -1007,8 +1034,12 @@ class HubScene:
                      else result["message"])
             self.perk_ctx = None
             if not self._open_pending_perk(app.game_state, ctx["hero_id"]):
-                self.mode = "train_attr"
-                self.submenu_index = 0
+                if ctx["hero_id"] in self._party(app.game_state):
+                    self.mode = "train_attr"
+                    self.submenu_index = 0
+                else:
+                    self.reset_modes()  # benched/dispatched perk: no rack
+                                        # session for off-team heroes (M12)
 
     # ------------------------------------------------------------------ draw
 
@@ -1159,9 +1190,9 @@ class HubScene:
         char_id = self.scene.get("character")
         if char_id:
             big = pygame.transform.scale(sprites.portrait(char_id), (48, 48))
-            surface.blit(big, (box.x + 8, box.y - 24))
+            surface.blit(big, (box.x + 8, box.y - 52))  # fully above the box
         pixelkit.text(surface, self.scene["title"], 16, "gold", bold=True,
-                      topleft=(box.x + 62, box.y - 20), shadow="maroon")
+                      topleft=(box.x + 62, box.y - 24), shadow="maroon")
         line = self.scene["lines"][min(self.scene_line, len(self.scene["lines"]) - 1)]
         self._wrap_text(surface, line, box)
         pixelkit.text(surface, "Enter: continue", 11, "grey",

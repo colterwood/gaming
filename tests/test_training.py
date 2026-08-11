@@ -130,41 +130,102 @@ def test_session_xp_tiers(content):
     assert attrs.session_xp(state, content["calendar"]) == 120
 
 
-def test_training_session_grants_xp(content):
+def test_training_lockout_grants_xp_on_completion(content):
+    # M12: training is a lockout — EN up front, XP when the clock runs out.
     state = game_state(content)
-    result = activities.training_session(state, content, "captain_america", "strength")
-    assert result["ok"]
-    # M9: only the TRAINEE drains, scaled by the rank trained toward (rank 1
-    # -> 15 + 5 = 20 EN); teammates untouched.
-    assert state["roster"]["captain_america"]["energy"] == 80
-    assert state["roster"]["iron_man"]["energy"] == 100
-    assert state["roster"]["captain_america"]["attribute_xp"]["strength"] == 40
+    result = activities.start_training(state, content, "captain_america", "strength")
+    assert result["ok"] and result["minutes"] == 60             # rank 1 = 1 h
+    cap = state["roster"]["captain_america"]
+    assert cap["energy"] == 80                          # trainee pays 20 EN now
+    assert state["roster"]["iron_man"]["energy"] == 100  # teammates untouched
+    assert state["party"] == ["iron_man"]               # off the team
+    assert cap["attribute_xp"] == {}                    # nothing granted yet
+    # too early: nothing completes
+    assert activities.finish_due_training(state, content) == []
+    state["time_minutes"] += 60
+    messages = activities.finish_due_training(state, content)
+    assert len(messages) == 1 and "Strength" in messages[0]
+    assert cap["attribute_xp"]["strength"] == 40
+    assert "training" not in cap
+    assert state["party"] == ["iron_man", "captain_america"]    # auto-rejoin
 
 
 def test_training_costs_scale_with_rank(content):
-    assert activities.training_cost(1) == (20, 75)
-    assert activities.training_cost(2) == (25, 90)     # original §6.1 values
-    assert activities.training_cost(7) == (50, 165)    # substantially more
+    assert activities.training_cost(1) == (20, 60)      # M12: 1 h lockout
+    assert activities.training_cost(2) == (25, 90)      # original §6.1 values
+    assert activities.training_cost(7) == (50, 240)     # substantially more
 
 
 def test_banked_battle_xp_double_dips(content):
     state = game_state(content)
     cap = state["roster"]["captain_america"]
     cap["unspent_xp"] = 100
-    result = activities.training_session(state, content, "captain_america", "strength")
-    assert result["ok"]
+    activities.start_training(state, content, "captain_america", "strength")
+    assert cap["unspent_xp"] == 60                      # banked slice reserved
+    activities.finish_due_training(state, content, force=True)
     # session grants 40 facility XP + 40 banked battle XP alongside it
     assert cap["attribute_xp"]["strength"] == 80       # rank 1 costs 100: banked
     assert cap["trained_ranks"].get("strength", 0) == 0
-    assert cap["unspent_xp"] == 60
 
 
 def test_training_maxed_attribute_refused_without_cost(content):
     state = game_state(content)
     state["roster"]["iron_man"]["trained_ranks"]["intelligence"] = 7  # trained max
-    result = activities.training_session(state, content, "iron_man", "intelligence")
+    result = activities.start_training(state, content, "iron_man", "intelligence")
     assert not result["ok"]
-    assert state["energy"] == 100                       # nothing spent
+    assert state["roster"]["iron_man"]["energy"] == 100  # nothing spent
+    assert state["party"] == ["iron_man", "captain_america"]
+
+
+def test_training_last_party_member_refused(content):
+    state = game_state(content)
+    state["party"] = ["captain_america"]
+    result = activities.start_training(state, content, "captain_america", "strength")
+    assert not result["ok"] and "stay on the team" in result["message"]
+
+
+def test_training_is_party_only(content):
+    # M12 review fix: the perk-chooser fall-through must not let a benched
+    # hero start a rack session.
+    state = game_state(content)
+    state["party"] = ["iron_man"]                       # cap benched
+    result = activities.start_training(state, content, "captain_america", "strength")
+    assert not result["ok"] and "isn't on the team" in result["message"]
+    assert "training" not in state["roster"]["captain_america"]
+
+
+def test_training_refused_when_it_would_zero_the_trainee(content):
+    state = game_state(content)
+    state["roster"]["captain_america"]["energy"] = 20   # rank-1 cost exactly
+    result = activities.start_training(state, content, "captain_america", "strength")
+    assert not result["ok"] and "exhausted" in result["message"]
+    assert state["roster"]["captain_america"]["energy"] == 20
+
+
+def test_training_completed_in_zone_waits_at_tower(content):
+    # M12 review fix: a session ending while the team is out in a zone must
+    # not teleport the hero into the field.
+    state = game_state(content)
+    activities.start_training(state, content, "captain_america", "strength")
+    state["time_minutes"] += 60
+    messages = activities.finish_due_training(state, content, rejoin=False)
+    assert any("Waiting at the tower" in m for m in messages)
+    assert state["party"] == ["iron_man"]               # benched, not fielded
+    assert "training" not in state["roster"]["captain_america"]
+    assert state["roster"]["captain_america"]["attribute_xp"]["strength"] == 40
+
+
+def test_training_locks_out_everything(content):
+    from game.hub import dispatch, party, passive
+    state = game_state(content)
+    activities.start_training(state, content, "captain_america", "strength")
+    assert not party.add_to_party(content, state, "captain_america")[0]
+    assert not passive.assign(content, state, "captain_america", "socialize")[0]
+    task = next(t for t in content["assignments"] if t["heroes"] == 1)
+    assert not dispatch.send(content, state, task, ["captain_america"])[0]
+    # atrophy never touches a hero mid-training
+    passive.process_day(content, state)
+    assert state["roster"]["captain_america"]["idle_days"] == 0
 
 
 # --- M4 acceptance: Cap Strength to rank 3, pick Haymaker, damage changes ---

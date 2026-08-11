@@ -35,11 +35,14 @@ def roll_ambush(danger, party_size, rng):
 
 def search_loot(zone, rng):
     """Rummage one crate (M10): returns {"credits", "item", "trap"}. A trap
-    forfeits the loot — the caller starts a battle with trap_squad(). Loot
-    tables live in zones.json; searched spots respawn daily."""
+    forfeits the loot — the caller starts a battle with trap_squad(). Most
+    crates are empty (M12 find_chance roll); loot tables live in zones.json;
+    searched spots respawn daily."""
     if rng.random() < zone["danger"] * config.SEARCH_TRAP_CHANCE:
         return {"credits": 0, "item": None, "trap": True}
     loot = zone.get("loot", {})
+    if rng.random() >= loot.get("find_chance", 1.0):
+        return {"credits": 0, "item": None, "trap": False}      # empty crate
     lo, hi = loot.get("credits", [0, 0])
     item = None
     items = loot.get("items", [])

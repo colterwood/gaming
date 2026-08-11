@@ -82,6 +82,9 @@ def send(content, state, task, hero_ids):
         if roster[hero_id].get("dispatch"):
             name = content["characters"][hero_id]["name"]
             return False, f"{name} is already away on assignment."
+        if roster[hero_id].get("training"):
+            name = content["characters"][hero_id]["name"]
+            return False, f"{name} is mid-training."
     party = state.get("party", [])
     if party and not [p for p in party if p not in hero_ids]:
         return False, "Someone has to stay on the team."
