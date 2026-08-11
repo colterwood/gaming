@@ -55,7 +55,8 @@
     "heroes": 2,
     "days": 1,
     "credits": 130,
-    "xp": 3,
+    "xp": 7,
+    "trains": ["strength", "agility", "durability"],
     "spot": ["training", 25, 5],
     "requires": {
       "hero_any_of": [
@@ -225,7 +226,8 @@
     "heroes": 2,
     "days": 2,
     "credits": 380,
-    "xp": 13,
+    "xp": 20,
+    "trains": ["strength", "stamina", "agility", "durability"],
     "spot": ["training", 15, 12],
     "requires": {
       "hero_any_of": [

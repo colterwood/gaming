@@ -23,13 +23,14 @@ def task_by_id(content, task_id):
 
 # --- sparring (1) ---
 
-def test_sparring_trains_every_stat_within_its_tier_budget(content):
-    # M24: xp is PER ATTRIBUTE and `trains` names them; absent = all six.
-    # M25: the amount comes from the tier's XP-per-day budget.
+def test_sparring_trains_the_sparring_stats(content):
+    # M24: xp is PER ATTRIBUTE and `trains` names them.
+    # M27: narrowed to what you actually practise in a spar, so the budget
+    # buys a readable number instead of 3 XP spread over six stats.
     task = task_by_id(content, "spar_rookies")
-    assert task.get("trains") is None                   # all six
+    assert task["trains"] == ["strength", "agility", "durability"]
     budget = config.board_tier_xp_per_day(task["tier"]) * task["days"]
-    assert task["xp"] * len(config.ATTRIBUTES) <= budget + 1
+    assert task["xp"] * len(task["trains"]) <= budget + len(task["trains"])
 
 
 def test_a_spar_pays_out_across_the_board(content):
@@ -47,8 +48,8 @@ def test_a_spar_pays_out_across_the_board(content):
     dispatch.process_day(content, state)               # 1-day job: home
     for hero_id in crew:
         gains = state["roster"][hero_id]["attribute_xp"]
-        assert set(gains) == set(config.ATTRIBUTES), hero_id
-        # +20 into EVERY stat, not 20 split six ways
+        assert set(gains) == set(task["trains"]), hero_id
+        # the full amount into EACH stat it trains, not a split
         assert all(v == round(task["xp"] * mult) for v in gains.values()), gains
 
 

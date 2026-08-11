@@ -946,12 +946,13 @@ else; read "+20 XP to Stamina" on the board before sending them.*
   day TOTAL**, divided across whatever the job trains. Board work is
   deliberately the lesser XP route — it also pays credits and often bond.
   A test asserts every shipped job sits inside its tier's budget.
-- **Consequence worth knowing**: a job that trains all six spreads its
-  budget thinly. Spar (tier 1, 1 day, six attributes) lands at 3 XP each;
-  Boot Camp (tier 2, 2 days, six) at 13 each. Narrow jobs concentrate:
-  Field-Test is 120 Intelligence. So broad jobs are credit work and
-  narrow jobs are targeted training — intended, but it does make the two
-  "training" jobs weak as training.
+- **Consequence**: a job that trains all six spreads its budget thinly, so
+  a broad job is credit work and a narrow one is targeted training. The two
+  jobs actually *named* for training were the casualties (3 and 13 XP a
+  stat), so M27 narrowed them to what you'd really practise — Spar trains
+  Strength/Agility/Durability at 7, Boot Camp the physical four at 20.
+  Keep this in mind when authoring new jobs: `trains` width sets how much
+  each stat sees.
 - **Board presentation**: the title is just "Assignment Board"; payouts
   read "150 cr, 40 XP to Intelligence" with no "pays" and no "~" (the M11
   crew multiplier still scales what actually lands); and the last line
