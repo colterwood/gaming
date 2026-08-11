@@ -193,6 +193,18 @@ GIFT_REPEAT_PENALTY = 5             # same gift two days in a row: -5 points
 # scale: two starters at rank 1 = 37, a full 4-hero roster at rank 1 = 75,
 # everyone at rank 10 = 299.
 BOARD_TIER_POWER = {2: 90, 3: 160}  # team power to unlock board tier N
+# M25: what a board job pays in XP, as a multiple of the passive
+# "Attribute training" assignment (passive.json, 40 XP/day). A dispatched
+# hero is off the team exactly like one on the mats, so that's the fair
+# baseline — and board work is meant to stay the lesser XP route, because
+# it also pays credits and sometimes bond. This is the job's TOTAL per
+# day, divided across whatever attributes it trains.
+PASSIVE_TRAIN_XP_PER_DAY = 40
+BOARD_TIER_XP_MULT = {1: 0.5, 2: 1.0, 3: 1.5}
+
+
+def board_tier_xp_per_day(tier):
+    return PASSIVE_TRAIN_XP_PER_DAY * BOARD_TIER_XP_MULT[tier]
 DISPATCH_POWER_BASELINE = 22        # avg sent-hero total paying 1.0x
 DISPATCH_POWER_BONUS = 0.01         # pay multiplier step per point of avg power
 DISPATCH_MULT_MIN = 0.8

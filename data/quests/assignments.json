@@ -31,7 +31,7 @@
     "heroes": 1,
     "days": 2,
     "credits": 150,
-    "xp": 20,
+    "xp": 40,
     "trains": ["intelligence"],
     "spot": ["ops", 30, 4],
     "requires": {
@@ -55,7 +55,7 @@
     "heroes": 2,
     "days": 1,
     "credits": 130,
-    "xp": 20,
+    "xp": 3,
     "spot": ["training", 25, 5],
     "requires": {
       "hero_any_of": [
@@ -78,7 +78,7 @@
     "heroes": 2,
     "days": 2,
     "credits": 280,
-    "xp": 20,
+    "xp": 10,
     "trains": ["strength", "stamina", "agility", "durability"],
     "spot": ["docks", 20, 8]
   },
@@ -90,7 +90,7 @@
     "heroes": 1,
     "days": 1,
     "credits": 65,
-    "xp": 25,
+    "xp": 20,
     "trains": ["intelligence"],
     "spot": ["common", 10, 6],
     "requires": {
@@ -164,7 +164,7 @@
     "heroes": 1,
     "days": 2,
     "credits": 190,
-    "xp": 40,
+    "xp": 80,
     "trains": ["speed"],
     "requested_by": "coulson",
     "bond": 45,
@@ -184,7 +184,7 @@
     "heroes": 2,
     "days": 1,
     "credits": 210,
-    "xp": 40,
+    "xp": 13,
     "trains": ["strength", "durability", "stamina"],
     "spot": ["midtown", 12, 3]
   },
@@ -196,7 +196,7 @@
     "heroes": 1,
     "days": 2,
     "credits": 230,
-    "xp": 40,
+    "xp": 80,
     "trains": ["intelligence"],
     "spot": ["hydra_district", 22, 12],
     "requires": {
@@ -226,7 +226,7 @@
     "heroes": 2,
     "days": 2,
     "credits": 380,
-    "xp": 40,
+    "xp": 13,
     "spot": ["training", 15, 12],
     "requires": {
       "hero_any_of": [
@@ -255,7 +255,7 @@
     "heroes": 2,
     "days": 2,
     "credits": 520,
-    "xp": 60,
+    "xp": 20,
     "spot": ["hydra_district", 30, 8],
     "requires": {
       "hero_all_attributes": {
@@ -271,7 +271,7 @@
     "heroes": 2,
     "days": 1,
     "credits": 400,
-    "xp": 60,
+    "xp": 10,
     "requested_by": "coulson",
     "bond": 60,
     "spot": ["midtown", 30, 14],
@@ -290,7 +290,7 @@
     "heroes": 1,
     "days": 2,
     "credits": 340,
-    "xp": 60,
+    "xp": 120,
     "trains": ["intelligence"],
     "requested_by": "pepper_potts",
     "bond": 60,

@@ -94,29 +94,26 @@ def test_the_board_spells_out_every_reward(content):
     put_player_at(scene, 34, 12)
     scene.handle_key(app, pygame.K_RETURN)
     labels = [i[0] for i in scene.submenu["items"]]
-    pays = [l for l in labels if l.strip().startswith("pays ")]
+    pays = [l for l in labels if l.strip().endswith(("cr",)) or " XP to " in l]
     assert pays, labels
-    for line in pays:
-        assert "cr" in line
+    assert not any("pays " in l or "~" in l for l in labels)    # M25 wording
     assert any("XP to " in l for l in pays)
     assert any("bond with" in l for l in pays)
 
 
 def test_a_reward_line_names_what_a_job_trains(content):
     scene = HubScene(content)
-    spar = next(t for t in content["assignments"] if t["id"] == "spar_rookies")
-    assert scene._reward_label(spar) == "~130 cr, ~20 XP to all skills"
     sweep = next(t for t in content["assignments"] if t["id"] == "sweep_hangar")
-    assert scene._reward_label(sweep) == "~60 cr, ~20 XP to Stamina"
+    assert scene._reward_label(sweep) == "60 cr, 20 XP to Stamina"
     convoy = next(t for t in content["assignments"] if t["id"] == "escort_convoy")
-    assert ("~20 XP to Strength, Stamina, Agility and Durability"
+    assert ("10 XP to Strength, Stamina, Agility and Durability"
             in scene._reward_label(convoy))
 
 
 def test_jobs_without_a_reward_do_not_advertise_it(content):
     scene = HubScene(content)
     label = scene._reward_label({"credits": 50, "xp": 0})
-    assert label == "~50 cr"
+    assert label == "50 cr"
 
 
 # --- Stormbreaker's gate (4) ---

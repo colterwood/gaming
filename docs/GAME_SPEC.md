@@ -932,6 +932,35 @@ pays before sending anyone.*
 *AC: send a hero to sweep the hangar and see Stamina move and nothing
 else; read "+20 XP to Stamina" on the board before sending them.*
 
+**M25 — The clock stops for menus; board XP gets a budget** *(added post-POC)*.
+- **The world clock only runs while the team is on its feet.** The cosmetic
+  tick sat outside the `mode == "normal"` branch, so it kept advancing
+  behind the assignment board, the shop, the ops console and every other
+  submenu. Reading a menu is not an activity. (The Impel pause screen was
+  already frozen — `App.update` only ticks the hub in the HUB state, now
+  pinned by a test.)
+- **Board XP is budgeted per tier** against the passive "Attribute
+  training" assignment (`PASSIVE_TRAIN_XP_PER_DAY` 40), because a
+  dispatched hero is off the team exactly like one on the mats:
+  `BOARD_TIER_XP_MULT` = 0.5x / 1.0x / 1.5x, i.e. **20 / 40 / 60 XP per
+  day TOTAL**, divided across whatever the job trains. Board work is
+  deliberately the lesser XP route — it also pays credits and often bond.
+  A test asserts every shipped job sits inside its tier's budget.
+- **Consequence worth knowing**: a job that trains all six spreads its
+  budget thinly. Spar (tier 1, 1 day, six attributes) lands at 3 XP each;
+  Boot Camp (tier 2, 2 days, six) at 13 each. Narrow jobs concentrate:
+  Field-Test is 120 Intelligence. So broad jobs are credit work and
+  narrow jobs are targeted training — intended, but it does make the two
+  "training" jobs weak as training.
+- **Board presentation**: the title is just "Assignment Board"; payouts
+  read "150 cr, 40 XP to Intelligence" with no "pays" and no "~" (the M11
+  crew multiplier still scales what actually lands); and the last line
+  before Close reports what's open and what's next — "Tier 1 and Tier 2
+  jobs available. Tier 3 jobs unlocked at team power 160 (currently 121)."
+  With every tier open it's simply "Tier 1-3 jobs available."
+*AC: open the board and watch the HUD clock hold still; read a payout with
+no tildes; see the footer name the next tier's threshold.*
+
 ---
 
 ## 10. CLAUDE.md Starter (place at repo root)

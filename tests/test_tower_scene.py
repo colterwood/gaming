@@ -271,7 +271,7 @@ def test_board_dispatch_and_recall_in_person(content):
     state = app.game_state
     put_player_at(scene, 34, 12)                # next to the board (35, 12)
     scene.handle_key(app, pygame.K_RETURN)
-    assert scene.submenu["title"] == "Assignment Board - Tier 1"
+    assert scene.submenu["title"] == "Assignment Board"      # M25
     labels = [i[0] for i in scene.submenu["items"]]
     assert any("1 Hero / 2 Days" in l for l in labels)  # M13: full words
     choose(scene, app, "Calibrate Tower Sensors")     # 1 hero, 2 days, ops spot
@@ -355,13 +355,13 @@ def test_board_shows_tier_teaser_and_request_label(content):
     app.game_state["day"] = 3                   # rotation shows the request tasks
     put_player_at(scene, 34, 12)
     scene.handle_key(app, pygame.K_RETURN)
-    assert scene.submenu["title"] == "Assignment Board - Tier 1"
+    assert scene.submenu["title"] == "Assignment Board"      # M25
     labels = [i[0] for i in scene.submenu["items"]]
-    assert any("Tier 2 jobs at team power 90 (now 37)" in l for l in labels)
+    assert any("Tier 1 jobs available. Tier 2 jobs unlocked at team power "
+               "90 (currently 37)." == l for l in labels)
     # M23: the payout line carries the bond; the request line names who
     assert any(l.strip().startswith("requested by ") for l in labels)
-    assert any(l.strip().startswith("pays ") and "bond with " in l
-               for l in labels)
+    assert any("cr, " in l and "bond with " in l for l in labels)   # M25
 
 
 def test_street_cart_stocks_field_food(content):

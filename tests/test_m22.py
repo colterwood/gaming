@@ -23,11 +23,13 @@ def task_by_id(content, task_id):
 
 # --- sparring (1) ---
 
-def test_sparring_is_worth_twenty_to_every_stat(content):
+def test_sparring_trains_every_stat_within_its_tier_budget(content):
     # M24: xp is PER ATTRIBUTE and `trains` names them; absent = all six.
+    # M25: the amount comes from the tier's XP-per-day budget.
     task = task_by_id(content, "spar_rookies")
-    assert task["xp"] == 20
-    assert task.get("trains") is None
+    assert task.get("trains") is None                   # all six
+    budget = config.board_tier_xp_per_day(task["tier"]) * task["days"]
+    assert task["xp"] * len(config.ATTRIBUTES) <= budget + 1
 
 
 def test_a_spar_pays_out_across_the_board(content):

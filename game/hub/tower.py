@@ -437,10 +437,13 @@ class HubScene:
                 return      # an ambush started a battle this frame — the
                             # pass-out check must not fire on top of it
                             # (BATTLE -> SLEEP is an illegal transition)
-        self.tick_accum += dt
-        if self.tick_accum >= config.TICK_REAL_SECONDS:
-            self.tick_accum -= config.TICK_REAL_SECONDS
-            clock.advance(state, config.TICK_GAME_MINUTES)
+            # M25: the world clock only runs while the team is on its feet.
+            # Reading a menu is not an activity — this used to tick behind
+            # the board, the shop, the ops console and every other submenu.
+            self.tick_accum += dt
+            if self.tick_accum >= config.TICK_REAL_SECONDS:
+                self.tick_accum -= config.TICK_REAL_SECONDS
+                clock.advance(state, config.TICK_GAME_MINUTES)
         for msg in activities.finish_due_training(
                 state, self.content, rejoin=(self.area == "tower")):
             self.log(msg)                           # sessions ending (M12);
@@ -966,24 +969,36 @@ class HubScene:
                           (lambda a, t=task: self._open_dispatch_picker(a, t))))
             # M23: every reward a job pays, spelled out — credits were the
             # only one on the board, so XP and bond were invisible.
-            items.append((f"   pays {self._reward_label(task)}", True, None))
+            items.append((f"   {self._reward_label(task)}", True, None))
             requester = task.get("requested_by")
             if requester and not under_way:
                 requester_name = self.content["characters"][requester]["name"]
                 items.append((f"   requested by {requester_name}", True, None))
-        next_tier = tier + 1
-        if next_tier in config.BOARD_TIER_POWER:
-            need = config.BOARD_TIER_POWER[next_tier]
-            items.append((f"Tier {next_tier} jobs at team power {need} "
-                          f"(now {round(power)})", True, None))
         for job in dispatch.active(state):
             names = ", ".join(self.content["characters"][h]["name"]
                               for h in job["heroes"])
             where = self._area_name(job.get("spot", [None])[0])
             items.append((f"Away: {names} - {where}, back in "
                           f"{job['days_left']} day(s)", True, None))
+        items.append((self._tier_status(tier, power), True, None))
         items.append(("Close", False, None))
-        self._open_submenu(f"Assignment Board - Tier {tier}", items)
+        self._open_submenu("Assignment Board", items)
+
+    @staticmethod
+    def _tier_status(tier, power):
+        """The footer line (M25): what's open, and what opens next."""
+        if tier <= 1:
+            open_tiers = "Tier 1 jobs"
+        elif tier == 2:
+            open_tiers = "Tier 1 and Tier 2 jobs"
+        else:
+            open_tiers = f"Tier 1-{tier} jobs"
+        line = f"{open_tiers} available."
+        need = config.BOARD_TIER_POWER.get(tier + 1)
+        if need:
+            line += (f" Tier {tier + 1} jobs unlocked at team power "
+                     f"{need} (currently {round(power)}).")
+        return line
 
     @staticmethod
     def _crew_label(task):
@@ -993,11 +1008,11 @@ class HubScene:
 
     def _reward_label(self, task):
         """Everything a board job pays out (M23). M24: XP is per attribute
-        and named — a job trains specific things. The '~' is the M11
-        crew-power multiplier, unknown until you pick who goes."""
-        parts = [f"~{task['credits']} cr"]
+        and named. M25: quoted as the plain base figure — the M11 crew-power
+        multiplier still scales what actually lands."""
+        parts = [f"{task['credits']} cr"]
         if task.get("xp"):
-            parts.append(f"~{task['xp']} XP to "
+            parts.append(f"{task['xp']} XP to "
                          f"{dispatch.trains_label(task.get('trains'))}")
         if task.get("bond") and task.get("requested_by"):
             name = self.content["characters"][task["requested_by"]]["name"]
