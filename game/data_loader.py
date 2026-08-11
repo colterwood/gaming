@@ -243,6 +243,11 @@ def load_assignments(data_dir=None):
             bond = _require(task, "bond", int, tw)
             if bond < 1:
                 raise DataError(f"{tw}: bond must be >= 1")
+        spot = _require(task, "spot", list, tw)         # work site (M13)
+        if (len(spot) != 3 or not isinstance(spot[0], str)
+                or not all(isinstance(v, int) and not isinstance(v, bool)
+                           for v in spot[1:])):
+            raise DataError(f"{tw}: spot must be [area, x, y]")
         if task["id"] in seen:
             raise DataError(f"{tw}: duplicate id")
         seen.add(task["id"])
@@ -323,10 +328,16 @@ def load_story(data_dir=None):
             enemies = _require(quest, "enemies", list, qw)
             if not enemies or not all(isinstance(e, str) for e in enemies):
                 raise DataError(f"{qw}: enemies must be a non-empty list of ids")
-        elif kind == "hub_task":
-            _require(quest, "energy", int, qw)
+        elif kind == "scout":                           # field work (M13)
+            _require(quest, "location", str, qw)
+            points = _require(quest, "scout_points", list, qw)
+            if not points or not all(
+                    isinstance(p, list) and len(p) == 2
+                    and all(isinstance(v, int) for v in p) for p in points):
+                raise DataError(f"{qw}: scout_points must be a non-empty "
+                                f"list of [x, y]")
         else:
-            raise DataError(f"{qw}: kind must be battle|hub_task, got '{kind}'")
+            raise DataError(f"{qw}: kind must be battle|scout, got '{kind}'")
         if quest["id"] in seen:
             raise DataError(f"{qw}: duplicate id")
         seen.add(quest["id"])
@@ -466,18 +477,43 @@ def load_all(data_dir=None):
             if item_id not in items:
                 raise DataError(
                     f"zones.json '{zone['id']}': loot item '{item_id}' not found in items.json")
+    TOWER_FLOORS = ("common", "training", "ops")        # spec §7 rooms
+    for task in assignments:
+        area, sx, sy = task["spot"]
+        if area in TOWER_FLOORS:
+            in_bounds = (0 <= sx < config.MAP_TILES_W
+                         and 0 <= sy < config.MAP_TILES_H)
+        elif area in zones:
+            zone_map = zones[area]["map"]
+            in_bounds = 0 <= sy < len(zone_map) and 0 <= sx < len(zone_map[sy])
+        else:
+            raise DataError(
+                f"assignments.json '{task['id']}': spot area '{area}' is neither "
+                f"a tower floor nor a zone")
+        if not in_bounds:
+            # An unreachable spot would make the hero unrecallable now that
+            # recall is in-person only (M13).
+            raise DataError(
+                f"assignments.json '{task['id']}': spot [{sx}, {sy}] is outside "
+                f"the '{area}' map")
     for quest in story:
         for enemy_id in quest.get("enemies", []):
             if enemy_id not in enemies:
                 raise DataError(f"story.json '{quest['id']}': enemy '{enemy_id}' not found")
         if quest.get("recruit") and quest["recruit"] not in characters:
             raise DataError(f"story.json '{quest['id']}': recruit '{quest['recruit']}' not found")
-        if quest["kind"] == "battle":
+        if quest["kind"] in ("battle", "scout"):
             if quest.get("location") and quest["location"] not in zones:
                 raise DataError(f"story.json '{quest['id']}': zone '{quest['location']}' not found")
             if quest.get("deadline_days") is not None and (
                     not isinstance(quest["deadline_days"], int) or quest["deadline_days"] < 1):
                 raise DataError(f"story.json '{quest['id']}': deadline_days must be a positive int")
+        if quest["kind"] == "scout":
+            zone_map = zones[quest["location"]]["map"]
+            for x, y in quest["scout_points"]:
+                if not (0 <= y < len(zone_map) and 0 <= x < len(zone_map[y])):
+                    raise DataError(f"story.json '{quest['id']}': scout point "
+                                    f"[{x}, {y}] is outside the zone map")
     return {"characters": characters, "enemies": enemies, "items": items,
             "calendar": load_calendar(data_dir), "assignments": assignments,
             "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story,

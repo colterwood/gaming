@@ -197,6 +197,19 @@ def test_dispatched_heroes_skip_idle_atrophy(content):
     assert im["idle_days"] == 0
 
 
+def test_backfill_spots_migrates_pre_m13_saves(content):
+    # Jobs saved before work sites existed must still be findable/recallable.
+    state = state_with(["iron_man"], ["iron_man"])
+    state["dispatches"] = [
+        {"task_id": "calibrate_sensors", "name": "Calibrate Tower Sensors",
+         "heroes": ["iron_man"], "days_left": 2, "credits": 150, "xp": 50},
+        {"task_id": "task_removed_from_pool", "name": "?", "heroes": [],
+         "days_left": 1, "credits": 0, "xp": 0}]
+    dispatch.backfill_spots(content, state)
+    assert state["dispatches"][0]["spot"] == ["ops", 30, 4]     # from the task
+    assert state["dispatches"][1]["spot"] == dispatch.FALLBACK_SPOT
+
+
 def test_send_clears_passive_assignment(content):
     state = state_with(["iron_man", "captain_america"], ["captain_america"])
     passive.assign(content, state, "iron_man", "train", "agility")

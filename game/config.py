@@ -70,9 +70,11 @@ MISSION_ENERGY = 40
 MISSION_MINUTES = 180
 CRAFT_ENERGY = 15
 CRAFT_MINUTES = 60
-SMALL_TASK_ENERGY_MIN = 10
-SMALL_TASK_ENERGY_MAX = 20
 TALK_GIFT_MINUTES = 20              # talking/gifting costs time, no energy
+
+# Walkable-map grid (tower floors and zones share it; §9 M8)
+MAP_TILES_W = 40
+MAP_TILES_H = 21
 
 # --- Calendar (§6.2 / §7) ---
 DAYS_PER_ISSUE = 28
@@ -131,6 +133,10 @@ TRAVEL_MINUTES = 30                 # Quinjet hop tower <-> zone
 EAT_MINUTES = 10                    # eating a ration advances the clock
 SEARCH_MINUTES = 15                 # rummaging a crate/dumpster
 SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
+
+# --- Scout quests (M13): field work per scout point ---
+SCOUT_ENERGY = 5
+SCOUT_MINUTES = 20
 
 # --- Battle time & defeat (M12) ---
 # Engaging a mission costs MISSION_ENERGY/MISSION_MINUTES up front (§6.1).

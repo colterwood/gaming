@@ -307,9 +307,12 @@ class ImpelCardScene:
             for task in today:
                 job = dispatch.find(state, task["id"])
                 mark = "[>]" if job else "[ ]"
+                heroes, days = task["heroes"], task["days"]
+                crew = (f"{heroes} Hero{'es' if heroes != 1 else ''} / "
+                        f"{days} Day{'s' if days != 1 else ''}")
                 line = f"{mark} {task['name']} - {task['credits']}cr"
                 line += (f" (back in {job['days_left']}d)" if job
-                         else f" ({task['heroes']}h {task['days']}d)")
+                         else f" ({crew})")
                 pixelkit.text(surface, line, 11, GREY if job else INK,
                               topleft=(panel.x + pad, y))
                 y += 13

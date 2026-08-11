@@ -124,16 +124,28 @@ def test_party_members_are_not_placed_in_world(content):
     assert "iron_man" in ids                                        # benched now
 
 
-def test_mission_flow_fly_and_engage(content):
+def test_mission_flow_accept_fly_and_engage(content):
     scene, app = scene_with_app(content)
     state = app.game_state
-    # Ops console shows the mission details and offers the flight
+    # M13: the docks are empty before the mission is accepted
+    scene.area = "docks"
+    assert scene._mission_target(state) is None
+    scene.area = "tower"
+    # Ops console OFFERS the mission; accept to start the clock
     scene.floor = "ops"
     put_player_at(scene, 8, 5)
     scene.handle_key(app, pygame.K_RETURN)
     labels = [i[0] for i in scene.submenu["items"]]
+    assert any(l.startswith("NEW - ") for l in labels)
+    assert any("once accepted" in l for l in labels)
+    assert not any("Fly to" in l for l in labels)       # no flight offered yet
+    choose(scene, app, "  ACCEPT MISSION")
+    labels = [i[0] for i in scene.submenu["items"]]     # menu reopened
     assert any("Where: Hudson Docks" in l for l in labels)
     assert any("Deadline: 3 day(s) left" in l for l in labels)
+    # cursor lands on an actionable row, not a disabled info line
+    label, disabled, cb = scene.submenu["items"][scene.submenu["index"]]
+    assert not disabled and cb is not None and "Fly to" in label
     choose(scene, app, "  Fly to Hudson Docks")
     assert scene.area == "docks"
     # walk to the target squad and engage
@@ -246,24 +258,38 @@ def test_rations_menu_feeds_party_member(content):
     assert any("+25 EN" in m for m in scene.messages)
 
 
-def test_board_dispatch_and_recall(content):
+def test_board_dispatch_and_recall_in_person(content):
     scene, app = scene_with_app(content)
     state = app.game_state
     put_player_at(scene, 34, 12)                # next to the board (35, 12)
     scene.handle_key(app, pygame.K_RETURN)
     assert scene.submenu["title"] == "Assignment Board - Tier 1"
-    choose(scene, app, "Calibrate Tower Sensors")     # day-1 task, 1 hero 2d
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any("1 Hero / 2 Days" in l for l in labels)  # M13: full words
+    choose(scene, app, "Calibrate Tower Sensors")     # 1 hero, 2 days, ops spot
     choose(scene, app, "Send Iron Man")
     assert state["roster"]["iron_man"]["dispatch"] == "calibrate_sensors"
     assert state["party"] == ["captain_america"]
-    # away heroes don't stand around the tower
+    # not on the common floor — he's at the job site on the ops floor
     ids = [cid for cid, _, _ in scene._characters_here(state)]
     assert "iron_man" not in ids
-    # board shows the job under way and offers a recall
+    # the board shows the job under way and WHERE the crew is — no recall row
     scene.handle_key(app, pygame.K_RETURN)
     labels = [i[0] for i in scene.submenu["items"]]
     assert any("[under way]" in l for l in labels)
-    choose(scene, app, "  Recall")
+    assert any("Away: Iron Man - Ops Floor" in l for l in labels)
+    assert not any("Recall" in l for l in labels)
+    scene.reset_modes()
+    # M13: find him at the work site (ops 30, 4) and recall face to face
+    scene.floor = "ops"
+    ids = [cid for cid, _, _ in scene._characters_here(state)]
+    assert "iron_man" in ids
+    put_player_at(scene, 30, 5)
+    hit = scene._nearest_interaction(state)
+    assert hit[:2] == ("char", "iron_man")
+    scene.handle_key(app, pygame.K_RETURN)
+    assert "on assignment" in scene.submenu["title"]
+    choose(scene, app, "Recall")
     assert "dispatch" not in state["roster"]["iron_man"]
     assert state["dispatches"] == []
 
@@ -325,7 +351,9 @@ def test_board_shows_tier_teaser_and_request_label(content):
     assert scene.submenu["title"] == "Assignment Board - Tier 1"
     labels = [i[0] for i in scene.submenu["items"]]
     assert any("Tier 2 jobs at team power 70 (now 47)" in l for l in labels)
-    assert any(l.strip().startswith("for ") for l in labels)   # NPC request
+    # NPC request shows who wants it and the bond payout (M13 wording)
+    assert any(l.strip().startswith("requested by ") and "bond" in l
+               for l in labels)
 
 
 def test_street_cart_stocks_field_food(content):
@@ -360,6 +388,7 @@ def test_ambush_frame_never_stacks_pass_out(content):
 def test_engage_at_low_energy_fights_first_sleeps_after(content):
     scene, app = scene_with_app(content)
     state = app.game_state
+    story.accept(state, story.current_quest(state, content["story"]))
     state["roster"]["captain_america"]["energy"] = 10
     energy.sync(state)
     scene.area = "docks"
@@ -419,6 +448,40 @@ def test_rack_is_party_only_and_locks_the_trainee(content):
     state["time_minutes"] += 200
     scene.update(0.016, app)
     assert state["party"] == ["iron_man"]               # no field teleport
+
+
+def test_scout_quest_worked_on_foot(content):
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    first = content["story"][0]
+    state["quests"][first["id"]] = {"name": first["name"], "status": "done"}
+    story.init(state, content["story"])
+    quest = story.current_quest(state, content["story"])
+    assert quest["kind"] == "scout" and quest["location"] == "midtown"
+    scene.area = "midtown"
+    assert scene._scout_targets(state) == []            # not accepted yet
+    story.accept(state, quest)
+    assert len(scene._scout_targets(state)) == 3        # markers appear
+    for i, (tx, ty) in enumerate(quest["scout_points"]):
+        put_player_at(scene, tx, ty)
+        hit = scene._nearest_interaction(state)
+        assert hit[0] == "scout" and hit[2] == "Scout"
+        scene.handle_key(app, pygame.K_RETURN)
+    assert state["quests"][quest["id"]]["status"] == "done"
+    assert scene._scout_targets(state) == []            # all worked
+    assert any("complete" in m for m in scene.messages)
+
+
+def test_gift_menu_lists_consumables(content):
+    scene, app = scene_with_app(content)
+    app.game_state["inventory"]["energy_bar"] = 1       # Hulk's true love
+    put_player_at(scene, 4, 7)                          # Jarvis
+    scene.handle_key(app, pygame.K_RETURN)
+    choose(scene, app, "Give Gift")
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any(l.startswith("Energy Bar") for l in labels)      # M13
+    assert any(l.startswith("Med Kit") for l in labels)         # starter kit
+    assert any(l.startswith("Shawarma Wrap") for l in labels)
 
 
 def test_talk_at_2am_sleeps_without_dialogue_box(content):

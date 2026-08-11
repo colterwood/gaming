@@ -1,8 +1,12 @@
-"""Story quest progression (M6): sequential Ch. 1-2 quest chain, hub tasks,
-recruitment, story flags. Pure Python — no pygame.
+"""Story quest progression (M6): sequential Ch. 1-2 quest chain, field
+scouting, recruitment, story flags. Pure Python — no pygame.
 
 Quest state lives in state["quests"] as {quest_id: {"name", "status"}} with
-status "active" | "done"; quests unlock strictly in story.json order.
+status "offered" | "active" | "failed" | "done"; quests unlock strictly in
+story.json order. M13: a quest is only visible in the field once ACCEPTED
+at the Ops Console ("offered" -> "active"); the deadline starts at accept.
+Scout quests (kind "scout") replace hub tasks: fly to the zone and work
+every scout point.
 """
 
 from game import config
@@ -31,24 +35,38 @@ def _activate_next(state, story_data):
     quest = current_quest(state, story_data)
     if quest:
         state["quests"].setdefault(quest["id"],
-                                   {"name": quest["name"], "status": "active",
-                                    "activated_day": abs_day(state)})
+                                   {"name": quest["name"], "status": "offered"})
     return quest
 
 
 def quest_entry(state, quest):
     return state.setdefault("quests", {}).setdefault(
-        quest["id"], {"name": quest["name"], "status": "active",
-                      "activated_day": abs_day(state)})
+        quest["id"], {"name": quest["name"], "status": "offered"})
+
+
+def is_accepted(state, quest):
+    """M13: nothing shows in the field until the player takes the job."""
+    return quest_entry(state, quest)["status"] == "active"
+
+
+def accept(state, quest):
+    """Take the job at the Ops Console; the deadline clock starts now."""
+    entry = quest_entry(state, quest)
+    if entry["status"] != "offered":
+        return {"ok": False, "message": "Nothing to accept."}
+    entry["status"] = "active"
+    entry["activated_day"] = abs_day(state)
+    return {"ok": True, "message": f"Mission accepted: {quest['name']}."}
 
 
 def days_left(state, quest):
-    """Days remaining before the mission deadline, or None if untimed."""
+    """Days remaining before the mission deadline; None if untimed or not
+    yet accepted (the clock starts at accept, M13)."""
     deadline = quest.get("deadline_days")
-    if not deadline:
-        return None
     entry = quest_entry(state, quest)
-    return entry.get("activated_day", abs_day(state)) + deadline - abs_day(state)
+    if not deadline or "activated_day" not in entry:
+        return None
+    return entry["activated_day"] + deadline - abs_day(state)
 
 
 def is_locked(state, quest):
@@ -68,11 +86,11 @@ def fail_mission(state, quest):
 
 
 def check_deadlines(state, story_data):
-    """Run at day start: expire overdue missions, reactivate cooled-down
-    ones. Returns messages."""
+    """Run at day start: expire overdue missions, re-offer cooled-down
+    ones (they must be accepted again, M13). Returns messages."""
     messages = []
     quest = current_quest(state, story_data)
-    if quest is None or quest["kind"] != "battle":
+    if quest is None:
         return messages
     entry = quest_entry(state, quest)
     today = abs_day(state)
@@ -80,26 +98,47 @@ def check_deadlines(state, story_data):
     if entry["status"] == "active" and left is not None and left < 0:
         messages.append(fail_mission(state, quest))
     elif entry["status"] == "failed" and today >= entry.get("retry_day", 0):
-        entry["status"] = "active"
-        entry["activated_day"] = today
+        entry["status"] = "offered"
+        entry.pop("activated_day", None)
+        entry.pop("scouted", None)      # a re-offered scout restarts clean,
         messages.append(f"New intel: {quest['name']} is back on the board.")
-    return messages
+    return messages                     # same as a failed battle quest
 
 
 def story_complete(state, story_data):
     return current_quest(state, story_data) is None
 
 
-def do_hub_task(state, quest, story_data=None):
-    """Perform a hub_task quest step (§6.1 small-task costs from quest data)."""
-    if not energy.can_afford(state, quest["energy"]):
+# ----------------------------------------------------- scout quests (M13)
+
+def scouted(state, quest):
+    """Indices of this scout quest's points already worked."""
+    return quest_entry(state, quest).setdefault("scouted", [])
+
+
+def do_scout(state, quest, index, story_data=None):
+    """Work one scout point in the field (SCOUT_ENERGY/SCOUT_MINUTES per
+    point); the quest completes when every point is done."""
+    if not is_accepted(state, quest):
+        return {"ok": False, "message": "Accept the mission at Ops first."}
+    done = scouted(state, quest)
+    if index in done or not 0 <= index < len(quest["scout_points"]):
+        return {"ok": False, "message": "Nothing left to do here."}
+    if not energy.can_afford(state, config.SCOUT_ENERGY):
         return {"ok": False, "message": "Too exhausted — sleep to recover."}
-    energy.spend(state, quest["energy"])
-    clock.advance(state, quest.get("minutes", 60))
-    state["quests"][quest["id"]] = {"name": quest["name"], "status": "done"}
+    energy.spend(state, config.SCOUT_ENERGY)
+    hit_end = clock.advance(state, config.SCOUT_MINUTES)
+    done.append(index)
+    remaining = len(quest["scout_points"]) - len(done)
+    if remaining:
+        return {"ok": True, "hit_day_end": hit_end,
+                "message": f"{quest['name']}: {remaining} spot(s) left."}
+    entry = quest_entry(state, quest)
+    entry["status"] = "done"
     if story_data:
         _activate_next(state, story_data)
-    return {"ok": True, "message": f"{quest['name']} — done."}
+    return {"ok": True, "hit_day_end": hit_end, "complete": True,
+            "message": f"{quest['name']} — complete!"}
 
 
 def complete_battle_quest(state, quest, content):

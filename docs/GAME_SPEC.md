@@ -186,7 +186,7 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
 | Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
 | Craft action | 15 energy, +60 min |
-| Small task | 10–20 energy |
+| Scout point (M13, replaces hub small tasks) | 5 energy, +20 min per point |
 | Talk / gift | 0 energy, +20 min |
 | Eat a ration (M10) | 0 energy, +10 min; restores the item's `energy` EN to one party member, capped at 100 |
 | Search a zone crate (M10) | 0 energy, +15 min; daily-respawning loot, trap risk scales with danger |
@@ -278,7 +278,7 @@ Avengers Tower rooms and activities:
 |---|---|
 | Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating tasks per day per unlocked board tier; dispatch jobs — see §9 M10/M11) |
 | Training Floor | Attribute training (pick hero + attribute); upgrades to tier 2 via story flag after Ch. 1 boss |
-| Ops Floor | Launch story missions, view quest log |
+| Ops Floor | Story missions are OFFERED here (M13): accept one to start its deadline and make its target/scout points appear in the field; view quest log |
 
 Sleep sequence: fade out → advance calendar → reset energy/talk flags →
 autosave → fade in. (Gift limits are the M12 rolling window — nothing weekly
@@ -358,7 +358,8 @@ state.
 shows recruited vs. empty pockets.*
 
 **M6 — Quest & recruitment.** Quest log, the Ant-Man rescue questline (2 hub
-tasks + 1 battle), Ant-Man joins roster and appears in binder/party select.
+tasks + 1 battle; superseded by M13: the hub tasks are now field scout
+quests), Ant-Man joins roster and appears in binder/party select.
 Ch. 1–2 story missions and both bosses wired in sequence.
 *AC: fresh save → complete Ch. 1–2 including recruiting Ant-Man, in under
 ~45 minutes of play.*
@@ -406,7 +407,9 @@ interaction point; recruited heroes appear standing in the tower.*
   data/zones.json, danger 1–3) and `deadline_days`. Travel by Quinjet,
   find the target squad in the zone, engage (mission energy/time §6.1).
   Deadline expiry or battle loss fails the mission: 2-day cooldown
-  (MISSION_FAIL_COOLDOWN_DAYS) before it reactivates.
+  (MISSION_FAIL_COOLDOWN_DAYS) before it reactivates. *(Superseded by
+  M13: targets appear only after accepting at Ops — the deadline starts
+  at accept — and a cooled-down mission returns as offered.)*
 - **Ambushes**: while walking a zone, ambush chance scales with zone
   danger and inversely with party size. Squad size rolls 2–8 and the
   ambush only triggers if it outnumbers the party (max 8).
@@ -520,6 +523,34 @@ fight at noon and be back in the tower at 3 PM with 10 EN; start a rank-1
 session, watch the hero leave the party and return an hour later ranked
 up; get gift-blocked on the second same-day gift and see −5 for a lazy
 repeat.*
+
+**M13 — Accept, scout & find them in the field** *(added post-POC)*.
+- **Accept before engage**: story quests are "offered" at the Ops Console
+  and show NOTHING in the field until accepted; accepting starts the
+  deadline (days_left is None before accept). A failed mission comes off
+  cooldown as offered again — re-accept it.
+- **Scout quests** replace hub tasks (story.json kind "scout"): a
+  location zone plus `scout_points` [[x,y],...] and an optional
+  `action_label`. Once accepted, gold markers appear in the zone; each
+  point costs SCOUT_ENERGY (5) / SCOUT_MINUTES (20) to work; the quest
+  completes on the last point. Ch. 1: Case the Safehouse and Spoof the
+  Ankle Monitor both play out on Lang's Midtown block.
+- **Dispatched heroes are physically at their work site**: every
+  assignments.json task carries `spot` [area, x, y] (a tower floor or a
+  zone), snapshotted onto the job. The hero stands there while away;
+  recall happens IN PERSON by finding them and choosing Recall (the
+  board only shows where everyone is). Board rows read "2 Heroes /
+  2 Days" and NPC requests show "requested by <name>: +N bond".
+- **Named attacks**: the battle menu lists the actor's actual ability
+  names (Repulsor Blast / Unibeam (12 EN) / House Party Protocol...)
+  instead of Basic/Special/Ultimate; Item and Defend stay generic.
+- **Consumables are giftable** alongside gift-kind items (Hulk's loved
+  Energy Bar is finally reachable); unlisted items land as neutral.
+*AC: fly to the docks before accepting quest 1 and find nothing; accept
+and the squad appears; case the safehouse by working all three markers on
+foot; walk to the ops floor and find Cap calibrating the sensors, recall
+him face to face; see "Shield Throw (10 EN)" in Cap's battle menu; gift
+Hulk an Energy Bar for +80.*
 
 ---
 

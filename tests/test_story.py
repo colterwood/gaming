@@ -43,11 +43,18 @@ def fresh_run(content):
 
 # --- quest chain mechanics ---
 
-def test_init_activates_first_quest(content):
+def test_init_offers_first_quest(content):
     state = fresh_run(content)
     quest = story.current_quest(state, content["story"])
     assert quest["id"] == content["story"][0]["id"]
-    assert state["quests"][quest["id"]]["status"] == "active"
+    # M13: quests start OFFERED — nothing in the field until accepted
+    assert state["quests"][quest["id"]]["status"] == "offered"
+    assert not story.is_accepted(state, quest)
+    assert story.days_left(state, quest) is None        # clock not started
+    result = story.accept(state, quest)
+    assert result["ok"]
+    assert story.is_accepted(state, quest)
+    assert story.accept(state, quest)["ok"] is False    # only once
 
 
 def test_quests_unlock_in_order(content):
@@ -58,37 +65,48 @@ def test_quests_unlock_in_order(content):
     assert story.current_quest(state, content["story"])["id"] == content["story"][1]["id"]
 
 
-def test_hub_task_costs_and_completes(content):
+def test_scout_quest_costs_and_completes(content):
     state = fresh_run(content)
-    task = next(q for q in content["story"] if q["kind"] == "hub_task")
-    result = story.do_hub_task(state, task)
-    assert result["ok"]
-    assert state["energy"] == config.DAILY_ENERGY - task["energy"]
-    assert state["quests"][task["id"]]["status"] == "done"
+    quest = next(q for q in content["story"] if q["kind"] == "scout")
+    assert not story.do_scout(state, quest, 0)["ok"]    # accept first (M13)
+    story.accept(state, quest)
+    points = quest["scout_points"]
+    for i in range(len(points)):
+        result = story.do_scout(state, quest, i, content["story"])
+        assert result["ok"]
+    assert result.get("complete")
+    assert state["quests"][quest["id"]]["status"] == "done"
+    assert state["energy"] == config.DAILY_ENERGY - config.SCOUT_ENERGY * len(points)
+    assert state["time_minutes"] == \
+        config.DAY_START_MINUTES + config.SCOUT_MINUTES * len(points)
+    assert not story.do_scout(state, quest, 0)["ok"]    # nothing left
 
 
-def test_hub_task_activates_next_quest_entry(content):
-    # Review finding: the hub-task path must register the next quest in
-    # state["quests"] so the pause-screen Tasks tab shows the active objective.
+def test_scout_completion_activates_next_quest_entry(content):
+    # The pause-screen Tasks tab needs the next quest registered.
     state = fresh_run(content)
     for quest in content["story"]:
-        if quest["kind"] != "hub_task":
+        if quest["kind"] != "scout":
             state["quests"][quest["id"]] = {"name": quest["name"], "status": "done"}
             continue
-        story.do_hub_task(state, quest, content["story"])
+        story.accept(state, quest)
+        for i in range(len(quest["scout_points"])):
+            story.do_scout(state, quest, i, content["story"])
         nxt = story.current_quest(state, content["story"])
         if nxt:
             assert nxt["id"] in state["quests"]
-            assert state["quests"][nxt["id"]]["status"] == "active"
+            assert state["quests"][nxt["id"]]["status"] == "offered"
 
 
-def test_hub_task_blocked_without_energy(content):
+def test_scout_blocked_without_energy(content):
     state = fresh_run(content)
+    quest = next(q for q in content["story"] if q["kind"] == "scout")
+    story.accept(state, quest)
     for entry in state["roster"].values():
-        entry["energy"] = 5
-    task = next(q for q in content["story"] if q["kind"] == "hub_task")
-    assert not story.do_hub_task(state, task)["ok"]
-    assert state["roster"]["iron_man"]["energy"] == 5
+        entry["energy"] = 2
+    assert not story.do_scout(state, quest, 0)["ok"]
+    assert state["roster"]["iron_man"]["energy"] == 2
+    assert story.scouted(state, quest) == []            # nothing marked
 
 
 def test_battle_quest_recruits_and_flags(content):
@@ -120,6 +138,9 @@ def test_mission_deadline_expires_and_cools_down(content):
     state = fresh_run(content)
     quest = story.current_quest(state, content["story"])
     assert quest["kind"] == "battle" and quest["deadline_days"] == 3
+    state["day"] += 4                                  # offered jobs never expire
+    assert story.check_deadlines(state, content["story"]) == []
+    story.accept(state, quest)                         # M13: clock starts here
     assert story.days_left(state, quest) == 3
     state["day"] += 4                                  # blow the deadline
     messages = story.check_deadlines(state, content["story"])
@@ -132,7 +153,29 @@ def test_mission_deadline_expires_and_cools_down(content):
     messages = story.check_deadlines(state, content["story"])
     assert any("back on the board" in m for m in messages)
     assert not story.is_locked(state, quest)
+    assert story.days_left(state, quest) is None       # re-offered: re-accept
+    story.accept(state, quest)
     assert story.days_left(state, quest) == 3          # fresh deadline
+
+
+def test_reoffered_scout_restarts_clean(content):
+    # A scout quest that fails its deadline must not keep partial progress
+    # through the re-offer (review fix, M13).
+    state = fresh_run(content)
+    scout = dict(next(q for q in content["story"] if q["kind"] == "scout"),
+                 deadline_days=2)
+    chain = [scout]
+    story.init(state, chain)
+    story.accept(state, scout)
+    story.do_scout(state, scout, 0, chain)
+    assert story.scouted(state, scout) == [0]
+    state["day"] += 3                                  # blow the deadline
+    assert any("Mission failed" in m
+               for m in story.check_deadlines(state, chain))
+    state["day"] += 2                                  # cooldown over
+    assert any("back on the board" in m
+               for m in story.check_deadlines(state, chain))
+    assert story.scouted(state, scout) == []           # progress wiped
 
 
 def test_battle_loss_fails_mission(content):
@@ -193,8 +236,13 @@ def test_full_ch1_ch2_playthrough(content):
     while not story.story_complete(state, content["story"]):
         assert state["day"] < 28, "run must finish well inside Issue 1"
         quest = story.current_quest(state, content["story"])
-        if quest["kind"] == "hub_task":
-            if not story.do_hub_task(state, quest)["ok"]:
+        if not story.is_accepted(state, quest):         # M13: take the job
+            story.accept(state, quest)
+        if quest["kind"] == "scout":
+            done = story.scouted(state, quest)
+            index = next(i for i in range(len(quest["scout_points"]))
+                         if i not in done)
+            if not story.do_scout(state, quest, index, content["story"])["ok"]:
                 cal.sleep(state)
             continue
         if activities.should_pass_out(state):   # M11: engaging never refuses,

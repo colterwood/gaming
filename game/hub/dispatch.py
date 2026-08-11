@@ -67,6 +67,30 @@ def is_away(state, hero_id):
     return bool(entry and entry.get("dispatch"))
 
 
+def job_of(state, hero_id):
+    """The active job a hero is away on, or None."""
+    for job in active(state):
+        if hero_id in job["heroes"]:
+            return job
+    return None
+
+
+# Where a job with no recorded work site lands after a save migration:
+# the common floor, by the bunks — always findable, always recallable.
+FALLBACK_SPOT = ["common", 8, 15]
+
+
+def backfill_spots(content, state):
+    """Save migration (M13): jobs saved before work sites existed get their
+    task's spot — or the fallback — so in-person recall always works."""
+    tasks = {t["id"]: t for t in content["assignments"]}
+    for job in state.get("dispatches", []):
+        if not job.get("spot"):
+            task = tasks.get(job["task_id"])
+            job["spot"] = list(task["spot"]) if task and task.get("spot") \
+                else list(FALLBACK_SPOT)
+
+
 def send(content, state, task, hero_ids):
     """Dispatch hero_ids on a board task. Returns (ok, message)."""
     hero_ids = list(hero_ids)
@@ -102,6 +126,8 @@ def send(content, state, task, hero_ids):
     if task.get("requested_by"):                        # NPC request (M11)
         job["requested_by"] = task["requested_by"]
         job["bond"] = task.get("bond", 0)
+    if task.get("spot"):                                # work site (M13):
+        job["spot"] = list(task["spot"])                # they're findable there
     active(state).append(job)
     names = " and ".join(content["characters"][h]["name"] for h in hero_ids)
     return True, (f"{names} head(s) out: {task['name']} "

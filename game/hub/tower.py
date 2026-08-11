@@ -20,8 +20,8 @@ from game.ui import pixelkit, sprites, widgets
 
 TILE = 16
 HUD_H = 20
-MAP_W = 40
-MAP_H = 21
+MAP_W = config.MAP_TILES_W
+MAP_H = config.MAP_TILES_H
 
 WALKABLE = {".", ",", "m", "=", "_", "H"}
 TILE_NAMES = {"#": "wall", "w": "window", "E": "elevator", ".": "floor",
@@ -232,16 +232,33 @@ class HubScene:
     def _party(self, state):
         return party_mod.get_party(state)
 
+    def _here(self, spot_area):
+        """Does an (area-or-floor) tag match the current screen?"""
+        if self.area == "tower":
+            return spot_area == self.floor
+        return spot_area == self.area
+
     def _characters_here(self, state):
-        """(char_id, px, py) for benched roster + NPCs on this screen."""
+        """(char_id, px, py) for benched roster + NPCs on this screen.
+        M13: dispatched heroes stand at their job's work site — find them
+        there to recall them in person."""
         placed = []
 
         def put(cid, tx, ty):
             placed.append((cid, tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2))
 
+        roster = state.get("roster", {})
+        away_offsets = 0
+        for hero_id in sorted(roster):
+            if not roster[hero_id].get("dispatch"):
+                continue
+            job = dispatch.job_of(state, hero_id)
+            spot = (job or {}).get("spot")
+            if spot and self._here(spot[0]):
+                put(hero_id, spot[1] + away_offsets, spot[2])
+                away_offsets += 2
         if self.area != "tower":
             return placed
-        roster = state.get("roster", {})
         active = set(self._party(state))
         flags = state.get("story_flags", {})
         if self.floor == "common":
@@ -256,7 +273,7 @@ class HubScene:
         for hero_id in sorted(roster):
             if hero_id in active:
                 continue
-            if roster[hero_id].get("dispatch"):     # away on a board job (M10)
+            if roster[hero_id].get("dispatch"):     # placed at the site above
                 continue
             if roster[hero_id].get("training"):     # on the mats (M12)
                 kind = "train"
@@ -270,17 +287,34 @@ class HubScene:
         return placed
 
     def _mission_target(self, state):
-        """(quest, x, y) if the current mission's squad is in this zone."""
+        """(quest, x, y) if the current mission's squad is in this zone.
+        M13: nothing shows until the mission is accepted at Ops."""
         zone = self._zone()
         if not zone:
             return None
         quest = story.current_quest(state, self.content["story"])
         if (not quest or quest["kind"] != "battle"
                 or quest.get("location") != zone["id"]
-                or story.is_locked(state, quest)):
+                or not story.is_accepted(state, quest)):
             return None
         tx, ty = zone["target_spot"]
         return (quest, tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2)
+
+    def _scout_targets(self, state):
+        """[(quest, index, x, y)] for the current scout quest's unworked
+        points in this zone (only once accepted, M13)."""
+        zone = self._zone()
+        if not zone:
+            return []
+        quest = story.current_quest(state, self.content["story"])
+        if (not quest or quest["kind"] != "scout"
+                or quest.get("location") != zone["id"]
+                or not story.is_accepted(state, quest)):
+            return []
+        done = story.scouted(state, quest)
+        return [(quest, i, tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2)
+                for i, (tx, ty) in enumerate(quest["scout_points"])
+                if i not in done]
 
     def _stations_here(self):
         found = []
@@ -329,6 +363,11 @@ class HubScene:
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
                 best, best_d = ("crate", (tx, ty), "Search"), d
+        for quest, i, x, y in self._scout_targets(state):
+            d = (x - self.px) ** 2 + (y - self.py) ** 2
+            if d < best_d:
+                best, best_d = ("scout", i,
+                                quest.get("action_label", "Scout")), d
         target = self._mission_target(state)
         if target:
             quest, x, y = target
@@ -467,6 +506,8 @@ class HubScene:
             self._engage_target(app)
         elif kind == "crate":
             self._search_crate(app, *ident)
+        elif kind == "scout":
+            self._do_scout_point(app, ident)
         elif ident == "bed":
             app.go_to_sleep(passed_out=False)
         elif ident == "elevator":
@@ -537,6 +578,16 @@ class HubScene:
         if result.get("launch_battle"):
             app.start_battle(enemy_ids=quest["enemies"], quest=quest)
             return
+        self._after_action(app)
+
+    def _do_scout_point(self, app, index):
+        state = app.game_state
+        quest = story.current_quest(state, self.content["story"])
+        if not quest or quest["kind"] != "scout":
+            return
+        result = story.do_scout(state, quest, index, self.content["story"])
+        self.log(result["message"])
+        self.reset_modes()
         self._after_action(app)
 
     # ------------------------------------------------- zone searching (M10)
@@ -615,6 +666,19 @@ class HubScene:
                   f"{clock.format_time(lock['ends'])}", True, None),
                  ("Never mind", False, None)])
             return
+        if entry is not None and entry.get("dispatch"):
+            # M13: you found them at the work site — recall them in person.
+            job = dispatch.job_of(state, char_id)
+            if job:
+                self._open_submenu(
+                    f"{char['name']} - on assignment",
+                    [(f"{job['name']} - back in {job['days_left']} day(s)",
+                      True, None),
+                     (f"Recall (abandon, no reward)", False,
+                      (lambda a, tid=job["task_id"]:
+                       self._recall_dispatch(a, tid))),
+                     ("Never mind", False, None)])
+            return
         items = []
         if bonds.bondable(char):
             bond = bonds.ensure_bond(state, char_id)
@@ -681,9 +745,11 @@ class HubScene:
             self._after_action(app)
 
     def _open_gift_menu(self, app, char_id):
+        # M13: consumables are giftable too (Hulk loves an Energy Bar)
         state = app.game_state
         gifts = [(iid, n) for iid, n in sorted(state["inventory"].items())
-                 if n > 0 and self.content["items"].get(iid, {}).get("kind") == "gift"]
+                 if n > 0 and self.content["items"].get(iid, {}).get("kind")
+                 in ("gift", "consumable")]
         if not gifts:
             self.log("No gifts in your bag - visit the Tower Shop.")
             self.reset_modes()
@@ -811,7 +877,7 @@ class HubScene:
         for task in activities.assignment_tasks_today(
                 state, self.content["assignments"], tier):
             under_way = dispatch.find(state, task["id"]) is not None
-            label = (f"{task['name']} - {task['heroes']}h/{task['days']}d, "
+            label = (f"{task['name']} - {self._crew_label(task)}, "
                      f"~{task['credits']} cr")
             if under_way:
                 label += "  [under way]"
@@ -820,8 +886,8 @@ class HubScene:
             requester = task.get("requested_by")
             if requester and not under_way:
                 requester_name = self.content["characters"][requester]["name"]
-                items.append((f"   for {requester_name} (+{task.get('bond', 0)}"
-                              f" bond)", True, None))
+                items.append((f"   requested by {requester_name}: "
+                              f"+{task.get('bond', 0)} bond", True, None))
         next_tier = tier + 1
         if next_tier in config.BOARD_TIER_POWER:
             need = config.BOARD_TIER_POWER[next_tier]
@@ -830,13 +896,23 @@ class HubScene:
         for job in dispatch.active(state):
             names = ", ".join(self.content["characters"][h]["name"]
                               for h in job["heroes"])
-            items.append((f"Away: {names} - back in {job['days_left']}d "
-                          f"({job['name']})", True, None))
-            items.append((f"  Recall - abandon {job['name']}", False,
-                          (lambda a, tid=job["task_id"]:
-                           self._recall_dispatch(a, tid))))
+            where = self._area_name(job.get("spot", [None])[0])
+            items.append((f"Away: {names} - {where}, back in "
+                          f"{job['days_left']} day(s)", True, None))
         items.append(("Close", False, None))
         self._open_submenu(f"Assignment Board - Tier {tier}", items)
+
+    @staticmethod
+    def _crew_label(task):
+        heroes, days = task["heroes"], task["days"]
+        return (f"{heroes} Hero{'es' if heroes != 1 else ''} / "
+                f"{days} Day{'s' if days != 1 else ''}")
+
+    def _area_name(self, area):
+        if area in FLOORS:
+            return FLOORS[area]["name"]
+        zone = self.content["zones"].get(area)
+        return zone["name"] if zone else "parts unknown"
 
     def _open_dispatch_picker(self, app, task, picked=()):
         state = app.game_state
@@ -881,6 +957,8 @@ class HubScene:
         self.reset_modes()
 
     def _open_ops(self, app):
+        """M13: missions are OFFERED here first — nothing shows in the field
+        until you accept, and the deadline clock starts at accept."""
         state = app.game_state
         quest = story.current_quest(state, self.content["story"])
         done = sum(1 for v in state.get("quests", {}).values()
@@ -888,38 +966,58 @@ class HubScene:
         items = []
         if quest is None:
             items.append(("Chapters 1-2 complete!", True, None))
-        elif quest["kind"] == "battle":
+        else:
             zone = self.content["zones"].get(quest.get("location", ""), {})
+            where = zone.get("name", "?")
+            danger = "!" * zone.get("danger", 0)
             if story.is_locked(state, quest):
                 entry = state["quests"][quest["id"]]
                 wait = entry.get("retry_day", 0) - story.abs_day(state)
                 items.append((f"FAILED - {quest['name']} (retry in {wait}d)",
                               True, None))
-            else:
-                tag = "BOSS - " if quest.get("boss") else "Mission - "
+            elif not story.is_accepted(state, quest):
+                tag = "BOSS - " if quest.get("boss") else "NEW - "
                 items.append((f"{tag}{quest['name']}", True, None))
-                left = story.days_left(state, quest)
-                where = zone.get("name", "?")
-                danger = "!" * zone.get("danger", 0)
                 items.append((f"  Where: {where}  [{danger}]", True, None))
-                items.append((f"  Deadline: {left} day(s) left", True, None))
+                if quest.get("deadline_days"):
+                    items.append((f"  Deadline: {quest['deadline_days']} day(s) "
+                                  f"once accepted", True, None))
+                items.append(("  ACCEPT MISSION", False,
+                              (lambda a, q=quest: self._accept_quest(a, q))))
+            else:
+                tag = ("BOSS - " if quest.get("boss")
+                       else "Scout - " if quest["kind"] == "scout"
+                       else "Mission - ")
+                items.append((f"{tag}{quest['name']}", True, None))
+                items.append((f"  Where: {where}  [{danger}]", True, None))
+                left = story.days_left(state, quest)
+                if left is not None:
+                    items.append((f"  Deadline: {left} day(s) left", True, None))
+                if quest["kind"] == "scout":
+                    worked = len(story.scouted(state, quest))
+                    total = len(quest["scout_points"])
+                    items.append((f"  Progress: {worked}/{total} spots worked",
+                                  True, None))
                 items.append((f"  Fly to {where} now", False,
                               (lambda a, z=quest["location"]: self._travel(a, z))))
-            items.append((quest["desc"][:44], True, None))
-        else:
-            items.append((f"Task - {quest['name']} ({quest['energy']} EN)", False,
-                          (lambda a, q=quest: self._do_story_task(a, q))))
-            items.append((quest["desc"][:44], True, None))
+            desc = quest["desc"]
+            items.append((desc if len(desc) <= 44 else desc[:41] + "...",
+                          True, None))
         items.append((f"Quest log: {done}/{len(self.content['story'])} complete",
                       True, None))
         items.append(("Close", False, None))
         self._open_submenu("Ops Console", items)
 
-    def _do_story_task(self, app, quest):
-        self.log(story.do_hub_task(app.game_state, quest,
-                                   self.content["story"])["message"])
-        self.reset_modes()
-        self._after_action(app)
+    def _accept_quest(self, app, quest):
+        result = story.accept(app.game_state, quest)
+        self.log(result["message"])
+        if result["ok"]:
+            self._open_ops(app)     # reopen showing the flight option, with
+            self.submenu["index"] = next(   # the cursor on an actionable row
+                (i for i, (_, disabled, cb) in enumerate(self.submenu["items"])
+                 if not disabled and cb is not None), 0)
+        else:
+            self.reset_modes()
 
     def _open_training(self, app):
         """M12: only ACTIVE party members can start a session, and starting
@@ -1094,6 +1192,10 @@ class HubScene:
         if target:
             _, x, y = target
             entities.append(("hydra_squad", x, y, False, 0))
+        for _, _, x, y in self._scout_targets(state):   # objective markers
+            points = [(x, y - 6), (x + 5, y), (x, y + 6), (x - 5, y)]
+            pygame.draw.polygon(surface, pixelkit.color("gold"), points)
+            pygame.draw.polygon(surface, pixelkit.color("ink"), points, width=1)
         party = self._party(state)
         bob = int(self.walk_bob) % 2
         for i, hero_id in enumerate(party):

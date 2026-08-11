@@ -29,6 +29,25 @@ def content():
     return data_loader.load_all()
 
 
+def test_menu_shows_the_actors_own_attack_names(content):
+    # M13: no more generic Basic/Special/Ultimate rows
+    rng = ScriptedRng(randints=[6, 1])          # Iron Man wins initiative
+    scene = BattleScene(content, hero_ids=("iron_man",),
+                        enemy_ids=("hydra_grunt",), rng=rng)
+    for _ in range(5):
+        if scene.phase == "menu":
+            break
+        scene.update(1.0)
+    labels = scene._menu_options()
+    kinds = [k for _, k in scene._menu_entries()]
+    assert labels[0] == "Repulsor Blast"
+    assert labels[1] == "Unibeam (12 EN)"
+    assert "Item" in labels and "Defend" in labels
+    assert labels[-1] == "House Party Protocol"
+    assert kinds == ["basic", "special", "item", "defend", "ultimate"]
+    assert not any(l in ("Basic", "Special", "Ultimate") for l in labels)
+
+
 def test_back_to_back_turns_still_run_begin_turn(content):
     # Cap (speed 2) vs a grunt (speed 2).
     # Round 1 rolls: Cap 1 (21), grunt 6 (26) -> grunt first, Cap last.

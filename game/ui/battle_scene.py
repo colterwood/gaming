@@ -43,23 +43,41 @@ class BattleScene:
     def _actor(self):
         return self.engine.current()
 
-    def _menu_options(self):
+    def _menu_entries(self):
+        """(label, kind) rows — labels are the actor's OWN ability names
+        (M13), kinds drive the logic (basic|special|item|defend|ultimate)."""
         actor = self._actor()
-        opts = ["Basic", "Special", "Item", "Defend"]
-        if actor.abilities_of_type("ultimate"):
-            opts.append("Ultimate")
-        return opts
+        entries = []
+        basics = actor.abilities_of_type("basic")
+        if basics:
+            entries.append((basics[0]["name"], "basic"))
+        specials = actor.abilities_of_type("special")
+        if specials:
+            entries.append((f"{specials[0]['name']} ({specials[0]['cost']} EN)",
+                            "special"))
+        entries.append(("Item", "item"))
+        entries.append(("Defend", "defend"))
+        ults = actor.abilities_of_type("ultimate")
+        if ults:
+            entries.append((ults[0]["name"], "ultimate"))
+        return entries
+
+    def _menu_options(self):
+        return [label for label, _ in self._menu_entries()]
 
     def _disabled_options(self):
         actor = self._actor()
         disabled = set()
         specials = actor.abilities_of_type("special")
-        if not specials or not actor.can_afford(specials[0]):
-            disabled.add("Special")
-        if not self._battle_items():
-            disabled.add("Item")
-        if not actor.ult_ready():
-            disabled.add("Ultimate")
+        items = self._battle_items()
+        ult_ok = actor.ult_ready()
+        for label, kind in self._menu_entries():
+            if kind == "special" and (not specials or not actor.can_afford(specials[0])):
+                disabled.add(label)
+            elif kind == "item" and not items:
+                disabled.add(label)
+            elif kind == "ultimate" and not ult_ok:
+                disabled.add(label)
         return disabled
 
     def _battle_items(self):
@@ -162,25 +180,25 @@ class BattleScene:
             app.finish_battle(self.engine)
 
     def _menu_key(self, key):
-        options = self._menu_options()
+        entries = self._menu_entries()
         if key in (pygame.K_UP, pygame.K_w):
-            self.menu_index = (self.menu_index - 1) % len(options)
+            self.menu_index = (self.menu_index - 1) % len(entries)
         elif key in (pygame.K_DOWN, pygame.K_s):
-            self.menu_index = (self.menu_index + 1) % len(options)
+            self.menu_index = (self.menu_index + 1) % len(entries)
         elif key == pygame.K_RETURN:
-            choice = options[self.menu_index]
-            if choice in self._disabled_options():
+            label, kind = entries[self.menu_index % len(entries)]
+            if label in self._disabled_options():
                 return
             actor = self._actor()
-            if choice == "Defend":
+            if kind == "defend":
                 self._emit(self.engine.take_turn({"type": "defend"}))
                 self.phase = "turn_start"
-            elif choice == "Item":
+            elif kind == "item":
                 self.pending_action = {"type": "item"}
                 self.item_index = 0
                 self.phase = "item"
             else:
-                ability = actor.abilities_of_type(choice.lower())[0]
+                ability = actor.abilities_of_type(kind)[0]
                 self.pending_action = {"type": "ability", "ability_id": ability["id"],
                                        "ability": ability}
                 if ability["target"] == "all":
@@ -235,7 +253,7 @@ class BattleScene:
         if self.phase == "menu":
             pixelkit.text(surface, f"{self._actor().name}'s turn", 15, "gold",
                           topleft=(30, config.HEIGHT - 122), shadow="ink")
-            widgets.menu(surface, pygame.Rect(30, config.HEIGHT - 108, 130, 96),
+            widgets.menu(surface, pygame.Rect(30, config.HEIGHT - 108, 210, 96),
                          self._menu_options(), self.menu_index,
                          disabled=self._disabled_options())
         elif self.phase == "target":
