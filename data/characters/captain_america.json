@@ -24,7 +24,7 @@
   "birthday": {"issue": 1, "day": 20},
   "synergies": [
     {"with": "iron_man", "name": "Old Friends",
-     "effect": {"crit_bonus": 8}, "requires_bond_level": 6}
+     "effect": {"crit_bonus": 8}, "requires_bond_level": 6, "innate": true}
   ],
   "recruit": {"chapter": 0, "method": "starter"}
 }

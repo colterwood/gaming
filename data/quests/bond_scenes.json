@@ -1,16 +1,42 @@
 [
   {
-    "id": "cap_bond_2",
-    "character": "captain_america",
+    "id": "coulson_bond_2",
+    "character": "coulson",
     "level": 2,
-    "title": "Old Soldiers",
+    "title": "Mint Condition",
     "lines": [
-      "Steve is on the common floor at 2 AM, sketching the skyline.",
-      "CAP: Couldn't sleep either? The city's quiet from up here.",
-      "CAP: You know, I used to draw this skyline before the ice. Different buildings. Same light.",
-      "CAP: Tony rebuilt the Tower twice. People rebuild too. Slower, maybe.",
-      "CAP: Thanks for keeping me company. Don't tell Stark I said the Tower feels like home.",
-      "Your bond with Captain America has deepened."
+      "Coulson slides a binder across the counter. Nine pockets, every card sleeved.",
+      "COULSON: 1991 Impel. Near-complete. Don't tell the Director I brought these on assignment.",
+      "COULSON: This one's Cap. I was eight cards short of the set when the Battle of New York happened.",
+      "COULSON: You work with these people every day. You know what that's worth?",
+      "He lets you hold the binder. He watches your hands the entire time.",
+      "Your bond with Agent Coulson has deepened."
+    ]
+  },
+  {
+    "id": "jarvis_bond_2",
+    "character": "jarvis",
+    "level": 2,
+    "title": "The Tower Keeps Its Own Hours",
+    "lines": [
+      "Jarvis polishes the same glass for the third time. It was already clean.",
+      "JARVIS: I served Mr. Stark's father, you know. This tower has burned down twice.",
+      "JARVIS: Heroes rebuild buildings. Someone has to rebuild the mornings after.",
+      "JARVIS: You keep this team fed and moving. That makes two of us, I suppose.",
+      "Your bond with Edwin Jarvis has deepened."
+    ]
+  },
+  {
+    "id": "hulk_bond_2",
+    "character": "hulk",
+    "level": 2,
+    "title": "Quiet Floor",
+    "lines": [
+      "The training floor is dark. Hulk sits against the wall, taking up most of it.",
+      "HULK: ...You keep coming back. Even after Hulk broke the weight machine.",
+      "HULK: Banner says tower people are scared of Hulk. You don't smell scared.",
+      "HULK: ...Hulk likes the quiet floor. Don't tell metal man.",
+      "Your bond with Hulk has deepened."
     ]
   }
 ]

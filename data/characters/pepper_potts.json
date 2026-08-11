@@ -1,0 +1,18 @@
+{
+  "id": "pepper_potts",
+  "name": "Pepper Potts",
+  "path": "avengers",
+  "rarity": "common",
+  "gifts": {
+    "loved": ["paperwork", "double_espresso"],
+    "liked": ["sketchbook", "war_bonds_poster"],
+    "disliked": ["magnets"],
+    "hated": ["bug_spray"]
+  },
+  "birthday": {"issue": 1, "day": 15},
+  "recruit": {"chapter": 0, "method": "npc"},
+  "bond_unlocks": [
+    {"level": 4, "flag": "pepper_requisitions",
+     "message": "Pepper's Stark requisitions: 20% off the Tower Shop!"}
+  ]
+}

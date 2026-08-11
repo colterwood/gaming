@@ -1,17 +1,11 @@
-"""Placeholder screens for every game state (M0). Rendering + input only —
-all rules live in game.core.state_machine."""
+"""Top-level screen routing + the simple screens (boot/title/path/sleep),
+pixel-styled (§9 M7). Rendering + input only."""
 
 import pygame
 
 from game import config
 from game.core.state_machine import GameState
-
-NAVY = pygame.Color(config.PALETTE["navy"])
-CREAM = pygame.Color(config.PALETTE["cream"])
-RED = pygame.Color(config.PALETTE["red"])
-GOLD = pygame.Color(config.PALETTE["gold"])
-INK = pygame.Color(config.PALETTE["ink"])
-GREY = pygame.Color(90, 90, 100)
+from game.ui import pixelkit
 
 HINTS = {
     GameState.BOOT: "Enter: continue",
@@ -52,15 +46,21 @@ def handle_key(app, key):
         app.machine.transition(GameState.HUB)
 
 
-def _text(surface, txt, size, color, center=None, topleft=None):
-    font = pygame.font.Font(None, size)
-    img = font.render(txt, True, color)
-    rect = img.get_rect()
-    if center:
-        rect.center = center
-    if topleft:
-        rect.topleft = topleft
-    surface.blit(img, rect)
+def _hint_bar(surface, txt):
+    if not txt:
+        return
+    pixelkit.text(surface, txt, 13, "cream",
+                  center=(config.WIDTH // 2, config.HEIGHT - 12), shadow="ink")
+
+
+def _starfield(surface):
+    """Night-sky backdrop: navy with deterministic star pixels."""
+    surface.fill(pixelkit.color("navy"))
+    for i in range(90):
+        x = (i * 97 + 31) % config.WIDTH
+        y = (i * 57 + 11) % (config.HEIGHT - 40)
+        c = "white" if i % 7 == 0 else ("steel_light" if i % 3 == 0 else "steel")
+        surface.set_at((x, y), pixelkit.color(c))
 
 
 def draw(surface, app):
@@ -68,47 +68,67 @@ def draw(surface, app):
 
     if state is GameState.BATTLE and app.battle:
         app.battle.draw(surface)
-        _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
         return
     if state is GameState.HUB and app.hub and app.game_state:
         app.hub.draw(surface, app)
-        _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
         return
     if state is GameState.PAUSE and app.game_state:
         app.pause_scene().draw(surface, app)
         return
 
-    surface.fill(NAVY)
+    _starfield(surface)
     cx = config.WIDTH // 2
 
     if state is GameState.SLEEP and app.game_state:
         gs = app.game_state
-        _text(surface, "A NEW DAY", 72, CREAM, center=(cx, config.HEIGHT // 2 - 80))
-        _text(surface, f"Issue {gs['issue']}, Day {gs['day']}", 44, GOLD,
-              center=(cx, config.HEIGHT // 2))
-        _text(surface, f"Energy: {gs['energy']}", 30, CREAM,
-              center=(cx, config.HEIGHT // 2 + 50))
-        _text(surface, HINTS[state], 30, CREAM, center=(cx, config.HEIGHT - 60))
+        box = pygame.Rect(cx - 130, 100, 260, 120)
+        pixelkit.panel(surface, box, fill="ink", border="gold", shadow=False)
+        pixelkit.text(surface, "A NEW DAY", 34, "gold", bold=True,
+                      center=(cx, 130), shadow="maroon")
+        pixelkit.text(surface, f"Issue {gs['issue']}, Day {gs['day']}", 20, "white",
+                      center=(cx, 165))
+        pixelkit.text(surface, f"Energy: {gs['energy']}", 15, "mint",
+                      center=(cx, 192))
+        _hint_bar(surface, HINTS[state])
         return
 
     if state is GameState.PATH_SELECT:
-        _text(surface, "CHOOSE YOUR PATH", 56, CREAM, center=(cx, 90))
-        cover_w, gap = 200, 40
+        pixelkit.text(surface, "CHOOSE YOUR PATH", 28, "yellow", bold=True,
+                      center=(cx, 40), shadow="maroon")
+        cover_w, cover_h, gap = 100, 150, 18
         total = len(PATHS) * cover_w + (len(PATHS) - 1) * gap
         x = (config.WIDTH - total) // 2
         for i, name in enumerate(PATHS):
-            rect = pygame.Rect(x + i * (cover_w + gap), 180, cover_w, 300)
+            rect = pygame.Rect(x + i * (cover_w + gap), 85, cover_w, cover_h)
             selectable = name == "AVENGERS"
-            pygame.draw.rect(surface, RED if selectable else GREY, rect, border_radius=8)
-            pygame.draw.rect(surface, GOLD if selectable else INK, rect, width=4, border_radius=8)
-            _text(surface, name, 28, CREAM if selectable else INK, center=(rect.centerx, rect.centery))
-            _text(surface, "#1", 40, GOLD if selectable else INK, center=(rect.centerx, rect.top + 40))
-    else:
-        _text(surface, state.name, 72, CREAM, center=(cx, config.HEIGHT // 2 - 40))
-        if state is GameState.TITLE:
-            from game.core import save as save_module
-            if save_module.slot_exists(1):
-                _text(surface, "C: continue", 30, GOLD, center=(cx, config.HEIGHT // 2 + 30))
+            pixelkit.panel(surface, rect,
+                           fill="red" if selectable else "steel_dark",
+                           border="gold" if selectable else "ink")
+            inner = rect.inflate(-14, -44)
+            inner.y = rect.y + 30
+            pygame.draw.rect(surface, pixelkit.color(
+                "yellow" if selectable else "grey_dark"), inner)
+            pygame.draw.rect(surface, pixelkit.color("ink"), inner, width=1)
+            pixelkit.text(surface, "#1", 18, "red" if selectable else "grey",
+                          bold=True, center=(inner.centerx, inner.centery))
+            pixelkit.text(surface, name, 12,
+                          "white" if selectable else "grey",
+                          center=(rect.centerx, rect.bottom - 12), shadow="ink")
+        _hint_bar(surface, HINTS[state])
+        return
 
-    _text(surface, HINTS[state], 30, CREAM, center=(cx, config.HEIGHT - 60))
-    _text(surface, f"{app.fps:.0f} fps", 24, GOLD, topleft=(12, 10))
+    # BOOT / TITLE / fallback PAUSE
+    pixelkit.text(surface, "MARVEL", 24, "red", bold=True,
+                  center=(cx, 90), shadow="ink")
+    pixelkit.text(surface, "ROADS TO", 40, "yellow", bold=True,
+                  center=(cx, 130), shadow="maroon")
+    pixelkit.text(surface, "SECRET WARS", 40, "yellow", bold=True,
+                  center=(cx, 168), shadow="maroon")
+    if state is GameState.TITLE:
+        from game.core import save as save_module
+        if save_module.slot_exists(1):
+            pixelkit.text(surface, "C: continue", 15, "gold",
+                          center=(cx, 230), shadow="ink")
+    elif state is GameState.PAUSE:
+        pixelkit.text(surface, "PAUSED", 20, "white", center=(cx, 230))
+    _hint_bar(surface, HINTS[state])

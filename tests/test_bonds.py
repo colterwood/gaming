@@ -100,24 +100,74 @@ def test_mission_bond(content):
     assert state["bonds"]["captain_america"]["points"] == 10
 
 
-def test_cap_bond2_scene_triggers_once(content):
+def test_coulson_bond2_scene_triggers_once(content):
     state = fresh_state()
     assert events.pending_bond_events(state, content["bond_scenes"]) == []
-    bonds.add_points(state, "captain_america", 500)
+    bonds.add_points(state, "coulson", 500)
     pending = events.pending_bond_events(state, content["bond_scenes"])
-    assert [s["id"] for s in pending] == ["cap_bond_2"]
-    events.mark_seen(state, "cap_bond_2")
+    assert [s["id"] for s in pending] == ["coulson_bond_2"]
+    events.mark_seen(state, "coulson_bond_2")
     assert events.pending_bond_events(state, content["bond_scenes"]) == []
 
 
-def test_synergy_gate_at_level_6(content):
+def test_old_friends_synergy_is_innate(content):
+    # Relationship redesign: starters don't bond; IM+Cap synergy is innate.
     cap = content["characters"]["captain_america"]
     synergy = cap["synergies"][0]
     state = fresh_state()
-    bonds.add_points(state, "captain_america", 6 * 250 - 1)
-    assert not bonds.synergy_active(state, cap, synergy)
-    bonds.add_points(state, "captain_america", 1)
-    assert bonds.synergy_active(state, cap, synergy)
+    assert bonds.synergy_active(state, cap, synergy)   # active at bond 0
+
+
+def test_bondable_split(content):
+    chars = content["characters"]
+    assert not bonds.bondable(chars["iron_man"])       # starter
+    assert not bonds.bondable(chars["ant_man"])        # story recruit
+    assert bonds.bondable(chars["hulk"])               # bond recruit
+    assert bonds.bondable(chars["coulson"])            # NPC
+    assert bonds.bondable(chars["jarvis"])
+    assert bonds.bondable(chars["pepper_potts"])
+
+
+def test_hulk_joins_roster_at_bond_4(content):
+    state = fresh_state()
+    bonds.add_points(state, "hulk", 4 * 250 - 1)
+    assert bonds.check_bond_progress(state, content) == []
+    assert "hulk" not in state["roster"]
+    bonds.add_points(state, "hulk", 1)
+    messages = bonds.check_bond_progress(state, content)
+    assert any("Hulk joins the roster" in m for m in messages)
+    assert "hulk" in state["roster"]
+    assert bonds.check_bond_progress(state, content) == []   # only fires once
+
+
+def test_npc_unlocks_fire_at_level_4(content):
+    from game import config
+    from game.hub import activities
+    state = fresh_state()
+    for npc, flag in (("jarvis", "jarvis_service"),
+                      ("pepper_potts", "pepper_requisitions"),
+                      ("coulson", "coulson_intel")):
+        bonds.add_points(state, npc, 1000)
+    messages = bonds.check_bond_progress(state, content)
+    assert len(messages) == 3
+    flags = state["story_flags"]
+    assert flags["jarvis_service"] and flags["pepper_requisitions"] and flags["coulson_intel"]
+    # effects
+    cal.sleep(state)
+    assert state["energy"] == config.DAILY_ENERGY + config.JARVIS_ENERGY_BONUS
+    assert activities.shop_discount(state, content["calendar"]) == config.PEPPER_SHOP_DISCOUNT
+    assert activities.mission_credits(state, 100) == 150
+
+
+def test_npc_data_loads_without_combat_fields(content):
+    jarvis = content["characters"]["jarvis"]
+    assert "power_grid" not in jarvis and "abilities" not in jarvis
+    assert jarvis["recruit"]["method"] == "npc"
+    hulk = content["characters"]["hulk"]
+    # card-authentic grid from assets/reference/hulk_53_back.jpg
+    assert hulk["power_grid"] == {"strength": 7, "speed": 2, "agility": 2,
+                                  "stamina": 6, "durability": 6, "intelligence": 5}
+    assert hulk["recruit"] == {"chapter": 2, "method": "bond", "bond_level": 4}
 
 
 # --- M3 acceptance: reach Cap Bond 2 through play across a week boundary ---

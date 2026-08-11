@@ -76,4 +76,33 @@ def mission_bond(state, char_ids):
 
 
 def synergy_active(state, character, synergy):
+    if synergy.get("innate"):       # e.g. Old Friends: IM + Cap need no bonding
+        return True
     return bond_level(ensure_bond(state, character["id"])["points"]) >= synergy["requires_bond_level"]
+
+
+def bondable(character):
+    """Relationship redesign: only bond-recruits (Hulk) and NPCs build bonds.
+    Starters and story recruits get flavor talk, no points."""
+    return character["recruit"]["method"] in ("bond", "npc")
+
+
+def check_bond_progress(state, content):
+    """Apply bond-gated effects: bond-recruits joining the roster and NPC
+    unlock flags. Returns messages for whatever newly triggered."""
+    messages = []
+    for char in content["characters"].values():
+        level = bond_level(ensure_bond(state, char["id"])["points"])
+        recruit = char["recruit"]
+        if (recruit["method"] == "bond" and char["id"] not in state["roster"]
+                and level >= recruit["bond_level"]):
+            state["roster"][char["id"]] = {"trained_ranks": {}, "attribute_xp": {},
+                                           "perks": [], "perk_choices": {},
+                                           "gear": {}, "ult_charge": 0}
+            messages.append(f"{char['name']} joins the roster!")
+        for unlock in char.get("bond_unlocks", []):
+            flags = state.setdefault("story_flags", {})
+            if level >= unlock["level"] and not flags.get(unlock["flag"]):
+                flags[unlock["flag"]] = True
+                messages.append(unlock["message"])
+    return messages

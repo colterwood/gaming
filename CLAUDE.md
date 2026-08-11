@@ -15,4 +15,6 @@ numbers and schemas exactly.
 - All content comes from JSON in /data — never hardcode character or item data.
 - All tunable numbers come from game/config.py, sourced from the spec.
 - Work one milestone (spec §9) at a time; run pytest before finishing a task.
-- Placeholder art = colored rectangles + text. Do not spend effort on art.
+- Art is 16-bit pixel style (spec §9 M7): everything renders to the 640×360
+  internal surface, colors come from config.PIXEL_PALETTE, no anti-aliasing.
+  Sprites are procedural — pixel grids authored in game/ui/sprites.py.

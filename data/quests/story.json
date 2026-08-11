@@ -18,7 +18,7 @@
 
   {"id": "ch1_siege", "chapter": 1, "name": "Siege of the Tower",
    "kind": "battle", "enemies": ["hydra_siege_captain", "hydra_grunt", "hydra_grunt"],
-   "boss": true, "flags": {"training_upgraded": true},
+   "boss": true, "flags": {"training_upgraded": true, "hulk_arrived": true},
    "desc": "A HYDRA Siege Captain leads an assault on the Tower itself."},
 
   {"id": "ch2_cell_hunt", "chapter": 2, "name": "Cell Hunt",

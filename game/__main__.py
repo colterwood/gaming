@@ -106,19 +106,22 @@ class App:
     def finish_battle(self, engine):
         quest = getattr(self, "battle_quest", None)
         if self.game_state and engine.outcome == "win":
-            from game.hub import story
+            from game.hub import activities, story
             from game.progression import mastery
             from game.social import bonds
             rewards = engine.rewards()
-            self.game_state["credits"] += rewards["credits"]
+            credits = activities.mission_credits(self.game_state, rewards["credits"])
+            self.game_state["credits"] += credits
             self.game_state["unspent_xp"] += rewards["xp"]
-            bonds.mission_bond(self.game_state, [h.id for h in engine.heroes])
+            bonds.mission_bond(self.game_state,
+                               [h.id for h in engine.heroes
+                                if bonds.bondable(self.content["characters"][h.data["id"]])])
             for hero in engine.heroes:
                 entry = self.game_state["roster"].get(hero.id)
                 if entry:
                     mastery.log_mastery_xp(entry, rewards["xp"])
             if self.hub:
-                self.hub.log(f"Mission complete: +{rewards['credits']} cr, +{rewards['xp']} XP")
+                self.hub.log(f"Mission complete: +{credits} cr, +{rewards['xp']} XP")
             if quest:
                 for msg in story.complete_battle_quest(self.game_state, quest, self.content):
                     if self.hub:
@@ -150,8 +153,12 @@ def main():
         os.makedirs(shot_dir, exist_ok=True)
 
     pygame.init()
-    screen = pygame.display.set_mode((config.WIDTH, config.HEIGHT))
+    window = pygame.display.set_mode((config.WIDTH * config.WINDOW_SCALE,
+                                      config.HEIGHT * config.WINDOW_SCALE))
     pygame.display.set_caption(config.TITLE)
+    # All drawing happens at internal resolution; the frame is scaled up
+    # nearest-neighbor for chunky uniform pixels (§9 M7).
+    screen = pygame.Surface((config.WIDTH, config.HEIGHT))
     clock = pygame.time.Clock()
     app = App()
 
@@ -166,7 +173,7 @@ def main():
 
         if smoke and frame > 0 and frame % 10 == 0:
             if shot_dir:
-                pygame.image.save(screen, os.path.join(
+                pygame.image.save(window, os.path.join(
                     shot_dir, f"smoke_{smoke_step:02d}_{app.machine.state.name.lower()}.png"))
             if smoke_step < len(smoke_keys):
                 screens.handle_key(app, pygame.key.key_code(smoke_keys[smoke_step]))
@@ -177,6 +184,7 @@ def main():
         dt = clock.tick(config.FPS) / 1000.0
         app.update(dt)
         screens.draw(screen, app)
+        pygame.transform.scale(screen, window.get_size(), window)
         pygame.display.flip()
         app.fps = clock.get_fps()
         frame += 1

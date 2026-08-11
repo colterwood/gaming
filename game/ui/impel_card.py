@@ -1,10 +1,9 @@
-"""Pause screen styled as a 1991 Impel Marvel card back (spec §8).
+"""Pause screen styled as a 1991 Impel Marvel card back (spec §8, pixel
+edition per §9 M7). Zone sizes are the §8 values halved to internal-res px.
 
-Layout and palette follow the reference scans in assets/reference/
-(cap_54_back.jpg, iron_man_13_back.jpg, hulk_53_back.jpg): cream body,
-yellow header banner with blue block lettering, pink 0-7 power-rating bars,
-black POWER RATINGS band, red accent strip. Trained ranks overlay in gold
-(a game addition), foil sparkle when Mastered. Rendering + input only.
+Palette anchored to the reference scans in assets/reference/; trained ranks
+overlay in gold (a game addition), foil sparkle when Mastered.
+Rendering + input only.
 """
 
 import pygame
@@ -16,44 +15,24 @@ from game.core.state_machine import GameState
 from game.hub import activities
 from game.progression import attributes as attrs
 from game.social import bonds
-from game.ui import binder, widgets
+from game.ui import binder, pixelkit, sprites
 
 TABS = ("Inventory", "Attributes", "Social", "Collections", "Tasks", "Map", "Options")
 
-CREAM = pygame.Color(config.CARD_PALETTE["cream"])
-PAPER = pygame.Color(config.CARD_PALETTE["paper"])
-YELLOW = pygame.Color(config.CARD_PALETTE["yellow"])
-BLUE = pygame.Color(config.CARD_PALETTE["blue"])
-BAR_PINK = pygame.Color(config.CARD_PALETTE["bar_pink"])
-RED = pygame.Color(config.CARD_PALETTE["red"])
-INK = pygame.Color(config.CARD_PALETTE["ink"])
-GOLD = pygame.Color(config.CARD_PALETTE["gold"])
-GREY = pygame.Color(120, 116, 108)
-
-_bold_fonts = {}
+CREAM = "cream"
+PAPER = "paper"
+YELLOW = "yellow"
+BLUE = "blue"
+PINK = "pink"
+RED = "red"
+INK = "ink"
+GOLD = "gold"
+GREY = "grey_dark"
 
 
-def bold_font(size):
-    if size not in _bold_fonts:
-        f = pygame.font.Font(None, size)
-        f.set_bold(True)
-        _bold_fonts[size] = f
-    return _bold_fonts[size]
-
-
-def btext(surface, txt, size, color, center=None, topleft=None, midleft=None, topright=None):
-    img = bold_font(size).render(txt, True, color)
-    rect = img.get_rect()
-    if center:
-        rect.center = center
-    elif topleft:
-        rect.topleft = topleft
-    elif midleft:
-        rect.midleft = midleft
-    elif topright:
-        rect.topright = topright
-    surface.blit(img, rect)
-    return rect
+def btext(surface, *args, **kwargs):
+    kwargs.setdefault("bold", True)
+    return pixelkit.text(surface, *args, **kwargs)
 
 
 class ImpelCardScene:
@@ -98,30 +77,29 @@ class ImpelCardScene:
 
     def draw(self, surface, app):
         state = app.game_state
-        surface.fill(pygame.Color(24, 24, 28))
+        surface.fill(pixelkit.color("shadow"))
         m = config.CARD_MARGIN
-        card = pygame.Rect(m, m + 36, config.WIDTH - 2 * m, config.HEIGHT - 2 * m - 36)
+        card = pygame.Rect(m, m + 16, config.WIDTH - 2 * m, config.HEIGHT - 2 * m - 16)
 
-        self._draw_tab_strip(surface, pygame.Rect(m, 4, card.width, 34))
+        self._draw_tab_strip(surface, pygame.Rect(m, 2, card.width, 16))
 
-        pygame.draw.rect(surface, CREAM, card, border_radius=14)
-        pygame.draw.rect(surface, INK, card, width=3, border_radius=14)
-        pygame.draw.rect(surface, RED, card.inflate(-10, -10), width=2, border_radius=10)
+        pixelkit.panel(surface, card, fill=CREAM, border=INK, shadow=False)
+        pygame.draw.rect(surface, pixelkit.color(RED), card.inflate(-6, -6), width=1)
         self._halftone(surface, card)
 
         hero_id = self._hero(state)
-        header = pygame.Rect(card.x + 18, card.y + 14, card.width - 36,
+        header = pygame.Rect(card.x + 10, card.y + 8, card.width - 20,
                              config.CARD_HEADER_HEIGHT)
-        pygame.draw.rect(surface, YELLOW, header, border_radius=6)
-        pygame.draw.rect(surface, INK, header, width=2, border_radius=6)
+        pygame.draw.rect(surface, pixelkit.color(YELLOW), header)
+        pygame.draw.rect(surface, pixelkit.color(INK), header, width=1)
         hero = self.content["characters"][hero_id] if hero_id else None
         title = hero["name"].upper() if hero else "ROADS TO SECRET WARS"
-        btext(surface, title, 52, BLUE, midleft=(header.x + 22, header.centery))
-        btext(surface, f"#{app.SAVE_SLOT:02d}", 40, INK,
-              topright=(header.right - 18, header.y + 16))
+        btext(surface, title, 26, BLUE, midleft=(header.x + 10, header.centery))
+        btext(surface, f"#{app.SAVE_SLOT:02d}", 20, INK,
+              topright=(header.right - 8, header.y + 8))
 
-        body = pygame.Rect(card.x + 18, header.bottom + 12, card.width - 36,
-                           card.bottom - header.bottom - 64)
+        body = pygame.Rect(card.x + 10, header.bottom + 6, card.width - 20,
+                           card.bottom - header.bottom - 34)
         tab = TABS[self.tab_index]
         if tab == "Collections":
             binder.draw_page(surface, body, self.content, state)
@@ -129,67 +107,73 @@ class ImpelCardScene:
             self._draw_portrait(surface, body, hero)
             if hero:
                 self._draw_power_grid(surface, body, state, hero)
-            panel = pygame.Rect(body.x, body.y + 356, body.width, body.height - 356)
+            panel = pygame.Rect(body.x, body.y + 180, body.width, body.height - 180)
             self._draw_lower_panel(surface, panel, app, tab)
 
-        footer = f"No. {app.SAVE_SLOT:03d}  —  Issue {state['issue']}, Day {state['day']}"
-        btext(surface, footer, 26, INK, center=(card.centerx, card.bottom - 24))
-        btext(surface, "Arrows: tab/hero   Esc: resume", 22, GREY,
-              topright=(card.right - 20, card.bottom - 34))
+        footer = f"No. {app.SAVE_SLOT:03d}  -  Issue {state['issue']}, Day {state['day']}"
+        btext(surface, footer, 13, INK, center=(card.centerx, card.bottom - 11))
+        pixelkit.text(surface, "Arrows: tab/hero  Esc: resume", 11, GREY,
+                      topright=(card.right - 10, card.bottom - 15))
 
     def _draw_tab_strip(self, surface, strip):
         tab_w = strip.width // len(TABS)
         for i, name in enumerate(TABS):
-            rect = pygame.Rect(strip.x + i * tab_w, strip.y, tab_w - 6, strip.height)
+            rect = pygame.Rect(strip.x + i * tab_w, strip.y, tab_w - 3, strip.height)
             greyed = name == "Map"
             selected = i == self.tab_index
-            bg = RED if selected else (pygame.Color(70, 70, 76) if greyed else INK)
-            pygame.draw.rect(surface, bg, rect, border_radius=6)
-            color = CREAM if not greyed else GREY
-            btext(surface, name, 24, color, center=rect.center)
+            bg = RED if selected else ("steel_dark" if greyed else INK)
+            pygame.draw.rect(surface, pixelkit.color(bg), rect)
+            if selected:
+                pygame.draw.rect(surface, pixelkit.color(GOLD), rect, width=1)
+            pixelkit.text(surface, name, 13, "grey" if greyed else "white",
+                          center=rect.center)
 
     def _halftone(self, surface, card):
-        dot = pygame.Color(0, 0, 0, 14)
         overlay = pygame.Surface(card.size, pygame.SRCALPHA)
-        for y in range(8, card.height - 8, 14):
-            offset = 7 if (y // 14) % 2 else 0
-            for x in range(8 + offset, card.width - 8, 14):
-                pygame.draw.circle(overlay, dot, (x, y), 2)
+        dot = pygame.Color(0, 0, 0, 16)
+        for y in range(4, card.height - 4, 7):
+            offset = 3 if (y // 7) % 2 else 0
+            for x in range(4 + offset, card.width - 4, 7):
+                overlay.set_at((x, y), dot)
         surface.blit(overlay, card.topleft)
 
     def _draw_portrait(self, surface, body, hero):
         w, h = config.CARD_PORTRAIT_SIZE
         frame = pygame.Rect(body.x, body.y, w, h)
-        pygame.draw.rect(surface, RED, frame, border_radius=6)
-        inner = frame.inflate(-16, -16)
-        color = binder._hero_color(hero["id"]) if hero else (90, 90, 100)
-        pygame.draw.rect(surface, pygame.Color(*color), inner, border_radius=4)
+        pygame.draw.rect(surface, pixelkit.color(RED), frame)
+        pygame.draw.rect(surface, pixelkit.color(INK), frame, width=1)
+        inner = frame.inflate(-12, -12)
+        inner.height -= 18
+        pygame.draw.rect(surface, pixelkit.color("navy"), inner)
+        pygame.draw.rect(surface, pixelkit.color(INK), inner, width=1)
         if hero:
-            initials = "".join(word[0] for word in hero["name"].split()[:2])
-            btext(surface, initials, 120, CREAM, center=inner.center)
-            name_box = pygame.Rect(frame.x + 24, frame.bottom - 44, frame.width - 48, 32)
-            pygame.draw.rect(surface, RED, name_box)
-            pygame.draw.rect(surface, INK, name_box, width=2)
-            btext(surface, hero["name"], 24, CREAM, center=name_box.center)
+            big = pygame.transform.scale(sprites.portrait(hero["id"], size=24),
+                                         (120, 120))
+            surface.blit(big, (inner.centerx - 60, inner.centery - 60))
+            name_box = pygame.Rect(frame.x + 12, frame.bottom - 22, frame.width - 24, 14)
+            pygame.draw.rect(surface, pixelkit.color(RED), name_box)
+            pygame.draw.rect(surface, pixelkit.color(INK), name_box, width=1)
+            btext(surface, hero["name"], 13, "white", center=name_box.center,
+                  shadow="maroon")
 
     def _draw_power_grid(self, surface, body, state, hero):
-        grid = pygame.Rect(body.x + config.CARD_PORTRAIT_SIZE[0] + 24, body.y,
-                           body.width - config.CARD_PORTRAIT_SIZE[0] - 24,
-                           config.CARD_GRID_ROW_HEIGHT * 6 + 40)
-        paper = pygame.Rect(grid.x, grid.y + 20, grid.width,
+        grid = pygame.Rect(body.x + config.CARD_PORTRAIT_SIZE[0] + 12, body.y,
+                           body.width - config.CARD_PORTRAIT_SIZE[0] - 12,
+                           config.CARD_GRID_ROW_HEIGHT * 6 + 20)
+        paper = pygame.Rect(grid.x, grid.y + 10, grid.width,
                             config.CARD_GRID_ROW_HEIGHT * 6)
-        pygame.draw.rect(surface, PAPER, paper)
-        pygame.draw.rect(surface, INK, paper, width=2)
+        pygame.draw.rect(surface, pixelkit.color(PAPER), paper)
+        pygame.draw.rect(surface, pixelkit.color(INK), paper, width=1)
 
         entry = state["roster"].get(hero["id"], {})
         unit = paper.width / (config.RANK_MAX + 1)
-        # 0..7 tick numbers + vertical gridlines, like the printed card
         for n in range(config.RANK_MAX + 1):
             x = int(paper.x + n * unit)
-            btext(surface, str(n), 20, INK, center=(x + int(unit) // 2, grid.y + 10))
+            pixelkit.text(surface, str(n), 11, INK,
+                          center=(x + int(unit) // 2, grid.y + 5))
             if n > 0:
-                pygame.draw.line(surface, pygame.Color(150, 150, 150),
-                                 (x, paper.y), (x, paper.bottom))
+                pygame.draw.line(surface, pixelkit.color("grey"),
+                                 (x, paper.y), (x, paper.bottom - 1))
 
         mastered = entry.get("mastered", False)
         for i, attribute in enumerate(config.ATTRIBUTES):
@@ -198,65 +182,67 @@ class ImpelCardScene:
             base = hero["power_grid"][attribute]
             trained = entry.get("trained_ranks", {}).get(attribute, 0)
             effective = min(config.RANK_MAX, base + trained)
-            bar = pygame.Rect(row.x + 2, row.y + 8,
-                              int((base + 1) * unit) - 4, row.height - 16)
-            pygame.draw.rect(surface, BAR_PINK, bar)
+            bar = pygame.Rect(row.x + 1, row.y + 4,
+                              int((base + 1) * unit) - 2, row.height - 8)
+            pygame.draw.rect(surface, pixelkit.color(PINK), bar)
+            pygame.draw.line(surface, pixelkit.color("white"),
+                             (bar.x, bar.y), (bar.right - 1, bar.y))
             if effective > base:
-                overlay = pygame.Rect(row.x + int((base + 1) * unit), row.y + 8,
-                                      int((effective - base) * unit) - 2, row.height - 16)
-                pygame.draw.rect(surface, GOLD, overlay)
-            btext(surface, attribute.upper(), 26, INK,
-                  midleft=(row.x + 10, row.centery))
+                overlay = pygame.Rect(row.x + int((base + 1) * unit), row.y + 4,
+                                      int((effective - base) * unit) - 1, row.height - 8)
+                pygame.draw.rect(surface, pixelkit.color(GOLD), overlay)
+            btext(surface, attribute.upper(), 13, INK,
+                  midleft=(row.x + 5, row.centery))
             if mastered:
                 self._foil_sparkle(surface, row, hero["id"], i)
 
-        band = pygame.Rect(paper.x, paper.bottom + 6, paper.width, 34)
-        pygame.draw.rect(surface, INK, band)
+        band = pygame.Rect(paper.x, paper.bottom + 3, paper.width, 16)
+        pygame.draw.rect(surface, pixelkit.color(INK), band)
         label = "POWER RATINGS" + ("  * MASTERED *" if mastered else "")
-        btext(surface, label, 30, GOLD if mastered else CREAM, center=band.center)
+        btext(surface, label, 15, GOLD if mastered else "white", center=band.center)
 
     def _foil_sparkle(self, surface, row, hero_id, row_index):
-        """Static sparkle overlay (POC foil treatment)."""
         seed = sum(ord(c) for c in hero_id) + row_index * 31
-        for k in range(6):
-            x = row.x + ((seed * (k + 3) * 97) % max(1, row.width - 12)) + 6
-            y = row.y + ((seed * (k + 7) * 53) % max(1, row.height - 12)) + 6
-            pygame.draw.line(surface, pygame.Color(255, 255, 255), (x - 4, y), (x + 4, y), 1)
-            pygame.draw.line(surface, pygame.Color(255, 255, 255), (x, y - 4), (x, y + 4), 1)
+        for k in range(5):
+            x = row.x + ((seed * (k + 3) * 97) % max(1, row.width - 8)) + 4
+            y = row.y + ((seed * (k + 7) * 53) % max(1, row.height - 8)) + 4
+            pygame.draw.line(surface, pixelkit.color("white"), (x - 2, y), (x + 2, y))
+            pygame.draw.line(surface, pixelkit.color("white"), (x, y - 2), (x, y + 2))
 
     # --- lower panel per tab ---
 
     def _draw_lower_panel(self, surface, panel, app, tab):
         state = app.game_state
-        pygame.draw.rect(surface, PAPER, panel, border_radius=6)
-        pygame.draw.rect(surface, INK, panel, width=2, border_radius=6)
-        pad = 14
-        surface.set_clip(panel.inflate(-4, -4))     # nothing bleeds past the panel
+        pygame.draw.rect(surface, pixelkit.color(PAPER), panel)
+        pygame.draw.rect(surface, pixelkit.color(INK), panel, width=1)
+        pad = 8
+        surface.set_clip(panel.inflate(-2, -2))
         if tab == "Inventory":
             items = [(iid, n) for iid, n in sorted(state["inventory"].items()) if n > 0]
-            extra = f"   (+{len(items) - 10} more)" if len(items) > 10 else ""
-            btext(surface, f"Inventory — {state['credits']} credits{extra}", 26, INK,
-                  topleft=(panel.x + pad, panel.y + 8))
-            slot_w, slot_h = 214, 40
+            extra = f"  (+{len(items) - 10} more)" if len(items) > 10 else ""
+            btext(surface, f"Inventory - {state['credits']} credits{extra}", 13, INK,
+                  topleft=(panel.x + pad, panel.y + 5))
+            slot_w, slot_h = 116, 20
             for i, (iid, n) in enumerate(items[:10]):
                 row, col = divmod(i, 5)
-                slot = pygame.Rect(panel.x + pad + col * (slot_w + 8),
-                                   panel.y + 38 + row * (slot_h + 6), slot_w, slot_h)
-                pygame.draw.rect(surface, CREAM, slot, border_radius=4)
-                pygame.draw.rect(surface, INK, slot, width=1, border_radius=4)
+                slot = pygame.Rect(panel.x + pad + col * (slot_w + 4),
+                                   panel.y + 21 + row * (slot_h + 3), slot_w, slot_h)
+                pygame.draw.rect(surface, pixelkit.color(CREAM), slot)
+                pygame.draw.rect(surface, pixelkit.color(INK), slot, width=1)
+                surface.blit(sprites.icon(iid), (slot.x + 3, slot.y + 4))
                 name = self.content["items"].get(iid, {}).get("name", iid)
-                btext(surface, f"{name} x{n}", 22, INK,
-                      midleft=(slot.x + 8, slot.centery))
+                pixelkit.text(surface, f"{name[:14]} x{n}", 11, INK,
+                              midleft=(slot.x + 18, slot.centery))
             if not items:
-                btext(surface, "(empty — visit the Tower Shop)", 26, GREY,
-                      topleft=(panel.x + pad, panel.y + 44))
+                pixelkit.text(surface, "(empty - visit the Tower Shop)", 13, GREY,
+                              topleft=(panel.x + pad, panel.y + 24))
         elif tab == "Attributes":
             hero_id = self._hero(state)
             entry = state["roster"].get(hero_id, {})
             chosen = sorted(entry.get("perk_choices", {}).items())
             extra = f"  (+{len(chosen) - 6} more)" if len(chosen) > 6 else ""
-            btext(surface, f"Chosen perks:{extra}", 26, INK,
-                  topleft=(panel.x + pad, panel.y + 8))
+            btext(surface, f"Chosen perks:{extra}", 13, INK,
+                  topleft=(panel.x + pad, panel.y + 5))
             if chosen:
                 by_id = {p["id"]: p for a in self.content["perks"].values()
                          for t in a.values() for p in t}
@@ -264,55 +250,65 @@ class ImpelCardScene:
                 shown = 0
                 for slot_key, pid in chosen:
                     perk = by_id.get(pid)
-                    if perk is None:            # stale id from a content update
+                    if perk is None:
                         continue
                     if shown >= 6:
                         break
                     row, col = divmod(shown, 2)
                     attribute, tier = slot_key.split(":")
-                    btext(surface, f"{attribute.title()} {tier}: {perk['name']} ({perk['blurb']})",
-                          22, INK, topleft=(panel.x + pad + col * col_w,
-                                            panel.y + 36 + row * 24))
+                    pixelkit.text(
+                        surface,
+                        f"{attribute.title()} {tier}: {perk['name']} ({perk['blurb']})",
+                        11, INK, topleft=(panel.x + pad + col * col_w,
+                                          panel.y + 20 + row * 12))
                     shown += 1
             else:
-                btext(surface, "(none yet — train to rank 3)", 24, GREY,
-                      topleft=(panel.x + pad + 12, panel.y + 38))
+                pixelkit.text(surface, "(none yet - train to rank 3)", 12, GREY,
+                              topleft=(panel.x + pad + 6, panel.y + 21))
             banked = entry.get("attribute_xp", {})
-            summary = "   ".join(f"{a[:3].upper()} {banked.get(a, 0)}xp"
-                                 for a in config.ATTRIBUTES)
-            btext(surface, "Banked XP:  " + summary, 22, INK,
-                  topleft=(panel.x + pad, panel.bottom - 28))
+            summary = "  ".join(f"{a[:3].upper()} {banked.get(a, 0)}"
+                                for a in config.ATTRIBUTES)
+            pixelkit.text(surface, "Banked XP:  " + summary, 11, INK,
+                          topleft=(panel.x + pad, panel.bottom - 14))
         elif tab == "Social":
-            y = panel.y + 12
-            for char_id in sorted(state.get("roster", {})):
+            y = panel.y + 6
+            names = sorted(c["id"] for c in self.content["characters"].values()
+                           if bonds.bondable(c))
+            shown = 0
+            for char_id in names:
+                if shown >= 4:
+                    continue
                 char = self.content["characters"][char_id]
                 bond = bonds.ensure_bond(state, char_id)
                 level = bonds.bond_level(bond["points"])
                 birthday = char["birthday"]
-                btext(surface, f"{char['name']} — Bond {level}  ({bond['points']} pts)   "
-                      f"birthday: Issue {birthday['issue']} Day {birthday['day']}",
-                      24, INK, topleft=(panel.x + pad, y))
+                pixelkit.text(surface,
+                              f"{char['name']} - Bond {level} ({bond['points']} pts)  "
+                              f"bday I{birthday['issue']} D{birthday['day']}",
+                              12, INK, topleft=(panel.x + pad, y))
                 into = bond["points"] - level * config.BOND_POINTS_PER_LEVEL
                 frac = 1.0 if level >= config.BOND_LEVEL_MAX else into / config.BOND_POINTS_PER_LEVEL
-                bar = pygame.Rect(panel.right - pad - 280, y + 2, 280, 12)
-                pygame.draw.rect(surface, CREAM, bar)
-                pygame.draw.rect(surface, BAR_PINK,
-                                 pygame.Rect(bar.x, bar.y, int(bar.width * frac), bar.height))
-                pygame.draw.rect(surface, INK, bar, width=1)
-                y += 38
+                bar = pygame.Rect(panel.right - pad - 140, y + 1, 140, 7)
+                pygame.draw.rect(surface, pixelkit.color(CREAM), bar)
+                pygame.draw.rect(surface, pixelkit.color(PINK),
+                                 pygame.Rect(bar.x, bar.y, max(1, int(bar.width * frac)),
+                                             bar.height))
+                pygame.draw.rect(surface, pixelkit.color(INK), bar, width=1)
+                y += 19
+                shown += 1
         elif tab == "Tasks":
             half = panel.width // 2
-            btext(surface, "Assignment Board (today)", 26, INK,
-                  topleft=(panel.x + pad, panel.y + 8))
-            y = panel.y + 38
+            btext(surface, "Assignments (today)", 13, INK,
+                  topleft=(panel.x + pad, panel.y + 5))
+            y = panel.y + 20
             for task in activities.assignment_tasks_today(state, self.content["assignments"]):
                 done = task["id"] in state.get("assignments_done", [])
                 mark = "[x]" if done else "[ ]"
-                btext(surface, f"{mark} {task['name']} — {task['credits']} cr", 22,
-                      GREY if done else INK, topleft=(panel.x + pad, y))
-                y += 26
+                pixelkit.text(surface, f"{mark} {task['name']} - {task['credits']}cr",
+                              11, GREY if done else INK, topleft=(panel.x + pad, y))
+                y += 13
             qx = panel.x + half + pad
-            btext(surface, "Quests", 26, INK, topleft=(qx, panel.y + 8))
+            btext(surface, "Quests", 13, INK, topleft=(qx, panel.y + 5))
             quests = sorted(state.get("quests", {}).items())
             if quests:
                 col_w = (half - 2 * pad) // 2
@@ -320,21 +316,22 @@ class ImpelCardScene:
                     col, row = divmod(i, 4)
                     done = q.get("status") == "done"
                     mark = "[x]" if done else "[>]"
-                    btext(surface, f"{mark} {q.get('name', qid)}", 22,
-                          GREY if done else INK,
-                          topleft=(qx + col * col_w, panel.y + 38 + row * 24))
+                    pixelkit.text(surface, f"{mark} {q.get('name', qid)}", 11,
+                                  GREY if done else INK,
+                                  topleft=(qx + col * col_w, panel.y + 20 + row * 12))
             else:
-                btext(surface, "(no active quests)", 22, GREY,
-                      topleft=(qx, panel.y + 38))
+                pixelkit.text(surface, "(no active quests)", 11, GREY,
+                              topleft=(qx, panel.y + 20))
         elif tab == "Map":
-            btext(surface, "WORLD MAP — coming in a later issue", 32, GREY,
+            btext(surface, "WORLD MAP - coming in a later issue", 15, GREY,
                   center=panel.center)
         elif tab == "Options":
-            btext(surface, "Enter: save game", 28, INK,
-                  topleft=(panel.x + pad, panel.y + 14))
+            btext(surface, "Enter: save game", 14, INK,
+                  topleft=(panel.x + pad, panel.y + 7))
             for ev in cal.active_events(state, self.content["calendar"]):
-                btext(surface, f"Active event: {ev['name']}", 24, RED,
-                      topleft=(panel.x + pad, panel.y + 50))
+                pixelkit.text(surface, f"Active event: {ev['name']}", 12, RED,
+                              topleft=(panel.x + pad, panel.y + 25))
             if self.message:
-                btext(surface, self.message, 26, RED, topleft=(panel.x + pad, panel.y + 84))
+                pixelkit.text(surface, self.message, 13, RED,
+                              topleft=(panel.x + pad, panel.y + 42))
         surface.set_clip(None)

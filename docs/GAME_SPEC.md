@@ -209,6 +209,17 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 - POC content: Cap's Level-2 bond scene; Ant-Man recruit is quest-based (story),
   Shang-Chi's bond-recruit is post-POC.
 
+> **Relationship redesign (post-POC):** bonding gameplay moved off the
+> starting heroes and onto NPCs + bond-recruits. Starters/story recruits
+> (`recruit.method` "starter"/"story") give flavor talk only — no points —
+> and the IM+Cap "Old Friends" synergy is innate. Characters with method
+> "bond" (Hulk, card-authentic grid, appears after the Ch. 1 boss via
+> `appears_flag`) join the roster at `recruit.bond_level`. Characters with
+> method "npc" (Jarvis, Pepper Potts, Coulson — no power grid/abilities)
+> are the talk/gift cast: Level-2 bond scenes and Level-4 `bond_unlocks`
+> that set story flags with real effects (Jarvis +10 daily energy, Pepper
+> 20% shop discount, Coulson +50% mission credits; constants in config).
+
 ### 6.3 Attributes & Training
 
 - Six attributes, ranks 1–7 (`RANK_MAX = 7`).
@@ -342,6 +353,29 @@ tasks + 1 battle), Ant-Man joins roster and appears in binder/party select.
 Ch. 1–2 story missions and both bosses wired in sequence.
 *AC: fresh save → complete Ch. 1–2 including recruiting Ant-Man, in under
 ~45 minutes of play.*
+
+**M7 — 16-bit visual identity** *(added post-POC; supersedes the
+"placeholder art" rule)*. The game renders to a 640×360 internal surface
+scaled 2× nearest-neighbor to the 1280×720 window — chunky uniform pixels,
+no anti-aliasing. One master palette (~32 colors, anchored to the sampled
+Impel card colors) drives every screen. All art is procedural (pixel data
+authored in code): pixel UI kit (comic-panel 9-slice frames, non-AA font,
+bars, cursors), hero/enemy portraits and battle sprites, 16×16 item icons,
+battle backdrop. The Impel card pause screen is redrawn in the same pixel
+style. Layout zone sizes in §8 are halved (internal-res px) and keep their
+on-screen proportions.
+*AC: every existing screen renders through the pixel pipeline at 60 fps;
+no anti-aliased text or off-grid pixels anywhere.*
+
+**M8 — Walkable Avengers Tower** *(added post-POC)*. The hub menu screen is
+replaced by a top-down walkable tower floor rendered from a procedural
+tileset. Arrow keys move a player sprite with tile collision; Enter/E at an
+interaction point (heroes standing in the room, shop counter, assignment
+board, training equipment, ops console, bed) opens the existing menu
+overlays. Elevator tiles switch floors. All §6/§7 rules are unchanged — the
+walkable scene is rendering/input only; game logic modules stay pure.
+*AC: walk between all three floors; every §7 activity reachable via an
+interaction point; recruited heroes appear standing in the tower.*
 
 ---
 

@@ -1,0 +1,18 @@
+{
+  "id": "jarvis",
+  "name": "Edwin Jarvis",
+  "path": "avengers",
+  "rarity": "common",
+  "gifts": {
+    "loved": ["double_espresso", "vintage_vinyl"],
+    "liked": ["sketchbook", "forties_memorabilia"],
+    "disliked": ["bug_spray"],
+    "hated": ["hydra_propaganda"]
+  },
+  "birthday": {"issue": 1, "day": 9},
+  "recruit": {"chapter": 0, "method": "npc"},
+  "bond_unlocks": [
+    {"level": 4, "flag": "jarvis_service",
+     "message": "Jarvis's espresso service: +10 energy every morning!"}
+  ]
+}

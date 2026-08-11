@@ -1,10 +1,50 @@
 """Tunable constants. Every number here is sourced from docs/GAME_SPEC.md §6/§8."""
 
-# --- Display ---
-WIDTH = 1280
-HEIGHT = 720
+# --- Display (§9 M7: 16-bit pixel pipeline) ---
+# All scenes lay out in INTERNAL coordinates; the frame is scaled up
+# nearest-neighbor to the window for chunky uniform pixels.
+WIDTH = 640                 # internal render width
+HEIGHT = 360                # internal render height
+WINDOW_SCALE = 2            # window = 1280x720
 FPS = 60
 TITLE = "Marvel: Roads to Secret Wars — POC"
+
+# Master palette: every screen and sprite draws only these colors.
+# Anchored to the sampled 1991 Impel card colors (yellow/blue/pink/cream/red).
+PIXEL_PALETTE = {
+    "ink": "#16121E",
+    "shadow": "#2A2438",
+    "navy": "#2E3350",
+    "steel_dark": "#48506B",
+    "steel": "#7C8BA6",
+    "steel_light": "#AEBACF",
+    "white": "#FFFDF5",
+    "paper": "#F8EFDC",
+    "cream": "#EFE3C8",
+    "tan": "#D9B98C",
+    "wood": "#C68A53",
+    "wood_dark": "#8A5A32",
+    "brown": "#5C3821",
+    "red": "#E82C2C",
+    "red_dark": "#9E1B1B",
+    "maroon": "#6B1010",
+    "pink": "#E07098",
+    "orange": "#E87820",
+    "yellow": "#F8D808",
+    "gold": "#FFC72C",
+    "gold_dark": "#B8860B",
+    "green": "#3E9C4E",
+    "green_dark": "#256B33",
+    "mint": "#9CD9A8",
+    "blue": "#2440D8",
+    "blue_dark": "#101A80",
+    "sky": "#4FA4E8",
+    "purple": "#7B4FB8",
+    "skin": "#F0C8A0",
+    "skin_dark": "#C8906C",
+    "grey": "#A0A098",
+    "grey_dark": "#56565A",
+}
 
 # --- Power grid (§6.3) ---
 RANK_MAX = 7
@@ -54,6 +94,11 @@ BOND_GATE_GEAR = 8                  # exclusive gear quest
 BOND_GATE_SIGNATURE = 10            # signature scene + costume
 BOND_PERSONAL_QUEST_MIN = 150       # personal quest reward range
 BOND_PERSONAL_QUEST_MAX = 250
+
+# NPC bond-unlock effects (relationship redesign: NPCs + bond-recruits)
+JARVIS_ENERGY_BONUS = 10            # jarvis_service flag: morning espresso
+PEPPER_SHOP_DISCOUNT = 0.8          # pepper_requisitions flag: price multiplier
+COULSON_CREDIT_MULT = 1.5           # coulson_intel flag: mission credits
 
 # --- Attributes & Training (§6.3) ---
 ATTRIBUTE_XP_PER_RANK = 100         # XP to gain trained rank N = 100 * N
@@ -119,7 +164,9 @@ CARD_PALETTE = {
     "ink": "#000000",           # text, POWER RATINGS band
     "gold": "#FFC72C",          # trained-rank overlay (game addition, not on card)
 }
-CARD_MARGIN = 24
-CARD_HEADER_HEIGHT = 64
-CARD_PORTRAIT_SIZE = (300, 340)
-CARD_GRID_ROW_HEIGHT = 44
+# §8 zones in internal-res px (halved from the 1280x720 spec values; same
+# on-screen proportions after the 2x window scale).
+CARD_MARGIN = 12
+CARD_HEADER_HEIGHT = 32
+CARD_PORTRAIT_SIZE = (150, 170)
+CARD_GRID_ROW_HEIGHT = 22

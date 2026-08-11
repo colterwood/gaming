@@ -86,11 +86,21 @@ def do_assignment(state, task):
 
 
 def shop_discount(state, calendar_data):
-    """Multiplier applied to shop prices; events may discount (§7)."""
+    """Multiplier applied to shop prices; events and Pepper's requisitions
+    (NPC bond unlock) may discount (§7)."""
     discount = 1.0
     for ev in cal.active_events(state, calendar_data):
         discount = min(discount, ev.get("effects", {}).get("shop_discount", 1.0))
+    if state.get("story_flags", {}).get("pepper_requisitions"):
+        discount = min(discount, config.PEPPER_SHOP_DISCOUNT)
     return discount
+
+
+def mission_credits(state, base):
+    """Coulson's intel network (NPC bond unlock) boosts mission credits."""
+    if state.get("story_flags", {}).get("coulson_intel"):
+        return int(base * config.COULSON_CREDIT_MULT)
+    return base
 
 
 def buy_item(state, item, discount=1.0):

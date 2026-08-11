@@ -38,6 +38,8 @@ def sleep(state, passed_out=False):
     state["time_minutes"] = config.DAY_START_MINUTES
     state["energy"] = (config.PASS_OUT_NEXT_DAY_ENERGY if passed_out
                        else config.DAILY_ENERGY)
+    if not passed_out and state.get("story_flags", {}).get("jarvis_service"):
+        state["energy"] += config.JARVIS_ENERGY_BONUS       # NPC bond unlock
     state["assignments_done"] = []
     for bond in state.get("bonds", {}).values():
         bond["talked_today"] = False

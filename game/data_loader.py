@@ -64,13 +64,24 @@ def _validate_abilities(abilities, where):
             _require(ab, "charge_required", int, aw)
 
 
+RECRUIT_METHODS = ("starter", "story", "bond", "npc")
+
+
 def _validate_character(char, where):
     _require(char, "id", str, where)
     _require(char, "name", str, where)
     _require(char, "path", str, where)
     _require(char, "rarity", str, where)
-    _validate_power_grid(_require(char, "power_grid", dict, where), where)
-    _validate_abilities(_require(char, "abilities", list, where), where)
+    recruit = _require(char, "recruit", dict, where)
+    _require(recruit, "chapter", int, f"{where} recruit")
+    method = _require(recruit, "method", str, f"{where} recruit")
+    if method not in RECRUIT_METHODS:
+        raise DataError(f"{where}: recruit.method must be one of {RECRUIT_METHODS}")
+    if method == "bond":
+        _require(recruit, "bond_level", int, f"{where} recruit")
+    if method != "npc":     # NPCs never fight: no grid/abilities required
+        _validate_power_grid(_require(char, "power_grid", dict, where), where)
+        _validate_abilities(_require(char, "abilities", list, where), where)
     gifts = _require(char, "gifts", dict, where)
     for category in ("loved", "liked", "disliked", "hated"):
         for gift_id in _require(gifts, category, list, f"{where} gifts"):
@@ -90,9 +101,16 @@ def _validate_character(char, where):
         _require(syn, "name", str, sw)
         _require(syn, "effect", dict, sw)
         _require(syn, "requires_bond_level", int, sw)
-    recruit = _require(char, "recruit", dict, where)
-    _require(recruit, "chapter", int, f"{where} recruit")
-    _require(recruit, "method", str, f"{where} recruit")
+    unlocks = char.get("bond_unlocks", [])
+    if not isinstance(unlocks, list):
+        raise DataError(f"{where}: bond_unlocks must be a list")
+    for unlock in unlocks:
+        uw = f"{where} bond_unlock"
+        if not isinstance(unlock, dict):
+            raise DataError(f"{uw}: each unlock must be an object")
+        _require(unlock, "level", int, uw)
+        _require(unlock, "flag", str, uw)
+        _require(unlock, "message", str, uw)
 
 
 def _validate_enemy(enemy, where):

@@ -1,0 +1,18 @@
+{
+  "id": "coulson",
+  "name": "Agent Coulson",
+  "path": "avengers",
+  "rarity": "common",
+  "gifts": {
+    "loved": ["forties_memorabilia", "war_bonds_poster"],
+    "liked": ["vintage_vinyl", "magic_trick_kit"],
+    "disliked": ["hydra_propaganda"],
+    "hated": ["bug_spray"]
+  },
+  "birthday": {"issue": 1, "day": 22},
+  "recruit": {"chapter": 0, "method": "npc"},
+  "bond_unlocks": [
+    {"level": 4, "flag": "coulson_intel",
+     "message": "Coulson's intel network: +50% mission credits!"}
+  ]
+}

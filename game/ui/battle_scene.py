@@ -1,12 +1,13 @@
-"""Battle rendering + input (M1). All rules live in game.combat; this file
-only draws engine state and translates keys into action dicts."""
+"""Battle rendering + input, 16-bit style (§9 M1/M7). All rules live in
+game.combat; this file only draws engine state and translates keys into
+action dicts."""
 
 import pygame
 
 from game import config
 from game.combat.engine import BattleEngine
 from game.combat.entities import Combatant, make_enemy_group
-from game.ui import widgets
+from game.ui import pixelkit, sprites, widgets
 
 ENEMY_TURN_DELAY = 0.55     # seconds before an enemy acts (readability)
 POPUP_LIFETIME = 0.9
@@ -73,8 +74,8 @@ class BattleScene:
         for ev in events:
             pos = self._position_of(ev.get("target") or ev.get("actor"))
             if ev["kind"] == "damage":
-                label = f"{ev['amount']}" + (" CRIT!" if ev["crit"] else "")
-                color = widgets.GOLD if ev["crit"] else widgets.CREAM
+                label = f"{ev['amount']}" + ("!" if ev["crit"] else "")
+                color = widgets.GOLD if ev["crit"] else widgets.WHITE
             elif ev["kind"] == "heal":
                 label, color = f"+{ev['amount']}", widgets.GREEN
             elif ev["kind"] == "dodge":
@@ -99,18 +100,18 @@ class BattleScene:
     def _position_of(self, combatant_id):
         for i, h in enumerate(self.engine.heroes):
             if h.id == combatant_id:
-                return (250, 240 + i * 150)
+                return (150, 118 + i * 56)
         for i, e in enumerate(self.engine.enemies):
             if e.id == combatant_id:
-                return (config.WIDTH - 300, 200 + i * 130)
+                return (config.WIDTH - 130, 92 + i * 60)
         return (config.WIDTH // 2, config.HEIGHT // 2)
 
-    # --- update / input ---
+    # --- update / input (logic identical to M1) ---
 
     def update(self, dt):
         for p in self.popups:
             p["age"] += dt
-            p["y"] -= 40 * dt
+            p["y"] -= 20 * dt
         self.popups = [p for p in self.popups if p["age"] < POPUP_LIFETIME]
 
         if self.engine.outcome:
@@ -189,13 +190,14 @@ class BattleScene:
 
     def _item_key(self, key):
         items = self._battle_items()
+        if not items or key == pygame.K_ESCAPE:
+            self.phase = "menu"
+            return
         if key in (pygame.K_UP, pygame.K_w):
             self.item_index = (self.item_index - 1) % len(items)
         elif key in (pygame.K_DOWN, pygame.K_s):
             self.item_index = (self.item_index + 1) % len(items)
-        elif key == pygame.K_ESCAPE:
-            self.phase = "menu"
-        elif key == pygame.K_RETURN and items:
+        elif key == pygame.K_RETURN:
             iid, _ = items[self.item_index % len(items)]
             self.pending_action = {"type": "item", "item_id": iid}
             self.target_index = 0
@@ -211,84 +213,109 @@ class BattleScene:
     # --- drawing ---
 
     def draw(self, surface):
-        surface.fill(widgets.NAVY)
+        surface.blit(sprites.battle_backdrop(config.WIDTH, config.HEIGHT), (0, 0))
         self._draw_turn_strip(surface)
         for i, hero in enumerate(self.engine.heroes):
-            self._draw_combatant(surface, hero, pygame.Rect(80, 200 + i * 150, 340, 120))
+            self._draw_hero(surface, hero, pygame.Rect(30, 100 + i * 56, 180, 48))
         for i, enemy in enumerate(self.engine.enemies):
-            self._draw_combatant(surface, enemy,
-                                 pygame.Rect(config.WIDTH - 460, 160 + i * 130, 340, 100))
+            self._draw_enemy(surface, enemy,
+                             pygame.Rect(config.WIDTH - 218, 74 + i * 60, 188, 52))
 
         if self.phase == "menu":
-            widgets.menu(surface, pygame.Rect(80, config.HEIGHT - 220, 300, 190),
+            pixelkit.text(surface, f"{self._actor().name}'s turn", 15, "gold",
+                          topleft=(30, config.HEIGHT - 122), shadow="ink")
+            widgets.menu(surface, pygame.Rect(30, config.HEIGHT - 108, 130, 96),
                          self._menu_options(), self.menu_index,
                          disabled=self._disabled_options())
-            widgets.text(surface, f"{self._actor().name}'s turn", 30, widgets.GOLD,
-                         topleft=(80, config.HEIGHT - 252))
         elif self.phase == "target":
             targets = self._targets_for_pending()
             tgt = targets[self.target_index % len(targets)]
             pos = self._position_of(tgt.id)
-            pygame.draw.polygon(surface, widgets.GOLD,
-                                [(pos[0], pos[1] - 46), (pos[0] - 12, pos[1] - 66),
-                                 (pos[0] + 12, pos[1] - 66)])
-            widgets.text(surface, "Arrows: pick target   Enter: confirm   Esc: back",
-                         26, widgets.CREAM, center=(config.WIDTH // 2, config.HEIGHT - 40))
+            self._target_arrow(surface, (pos[0], pos[1] - 30))
+            pixelkit.text(surface, "Arrows: pick target  Enter: confirm  Esc: back",
+                          13, "cream", center=(config.WIDTH // 2, config.HEIGHT - 12),
+                          shadow="ink")
         elif self.phase == "item":
             items = self._battle_items()
             labels = [f"{self.content['items'][iid]['name']} x{n}" for iid, n in items]
-            widgets.menu(surface, pygame.Rect(80, config.HEIGHT - 220, 380, 190),
+            widgets.menu(surface, pygame.Rect(30, config.HEIGHT - 108, 190,
+                                              max(30, 24 * len(labels or [1]))),
                          labels or ["(no items)"], self.item_index)
         elif self.phase == "result":
-            verdict = "VICTORY!" if self.engine.outcome == "win" else "DEFEATED"
-            widgets.text(surface, verdict, 84, widgets.GOLD if self.engine.outcome == "win"
-                         else widgets.RED, center=(config.WIDTH // 2, config.HEIGHT // 2 - 40))
-            if self.engine.outcome == "win":
+            box = pygame.Rect(config.WIDTH // 2 - 120, config.HEIGHT // 2 - 46, 240, 92)
+            pixelkit.panel(surface, box, fill="ink", border="gold")
+            won = self.engine.outcome == "win"
+            pixelkit.text(surface, "VICTORY!" if won else "DEFEATED", 34,
+                          "gold" if won else "red", bold=True,
+                          center=(box.centerx, box.y + 28), shadow="maroon")
+            if won:
                 r = self.engine.rewards()
-                widgets.text(surface, f"+{r['xp']} XP    +{r['credits']} credits", 36,
-                             widgets.CREAM, center=(config.WIDTH // 2, config.HEIGHT // 2 + 20))
-            widgets.text(surface, "Enter: return to Tower", 28, widgets.CREAM,
-                         center=(config.WIDTH // 2, config.HEIGHT - 60))
+                pixelkit.text(surface, f"+{r['xp']} XP   +{r['credits']} credits", 16,
+                              "white", center=(box.centerx, box.y + 52))
+            pixelkit.text(surface, "Enter: return to Tower", 13, "cream",
+                          center=(box.centerx, box.bottom - 16))
 
         for p in self.popups:
-            fade = max(0, 255 - int(255 * p["age"] / POPUP_LIFETIME))
-            color = pygame.Color(p["color"].r, p["color"].g, p["color"].b, fade)
-            widgets.text(surface, p["text"], 34, color, center=(int(p["x"]), int(p["y"])))
+            widgets.text(surface, p["text"], 18, p["color"],
+                         center=(int(p["x"]), int(p["y"])), shadow="ink", bold=True)
+
+    def _target_arrow(self, surface, pos):
+        x, y = pos
+        for i in range(5):
+            pygame.draw.line(surface, widgets.GOLD,
+                             (x - (4 - i), y - i), (x + (4 - i), y - i))
+        pygame.draw.line(surface, widgets.INK, (x - 4, y), (x, y + 4))
+        pygame.draw.line(surface, widgets.INK, (x + 4, y), (x, y + 4))
 
     def _draw_turn_strip(self, surface):
-        widgets.text(surface, f"Round {self.engine.round_number}", 26, widgets.CREAM,
-                     topleft=(80, 20))
-        x = 80
+        pixelkit.text(surface, f"Round {self.engine.round_number}", 14, "cream",
+                      topleft=(30, 8), shadow="ink")
+        x = 30
         current = self._actor()
         for c in self.engine.round_order:
-            w = widgets.font(24).size(c.name)[0] + 20
-            rect = pygame.Rect(x, 48, w, 30)
+            chip = pygame.Rect(x, 22, 26, 26)
+            surface.blit(pygame.transform.scale(
+                sprites.portrait(c.data["id"]), (26, 26)), chip.topleft)
+            border = "gold" if c is current else ("grey_dark" if not c.alive else "ink")
+            pygame.draw.rect(surface, pixelkit.color(border), chip, 2 if c is current else 1)
             if not c.alive:
-                bg, fg = widgets.INK, widgets.GREY
-            elif c is current:
-                bg, fg = widgets.RED, widgets.CREAM
-            else:
-                bg, fg = widgets.INK, widgets.CREAM
-            pygame.draw.rect(surface, bg, rect, border_radius=6)
-            widgets.text(surface, c.name, 24, fg, center=rect.center)
-            x += w + 8
+                pixelkit.checker(surface, chip.inflate(-4, -4), "shadow", "ink", cell=2)
+            x += 30
 
-    def _draw_combatant(self, surface, c, rect):
-        pygame.draw.rect(surface, widgets.INK, rect, border_radius=8)
-        border = widgets.GOLD if c is self._actor() else (
-            widgets.GREY if not c.alive else widgets.CREAM)
-        pygame.draw.rect(surface, border, rect, width=2, border_radius=8)
-        name = c.name + ("  [DOWN]" if not c.alive else "")
-        status = "  ".join(s.upper() for s in c.statuses)
+    def _draw_hero(self, surface, c, rect):
+        pixelkit.panel(surface, rect, fill="navy",
+                       border="gold" if c is self._actor() else "ink")
+        surface.blit(pygame.transform.scale(
+            sprites.portrait(c.data["id"]), (36, 36)),
+            (rect.x + 5, rect.y + 6))
+        name_c = "grey" if not c.alive else "white"
+        pixelkit.text(surface, c.name, 13, name_c,
+                      topleft=(rect.x + 46, rect.y + 4), shadow="ink")
+        widgets.bar(surface, pygame.Rect(rect.x + 46, rect.y + 16, rect.width - 54, 10),
+                    c.hp_fraction(), "green", label=f"{c.hp}/{c.max_hp}")
+        widgets.bar(surface, pygame.Rect(rect.x + 46, rect.y + 28, rect.width - 54, 6),
+                    c.energy / c.max_energy if c.max_energy else 0, "sky")
+        widgets.bar(surface, pygame.Rect(rect.x + 46, rect.y + 36, rect.width - 54, 5),
+                    c.ult_charge / config.ULT_CHARGE_MAX, "gold")
+        self._status_tags(surface, c, rect)
+
+    def _draw_enemy(self, surface, c, rect):
+        pixelkit.panel(surface, rect, fill="shadow",
+                       border="gold" if c is self._actor() else "ink")
+        surface.blit(pygame.transform.scale(
+            sprites.portrait(c.data["id"]), (40, 40)),
+            (rect.x + 5, rect.y + 6))
+        name_c = "grey" if not c.alive else "white"
+        pixelkit.text(surface, c.name + ("  [DOWN]" if not c.alive else ""), 13,
+                      name_c, topleft=(rect.x + 50, rect.y + 6), shadow="ink")
+        widgets.bar(surface, pygame.Rect(rect.x + 50, rect.y + 20, rect.width - 58, 10),
+                    c.hp_fraction(), "red", label=f"{c.hp}/{c.max_hp}")
+        self._status_tags(surface, c, rect)
+
+    def _status_tags(self, surface, c, rect):
+        tags = [s.upper() for s in c.statuses]
         if c.defending:
-            status = ("DEFENDING  " + status).strip()
-        widgets.text(surface, name, 28, widgets.CREAM, topleft=(rect.x + 12, rect.y + 8))
-        if status:
-            widgets.text(surface, status, 22, widgets.RED, topright=(rect.right - 10, rect.y + 10))
-        widgets.bar(surface, pygame.Rect(rect.x + 12, rect.y + 40, rect.width - 24, 20),
-                    c.hp_fraction(), widgets.GREEN, label=f"{c.hp}/{c.max_hp}")
-        if c.is_hero:
-            widgets.bar(surface, pygame.Rect(rect.x + 12, rect.y + 66, rect.width - 24, 14),
-                        c.energy / c.max_energy if c.max_energy else 0, widgets.BLUE)
-            widgets.bar(surface, pygame.Rect(rect.x + 12, rect.y + 86, rect.width - 24, 10),
-                        c.ult_charge / config.ULT_CHARGE_MAX, widgets.GOLD)
+            tags.insert(0, "DEF")
+        if tags:
+            pixelkit.text(surface, " ".join(tags), 11, "orange",
+                          topright=(rect.right - 4, rect.y + 2), shadow="ink")
