@@ -11,8 +11,9 @@ MINIMAL_CHAR = {
     "name": "Test Hero",
     "path": "avengers",
     "rarity": "common",
-    "power_grid": {"strength": 1, "speed": 2, "agility": 3,
-                   "stamina": 4, "durability": 5, "intelligence": 6},
+    # M15: heroes carry innate boosts (1..BOOST_MAX), not a flat grid
+    "boosts": {"strength": 1, "speed": 2, "agility": 3,
+               "stamina": 4, "durability": 5, "intelligence": 6},
     "abilities": [
         {"id": "punch", "name": "Punch", "type": "basic",
          "power": 10, "scales_with": "strength", "target": "single"},
@@ -59,12 +60,13 @@ def test_real_data_loads():
 
 
 def test_real_iron_man_matches_card_grid():
-    # Card-authentic ratings transcribed from the 1991 Impel Series II scan
-    # (assets/reference/iron_man_13_back.jpg).
+    # M15: the card-authentic ratings transcribed from the 1991 Impel Series
+    # II scan (assets/reference/iron_man_13_back.jpg) are now his innate
+    # BOOST table — everyone starts at rank 1 and trains up from there.
     chars = data_loader.load_characters()
     im = chars["iron_man"]
-    assert im["power_grid"] == {"strength": 6, "speed": 6, "agility": 3,
-                                "stamina": 4, "durability": 5, "intelligence": 5}
+    assert im["boosts"] == {"strength": 6, "speed": 6, "agility": 3,
+                            "stamina": 4, "durability": 5, "intelligence": 5}
     assert {a["type"] for a in im["abilities"]} == {"basic", "special", "ultimate"}
 
 
@@ -72,19 +74,28 @@ def test_real_iron_man_matches_card_grid():
 
 def test_missing_field_raises(tmp_path):
     bad = copy.deepcopy(MINIMAL_CHAR)
-    del bad["power_grid"]
+    del bad["boosts"]
     d = _write_data_dir(tmp_path, chars=[bad])
-    with pytest.raises(DataError, match="power_grid"):
+    with pytest.raises(DataError, match="boosts"):
         data_loader.load_characters(d)
 
 
-@pytest.mark.parametrize("rank", [0, 8, "5", 3.5])
-def test_out_of_range_rank_raises(tmp_path, rank):
+@pytest.mark.parametrize("rank", [-1, 8, "5", 3.5])
+def test_out_of_range_boost_raises(tmp_path, rank):
     bad = copy.deepcopy(MINIMAL_CHAR)
-    bad["power_grid"]["strength"] = rank
+    bad["boosts"]["strength"] = rank
     d = _write_data_dir(tmp_path, chars=[bad])
     with pytest.raises(DataError, match="strength"):
         data_loader.load_characters(d)
+
+
+def test_zero_boost_is_legal(tmp_path):
+    # M15: 0 means "no natural talent here" — a valid authoring choice even
+    # though the card-derived roster has at least 1 everywhere.
+    ok = copy.deepcopy(MINIMAL_CHAR)
+    ok["boosts"]["strength"] = 0
+    d = _write_data_dir(tmp_path, chars=[ok])
+    assert data_loader.load_characters(d)["test_hero"]["boosts"]["strength"] == 0
 
 
 def test_bad_ability_type_raises(tmp_path):
@@ -138,7 +149,7 @@ def test_invalid_json_raises(tmp_path):
 
 def test_bool_rank_rejected(tmp_path):
     bad = copy.deepcopy(MINIMAL_CHAR)
-    bad["power_grid"]["strength"] = True   # bools satisfy isinstance(x, int)
+    bad["boosts"]["strength"] = True       # bools satisfy isinstance(x, int)
     d = _write_data_dir(tmp_path, chars=[bad])
     with pytest.raises(DataError, match="strength"):
         data_loader.load_characters(d)

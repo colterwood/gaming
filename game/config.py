@@ -46,8 +46,20 @@ PIXEL_PALETTE = {
     "grey_dark": "#56565A",
 }
 
-# --- Power grid (§6.3) ---
-RANK_MAX = 7
+# --- Power grid & innate boosts (§6.3, reworked M15) ---
+# Everyone STARTS at rank 1 in all six and trains up to rank 10. What makes
+# a character feel like themselves is their innate BOOST table (1..7, the
+# old card-back grid): boosts add half a rank each plus a small percentage,
+# so Iron Man out-hits Cap on Strength at rank 1 and still does at rank 10.
+RANK_START = 1
+RANK_MAX = 10
+# Enemies aren't bound by the hero rank ladder — a boss may be written
+# above it so it can soak a party of ultimates (M15 §6.4 balance pass).
+ENEMY_RANK_MAX = 20
+BOOST_MAX = 7
+BOOST_RANK_VALUE = 0.5      # each boost level is worth this much flat rank
+BOOST_PCT = 0.01            # ...plus this much percent, which grows with rank
+TRAINED_MAX = RANK_MAX - RANK_START          # trained ranks 0..9
 ATTRIBUTES = ("strength", "speed", "agility", "stamina", "durability", "intelligence")
 
 # --- Clock & Energy (§6.1) — times in in-game minutes since midnight ---
@@ -122,6 +134,10 @@ AMBUSH_MAX_SIZE = 8
 AMBUSH_BASE_CHANCE = 0.010          # per walk-tick, scaled by zone danger
 AMBUSH_PARTY_BONUS = 0.006          # added per missing party member below 4
 AMBUSH_TICK_SECONDS = 0.6           # walking time between ambush rolls
+# M15: an ambush always outnumbers the party, by this many (cumulative
+# probability, extra attackers) — and never by more than double the party.
+AMBUSH_SIZE_TABLE = ((0.50, 1), (0.85, 2), (0.95, 3), (1.00, 4))
+AMBUSH_PARTY_MULTIPLE = 2           # hard ceiling: squad <= party x2
 
 ATROPHY_GRACE_DAYS = 2              # same-spot days before decay starts
 ATROPHY_XP_PER_DAY = 20             # XP drained per unworked attribute
@@ -152,12 +168,13 @@ GIFT_WINDOW_DAYS = 5                # rolling window...
 GIFTS_PER_WINDOW = 2                # ...allowing this many gifts per receiver
 GIFT_REPEAT_PENALTY = 5             # same gift two days in a row: -5 points
 
-# --- Board tiers & dispatch scaling (M11) ---
-# Team power = sum of the top-4 roster heroes' effective grid totals
-# (start: Iron Man 29 + Cap 18 = 47; max 42 per hero).
-BOARD_TIER_POWER = {2: 70, 3: 110}  # team power to unlock board tier N
-DISPATCH_POWER_BASELINE = 24        # avg sent-hero grid total paying 1.0x
-DISPATCH_POWER_BONUS = 0.02         # pay multiplier step per point of avg power
+# --- Board tiers & dispatch scaling (M11; rescaled for M15 ranks) ---
+# Team power = sum of the top-4 roster heroes' effective totals. On the M15
+# scale: two starters at rank 1 = 37, a full 4-hero roster at rank 1 = 75,
+# everyone at rank 10 = 299.
+BOARD_TIER_POWER = {2: 90, 3: 160}  # team power to unlock board tier N
+DISPATCH_POWER_BASELINE = 22        # avg sent-hero total paying 1.0x
+DISPATCH_POWER_BONUS = 0.01         # pay multiplier step per point of avg power
 DISPATCH_MULT_MIN = 0.8
 DISPATCH_MULT_MAX = 1.5
 

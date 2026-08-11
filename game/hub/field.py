@@ -19,16 +19,28 @@ def ambush_chance(danger, party_size):
                      + config.AMBUSH_PARTY_BONUS * missing)
 
 
+def ambush_size(party_size, rng):
+    """M15: an ambush always outnumbers the party — by 1 half the time, by
+    2 a third of the time, rarely by 3 or 4 — and is never more than twice
+    the party's size (nor above AMBUSH_MAX_SIZE)."""
+    roll = rng.random()
+    extra = config.AMBUSH_SIZE_TABLE[-1][1]
+    for cumulative, value in config.AMBUSH_SIZE_TABLE:
+        if roll < cumulative:
+            extra = value
+            break
+    return min(party_size + extra,
+               party_size * config.AMBUSH_PARTY_MULTIPLE,
+               config.AMBUSH_MAX_SIZE)
+
+
 def roll_ambush(danger, party_size, rng):
-    """Returns a list of enemy ids, or None. An ambush only happens if the
-    rolled squad outnumbers the party (squad size 2..AMBUSH_MAX_SIZE)."""
+    """Returns a list of enemy ids, or None if no ambush triggers."""
     if party_size <= 0:
         return None
     if rng.random() >= ambush_chance(danger, party_size):
         return None
-    size = rng.randint(2, config.AMBUSH_MAX_SIZE)
-    if size <= party_size:
-        return None
+    size = ambush_size(party_size, rng)
     pool = _POOLS.get(danger, _POOLS[1])
     return [pool[rng.randrange(len(pool))] for _ in range(size)]
 

@@ -172,12 +172,54 @@ class BattleEngine:
             return enrage["damage_multiplier"]
         return 1.0
 
+    def _spread_targets(self, actor, ability, primary):
+        """M15 signature attacks: a single-target ability may splash onto
+        extra opponents. `spread` in the ability JSON:
+            "adjacent"  - the primary plus its immediate neighbours in the
+                          enemy line (Iron Man's Unibeam)
+            "random"    - the primary plus `extra_targets` others at random
+                          (Ant-Man's Pym Particle Barrage)
+            "random_range" - the primary plus extra_min..extra_max others,
+                          the count decided by a coin flip (Cap's Shield
+                          Throw ricochet)
+        Every target is distinct; a spread never repeats or exceeds the
+        living opponents available.
+        """
+        spread = ability.get("spread")
+        if not spread:
+            return [primary]
+        line = self.living(self._opponents_of(actor))
+        others = [c for c in line if c is not primary]
+        if spread == "adjacent":
+            index = line.index(primary) if primary in line else 0
+            picked = [line[i] for i in (index - 1, index + 1)
+                      if 0 <= i < len(line) and line[i] is not primary]
+            return [primary] + picked
+        if spread == "random_range":
+            low = ability.get("extra_min", 1)
+            high = ability.get("extra_max", low)
+            wanted = low
+            for _ in range(high - low):         # a coin flip per extra step
+                if self.rng.randint(1, 2) == 1:
+                    wanted += 1
+        else:                                   # "random"
+            wanted = ability.get("extra_targets", 1)
+        wanted = min(wanted, len(others))
+        picked = []
+        pool = list(others)
+        for _ in range(wanted):
+            picked.append(pool.pop(self.rng.randint(0, len(pool) - 1)))
+        return [primary] + picked
+
     def _resolve_ability(self, actor, ability, target_id):
         events = []
         if ability.get("effect") == "heal":
             target = self._find(target_id)
             if target:
-                amount = ability["power"] + actor.rank(ability["scales_with"]) * config.SPECIAL_SCALING_MULT
+                # int(): ranks are floats since M15 and HP must stay integral
+                amount = int(ability["power"]
+                             + actor.rank(ability["scales_with"])
+                             * config.SPECIAL_SCALING_MULT)
                 target.heal(amount)
                 events.append({"kind": "heal", "actor": actor.id,
                                "target": target.id, "amount": amount})
@@ -187,7 +229,7 @@ class BattleEngine:
             targets = list(self.living(self._opponents_of(actor)))
         else:
             target = self._find(target_id)
-            targets = [target] if target else []
+            targets = self._spread_targets(actor, ability, target) if target else []
 
         damage_pct_key = ("basic_damage_pct" if ability["type"] == "basic"
                           else "special_damage_pct")

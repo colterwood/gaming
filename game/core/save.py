@@ -27,6 +27,7 @@ def new_game_state():
         "story_flags": {},
         "quests": {},
         "dispatches": [],      # board jobs under way (M10)
+        "completed_tasks": [], # one-shot board jobs already done (M15)
         "searched_today": [],  # zone crates rummaged today (M10)
         "unspent_xp": 0,       # mission XP banked for progression systems
     }

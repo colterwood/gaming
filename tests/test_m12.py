@@ -36,7 +36,8 @@ def lost_engine():
 
 
 def won_engine():
-    hero = SimpleNamespace(id="iron_man", alive=True, data={"id": "iron_man"})
+    hero = SimpleNamespace(id="iron_man", alive=True, data={"id": "iron_man"},
+                           ult_charge=40)
     return SimpleNamespace(outcome="win", heroes=[hero],
                            rewards=lambda: {"credits": 10, "xp": 5})
 

@@ -21,7 +21,7 @@ def assign(content, state, hero_id, kind, attribute=None):
     requirement = spec.get("requires")
     if requirement:
         char = content["characters"][hero_id]
-        rank = attrs.effective_rank(char["power_grid"], entry, requirement["attribute"])
+        rank = attrs.effective_rank(char["boosts"], entry, requirement["attribute"])
         if rank < requirement["min"]:
             return False, (f"{char['name']} needs {requirement['attribute']} "
                            f"{requirement['min']}+ for that.")
@@ -78,7 +78,7 @@ def process_day(content, state):
         if not assignment:
             entry["idle_days"] = entry.get("idle_days", 0) + 1
             if entry["idle_days"] > config.ATROPHY_GRACE_DAYS:
-                if _atrophy(entry, char.get("power_grid", {})):
+                if _atrophy(entry, char.get("boosts", {})):
                     messages.append(f"{char['name']} is getting rusty idling around.")
             continue
         assignment["days"] = assignment.get("days", 0) + 1
@@ -86,12 +86,12 @@ def process_day(content, state):
         spec = content["passive"][kind]
         if kind == "train":
             attribute = assignment.get("attribute", "strength")
-            gain = attrs.add_training_xp(char["power_grid"], entry, attribute,
+            gain = attrs.add_training_xp(char["boosts"], entry, attribute,
                                          spec["xp_per_day"])
             if gain["ranks_gained"]:
                 messages.append(f"{char['name']}'s {attribute.title()} reached "
                                 f"trained rank {gain['trained_rank']}!")
-            if mastery.update_mastery(char["power_grid"], entry):
+            if mastery.update_mastery(char["boosts"], entry):
                 messages.append(f"{char['name']} MASTERED - the card goes foil!")
         elif kind == "support":
             credits = spec["credits_per_day"]
@@ -107,6 +107,6 @@ def process_day(content, state):
                 messages.extend(bonds.check_bond_progress(state, content))
         if assignment["days"] > config.ATROPHY_GRACE_DAYS:
             exclude = assignment.get("attribute") if kind == "train" else None
-            if _atrophy(entry, char.get("power_grid", {}), exclude=exclude):
+            if _atrophy(entry, char.get("boosts", {}), exclude=exclude):
                 messages.append(f"{char['name']}'s unworked skills are slipping.")
     return messages

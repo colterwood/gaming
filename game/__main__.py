@@ -108,7 +108,7 @@ class App:
         from game.ui.battle_scene import BattleScene
         self.battle_quest = quest
         self.battle_ambush = ambush
-        trained = perk_fx = synergy_crit = energy_frac = None
+        trained = perk_fx = synergy_crit = energy_frac = ult_charge = None
         hero_ids = ("iron_man", "captain_america")
         if self.game_state:
             roster = self.game_state["roster"]
@@ -126,9 +126,12 @@ class App:
                     if syn["with"] in hero_ids and bonds.synergy_active(self.game_state, char, syn):
                         total += syn["effect"].get("crit_bonus", 0)
                 synergy_crit[hid] = total
+            # M15: ultimate charge carries over from the last fight.
+            ult_charge = {hid: roster[hid].get("ult_charge", 0) for hid in hero_ids}
         self.battle = BattleScene(
             self.content, hero_ids=hero_ids, enemy_ids=enemy_ids, trained=trained,
             perk_fx=perk_fx, synergy_crit=synergy_crit, energy_frac=energy_frac,
+            ult_charge=ult_charge,
             inventory=self.game_state["inventory"] if self.game_state else None)
         self.machine.transition(GameState.BATTLE)
 
@@ -137,6 +140,12 @@ class App:
         quest = getattr(self, "battle_quest", None)
         ambush = getattr(self, "battle_ambush", False)
         state = self.game_state
+        if state:
+            # M15: bank each hero's ultimate charge for the next fight.
+            for hero in engine.heroes:
+                entry = state["roster"].get(hero.id)
+                if entry is not None:
+                    entry["ult_charge"] = hero.ult_charge
         if state and engine.outcome == "win":
             from game.hub import activities, story
             from game.progression import mastery

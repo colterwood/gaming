@@ -19,7 +19,11 @@
     "name": "Case the Safehouse",
     "kind": "scout",
     "location": "midtown",
-    "scout_points": [[8, 3], [26, 6], [18, 14]],
+    "scout_points": [
+      [8, 3],
+      [26, 6],
+      [18, 14]
+    ],
     "action_label": "Scout",
     "desc": "Walk Lang's block and map the patrols."
   },
@@ -29,7 +33,11 @@
     "name": "Spoof the Ankle Monitor",
     "kind": "scout",
     "location": "midtown",
-    "scout_points": [[5, 6], [33, 3], [30, 13]],
+    "scout_points": [
+      [5, 6],
+      [33, 3],
+      [30, 13]
+    ],
     "action_label": "Plant relay",
     "desc": "Plant 3 relays to blind Lang's monitor."
   },
@@ -55,7 +63,10 @@
     "enemies": [
       "hydra_siege_captain",
       "hydra_grunt",
-      "hydra_grunt"
+      "hydra_grunt",
+      "hydra_grunt",
+      "hydra_enforcer",
+      "hydra_enforcer"
     ],
     "boss": true,
     "flags": {
@@ -87,7 +98,10 @@
     "kind": "battle",
     "enemies": [
       "crossbones",
-      "hydra_medic"
+      "hydra_medic",
+      "hydra_enforcer",
+      "hydra_enforcer",
+      "hydra_grunt"
     ],
     "boss": true,
     "flags": {

@@ -187,30 +187,44 @@ class ImpelCardScene:
                                  (x, paper.y), (x, paper.bottom - 1))
 
         mastered = entry.get("mastered", False)
+        boosts = hero.get("boosts", {})
         for i, attribute in enumerate(config.ATTRIBUTES):
             row_y = paper.y + i * config.CARD_GRID_ROW_HEIGHT
             row = pygame.Rect(paper.x, row_y, paper.width, config.CARD_GRID_ROW_HEIGHT)
-            base = hero["power_grid"][attribute]
-            trained = entry.get("trained_ranks", {}).get(attribute, 0)
-            effective = min(config.RANK_MAX, base + trained)
+            # M15: pink = the trained rank (1..10), gold = what the innate
+            # boost adds on top of it in combat.
+            rank = attrs.rank(entry, attribute)
+            effective = attrs.effective_rank(boosts, entry, attribute)
             bar = pygame.Rect(row.x + 1, row.y + 4,
-                              int((base + 1) * unit) - 2, row.height - 8)
+                              int((rank + 1) * unit) - 2, row.height - 8)
             pygame.draw.rect(surface, pixelkit.color(PINK), bar)
             pygame.draw.line(surface, pixelkit.color("white"),
                              (bar.x, bar.y), (bar.right - 1, bar.y))
-            if effective > base:
-                overlay = pygame.Rect(row.x + int((base + 1) * unit), row.y + 4,
-                                      int((effective - base) * unit) - 1, row.height - 8)
-                pygame.draw.rect(surface, pixelkit.color(GOLD), overlay)
-            btext(surface, attribute.upper(), 13, INK,
+            # The grid only has RANK_MAX columns, but a boosted combat value
+            # runs past it — clamp the gold band to the paper so it never
+            # spills over the card edge.
+            shown = min(config.RANK_MAX, effective)
+            if shown > rank:
+                left = row.x + int((rank + 1) * unit)
+                right = min(paper.right - 1, row.x + int((shown + 1) * unit) - 1)
+                if right > left:
+                    pygame.draw.rect(surface, pixelkit.color(GOLD),
+                                     pygame.Rect(left, row.y + 4,
+                                                 right - left, row.height - 8))
+            btext(surface, attribute.upper(), 12, INK,
                   midleft=(row.x + 5, row.centery))
+            boost = boosts.get(attribute, 0)
+            if boost:
+                pixelkit.text(surface, f"+{boost}", 11, GOLD,
+                              midleft=(row.right - 18, row.centery), shadow="ink")
             if mastered:
                 self._foil_sparkle(surface, row, hero["id"], i)
 
         band = pygame.Rect(paper.x, paper.bottom + 3, paper.width, 16)
         pygame.draw.rect(surface, pixelkit.color(INK), band)
-        label = "POWER RATINGS" + ("  * MASTERED *" if mastered else "")
-        btext(surface, label, 15, GOLD if mastered else "white", center=band.center)
+        label = ("POWER RATINGS  (gold = innate boost)"
+                 + ("  * MASTERED *" if mastered else ""))
+        btext(surface, label, 14, GOLD if mastered else "white", center=band.center)
 
     def _foil_sparkle(self, surface, row, hero_id, row_index):
         seed = sum(ord(c) for c in hero_id) + row_index * 31

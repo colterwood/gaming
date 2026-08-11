@@ -17,13 +17,15 @@ class BattleScene:
     def __init__(self, content, hero_ids=("iron_man", "captain_america"),
                  enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
                  inventory=None, trained=None, rng=None,
-                 perk_fx=None, synergy_crit=None, energy_frac=None):
+                 perk_fx=None, synergy_crit=None, energy_frac=None,
+                 ult_charge=None):
         self.content = content
         heroes = [Combatant(content["characters"][h],
                             trained_ranks=(trained or {}).get(h),
                             perk_effects=(perk_fx or {}).get(h),
                             synergy_crit=(synergy_crit or {}).get(h, 0),
                             energy_frac=(energy_frac or {}).get(h, 1.0),
+                            ult_charge=(ult_charge or {}).get(h, 0),
                             is_hero=True) for h in hero_ids]
         enemies = make_enemy_group([content["enemies"][e] for e in enemy_ids])
         self.engine = BattleEngine(
@@ -43,9 +45,12 @@ class BattleScene:
     def _actor(self):
         return self.engine.current()
 
+    # Special/Ultimate rows are tinted to match their resource bars (M15).
+    KIND_COLORS = {"special": "sky", "ultimate": "gold"}
+
     def _menu_entries(self):
         """(label, kind) rows — labels are the actor's OWN ability names
-        (M13), kinds drive the logic (basic|special|item|defend|ultimate)."""
+        (M13). Order (M15): Basic, Special, Ultimate, Defend, Item."""
         actor = self._actor()
         entries = []
         basics = actor.abilities_of_type("basic")
@@ -53,17 +58,20 @@ class BattleScene:
             entries.append((basics[0]["name"], "basic"))
         specials = actor.abilities_of_type("special")
         if specials:
-            entries.append((f"{specials[0]['name']} ({specials[0]['cost']} EN)",
-                            "special"))
-        entries.append(("Item", "item"))
-        entries.append(("Defend", "defend"))
+            entries.append((specials[0]["name"], "special"))
         ults = actor.abilities_of_type("ultimate")
         if ults:
             entries.append((ults[0]["name"], "ultimate"))
+        entries.append(("Defend", "defend"))
+        entries.append(("Item", "item"))
         return entries
 
     def _menu_options(self):
         return [label for label, _ in self._menu_entries()]
+
+    def _menu_colors(self):
+        return {label: self.KIND_COLORS[kind]
+                for label, kind in self._menu_entries() if kind in self.KIND_COLORS}
 
     def _disabled_options(self):
         actor = self._actor()
@@ -255,7 +263,8 @@ class BattleScene:
                           topleft=(30, config.HEIGHT - 122), shadow="ink")
             widgets.menu(surface, pygame.Rect(30, config.HEIGHT - 108, 210, 96),
                          self._menu_options(), self.menu_index,
-                         disabled=self._disabled_options())
+                         disabled=self._disabled_options(),
+                         colors=self._menu_colors())
         elif self.phase == "target":
             targets = self._targets_for_pending()
             tgt = targets[self.target_index % len(targets)]

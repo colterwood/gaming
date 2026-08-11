@@ -3,25 +3,67 @@
   "name": "Ant-Man",
   "path": "avengers",
   "rarity": "rare",
-  "power_grid": {
-    "strength": 2, "speed": 3, "agility": 5,
-    "stamina": 3, "durability": 2, "intelligence": 5
+  "boosts": {
+    "strength": 2,
+    "speed": 3,
+    "agility": 5,
+    "stamina": 3,
+    "durability": 2,
+    "intelligence": 5
   },
   "abilities": [
-    {"id": "shrink_strike", "name": "Shrink Strike", "type": "basic",
-     "power": 11, "scales_with": "agility", "target": "single"},
-    {"id": "pym_barrage", "name": "Pym Particle Barrage", "type": "special",
-     "power": 26, "cost": 10, "scales_with": "intelligence", "target": "single"},
-    {"id": "giant_man_stomp", "name": "Giant-Man Stomp", "type": "ultimate",
-     "power": 48, "charge_required": 100, "scales_with": "strength", "target": "all"}
+    {
+      "id": "shrink_strike",
+      "name": "Shrink Strike",
+      "type": "basic",
+      "power": 11,
+      "scales_with": "agility",
+      "target": "single"
+    },
+    {
+      "id": "pym_barrage",
+      "name": "Pym Particle Barrage",
+      "type": "special",
+      "power": 26,
+      "cost": 10,
+      "scales_with": "intelligence",
+      "target": "single",
+      "spread": "random",
+      "extra_targets": 2
+    },
+    {
+      "id": "giant_man_stomp",
+      "name": "Giant-Man Stomp",
+      "type": "ultimate",
+      "power": 48,
+      "charge_required": 100,
+      "scales_with": "strength",
+      "target": "all"
+    }
   ],
   "gifts": {
-    "loved": ["ant_farm", "double_espresso"],
-    "liked": ["tech_scrap", "magic_trick_kit"],
-    "disliked": ["bug_spray"],
-    "hated": ["paperwork"]
+    "loved": [
+      "ant_farm",
+      "double_espresso"
+    ],
+    "liked": [
+      "tech_scrap",
+      "magic_trick_kit"
+    ],
+    "disliked": [
+      "bug_spray"
+    ],
+    "hated": [
+      "paperwork"
+    ]
   },
-  "birthday": {"issue": 1, "day": 6},
+  "birthday": {
+    "issue": 1,
+    "day": 6
+  },
   "synergies": [],
-  "recruit": {"chapter": 1, "method": "story"}
+  "recruit": {
+    "chapter": 1,
+    "method": "story"
+  }
 }

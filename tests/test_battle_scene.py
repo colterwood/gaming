@@ -40,12 +40,14 @@ def test_menu_shows_the_actors_own_attack_names(content):
         scene.update(1.0)
     labels = scene._menu_options()
     kinds = [k for _, k in scene._menu_entries()]
-    assert labels[0] == "Repulsor Blast"
-    assert labels[1] == "Unibeam (12 EN)"
-    assert "Item" in labels and "Defend" in labels
-    assert labels[-1] == "House Party Protocol"
-    assert kinds == ["basic", "special", "item", "defend", "ultimate"]
+    # M15 order: Basic, Special, Ultimate, Defend, Item — and no "(N EN)"
+    # suffix; the special/ultimate rows are tinted like their bars instead.
+    assert labels == ["Repulsor Blast", "Unibeam", "House Party Protocol",
+                      "Defend", "Item"]
+    assert kinds == ["basic", "special", "ultimate", "defend", "item"]
     assert not any(l in ("Basic", "Special", "Ultimate") for l in labels)
+    assert scene._menu_colors() == {"Unibeam": "sky",
+                                    "House Party Protocol": "gold"}
 
 
 def test_back_to_back_turns_still_run_begin_turn(content):

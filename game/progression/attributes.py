@@ -7,6 +7,7 @@ Roster entry shape (in the save state):
 """
 
 from game import config
+from game.combat import formulas
 from game.core import calendar as cal
 
 
@@ -15,17 +16,28 @@ def xp_for_rank(n):
     return config.ATTRIBUTE_XP_PER_RANK * n
 
 
-def effective_rank(base_grid, roster_entry, attribute):
-    """Combat rank: base + trained, capped at RANK_MAX (§6.3)."""
-    trained = roster_entry.get("trained_ranks", {}).get(attribute, 0)
-    return min(config.RANK_MAX, base_grid[attribute] + trained)
+def rank(roster_entry, attribute):
+    """The plain trainable level, 1..RANK_MAX (M15) — what task
+    requirements and the card's bar length talk about."""
+    trained = min(config.TRAINED_MAX,
+                  roster_entry.get("trained_ranks", {}).get(attribute, 0))
+    return config.RANK_START + trained
 
 
-def can_train(base_grid, roster_entry, attribute):
-    """Trained ranks run 1..RANK_MAX independently of the base grid (§6.3:
-    ranks cost 100..700 XP, 2,800 total) — they gate perks (3/6) and Mastery
-    (trained 7); only the combat math is capped via effective_rank."""
-    return roster_entry.get("trained_ranks", {}).get(attribute, 0) < config.RANK_MAX
+def boost(boosts, attribute):
+    return (boosts or {}).get(attribute, 0)
+
+
+def effective_rank(boosts, roster_entry, attribute):
+    """Combat rank (M15): trained rank lifted by the innate boost."""
+    return formulas.effective_rank(rank(roster_entry, attribute),
+                                   boost(boosts, attribute))
+
+
+def can_train(boosts, roster_entry, attribute):
+    """Trained ranks run 0..TRAINED_MAX (rank 1..RANK_MAX). They gate perks
+    (trained 3/6) and Mastery (every attribute at RANK_MAX)."""
+    return roster_entry.get("trained_ranks", {}).get(attribute, 0) < config.TRAINED_MAX
 
 
 def session_xp(state, calendar_data):
@@ -38,14 +50,14 @@ def session_xp(state, calendar_data):
     return config.TRAINING_XP_BASIC
 
 
-def add_training_xp(base_grid, roster_entry, attribute, xp):
-    """Bank XP and consume it into trained ranks (1..RANK_MAX). Multiple
-    rank-ups can occur. Training past trained rank 7 is blocked by can_train."""
+def add_training_xp(boosts, roster_entry, attribute, xp):
+    """Bank XP and consume it into trained ranks (0..TRAINED_MAX). Multiple
+    rank-ups can occur; training past the cap is blocked by can_train."""
     xp_bank = roster_entry.setdefault("attribute_xp", {})
     ranks = roster_entry.setdefault("trained_ranks", {})
     xp_bank[attribute] = xp_bank.get(attribute, 0) + xp
     gained = []
-    while ranks.get(attribute, 0) < config.RANK_MAX:
+    while ranks.get(attribute, 0) < config.TRAINED_MAX:
         next_rank = ranks.get(attribute, 0) + 1
         cost = xp_for_rank(next_rank)
         if xp_bank[attribute] < cost:
@@ -55,7 +67,8 @@ def add_training_xp(base_grid, roster_entry, attribute, xp):
         gained.append(next_rank)
     return {"ranks_gained": gained,
             "trained_rank": ranks.get(attribute, 0),
-            "effective_rank": effective_rank(base_grid, roster_entry, attribute),
+            "rank": rank(roster_entry, attribute),
+            "effective_rank": effective_rank(boosts, roster_entry, attribute),
             "xp_banked": xp_bank[attribute],
             "perk_pending": pending_perk_tier(roster_entry, attribute)}
 

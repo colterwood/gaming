@@ -892,7 +892,7 @@ class HubScene:
         if next_tier in config.BOARD_TIER_POWER:
             need = config.BOARD_TIER_POWER[next_tier]
             items.append((f"Tier {next_tier} jobs at team power {need} "
-                          f"(now {power})", True, None))
+                          f"(now {round(power)})", True, None))
         for job in dispatch.active(state):
             names = ", ".join(self.content["characters"][h]["name"]
                               for h in job["heroes"])
@@ -926,7 +926,7 @@ class HubScene:
             name = self.content["characters"][hero_id]["name"]
             en = energy.hero_energy(state, hero_id)
             power = dispatch.hero_power(self.content, state, hero_id)
-            label = f"Send {name}  (EN {en}, PWR {power})"
+            label = f"Send {name}  (EN {en}, PWR {round(power)})"
             training = bool(state["roster"][hero_id].get("training"))
             would_empty = hero_id in party and len(remaining_party) <= 1
             if hero_id in party:
@@ -1086,15 +1086,19 @@ class HubScene:
         entry = state["roster"][self.train_hero_id]
         labels = []
         for attribute in config.ATTRIBUTES:
-            eff = attrs.effective_rank(hero["power_grid"], entry, attribute)
+            # M15: rank is the trainable level (1..RANK_MAX); the innate
+            # boost lifts the COMBAT value above it, so show both.
+            rank = attrs.rank(entry, attribute)
+            eff = attrs.effective_rank(hero["boosts"], entry, attribute)
+            head = f"{attribute.title()}  {rank}/{config.RANK_MAX} ({eff:.1f})"
             trained = entry.get("trained_ranks", {}).get(attribute, 0)
-            if not attrs.can_train(hero["power_grid"], entry, attribute):
-                labels.append(f"{attribute.title()}  {eff}/7  [MAX]")
+            if not attrs.can_train(hero["boosts"], entry, attribute):
+                labels.append(f"{head}  [MAX]")
             else:
                 banked = entry.get("attribute_xp", {}).get(attribute, 0)
                 cost = attrs.xp_for_rank(trained + 1)
                 en_cost, minutes = activities.training_cost(trained + 1)
-                labels.append(f"{attribute.title()}  {eff}/7  {banked}/{cost}xp"
+                labels.append(f"{head}  {banked}/{cost}xp"
                               f"  ({en_cost}EN {minutes}m)")
         return labels
 

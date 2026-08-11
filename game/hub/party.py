@@ -23,7 +23,7 @@ def meets_requirement(content, state, hero_id, requirement):
         return True
     char = content["characters"][hero_id]
     entry = state["roster"][hero_id]
-    rank = attrs.effective_rank(char["power_grid"], entry, requirement["attribute"])
+    rank = attrs.effective_rank(char["boosts"], entry, requirement["attribute"])
     return rank >= requirement["min"]
 
 

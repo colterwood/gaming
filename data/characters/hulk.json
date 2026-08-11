@@ -3,26 +3,69 @@
   "name": "Hulk",
   "path": "avengers",
   "rarity": "legendary",
-  "power_grid": {
-    "strength": 7, "speed": 2, "agility": 2,
-    "stamina": 6, "durability": 6, "intelligence": 5
+  "boosts": {
+    "strength": 7,
+    "speed": 2,
+    "agility": 2,
+    "stamina": 6,
+    "durability": 6,
+    "intelligence": 5
   },
   "abilities": [
-    {"id": "smash", "name": "Smash", "type": "basic",
-     "power": 14, "scales_with": "strength", "target": "single"},
-    {"id": "thunderclap", "name": "Thunderclap", "type": "special",
-     "power": 24, "cost": 12, "scales_with": "strength", "target": "all"},
-    {"id": "worldbreaker", "name": "Worldbreaker", "type": "ultimate",
-     "power": 60, "charge_required": 100, "scales_with": "strength", "target": "all"}
+    {
+      "id": "smash",
+      "name": "Smash",
+      "type": "basic",
+      "power": 14,
+      "scales_with": "strength",
+      "target": "single"
+    },
+    {
+      "id": "thunderclap",
+      "name": "Thunderclap",
+      "type": "special",
+      "power": 24,
+      "cost": 12,
+      "scales_with": "strength",
+      "target": "all"
+    },
+    {
+      "id": "worldbreaker",
+      "name": "Worldbreaker",
+      "type": "ultimate",
+      "power": 60,
+      "charge_required": 100,
+      "scales_with": "strength",
+      "target": "all"
+    }
   ],
   "gifts": {
-    "loved": ["energy_bar", "double_espresso"],
-    "liked": ["vintage_vinyl", "sketchbook"],
-    "disliked": ["magnets", "bug_spray"],
-    "hated": ["paperwork", "hydra_propaganda"]
+    "loved": [
+      "energy_bar",
+      "double_espresso"
+    ],
+    "liked": [
+      "vintage_vinyl",
+      "sketchbook"
+    ],
+    "disliked": [
+      "magnets",
+      "bug_spray"
+    ],
+    "hated": [
+      "paperwork",
+      "hydra_propaganda"
+    ]
   },
-  "birthday": {"issue": 1, "day": 18},
+  "birthday": {
+    "issue": 1,
+    "day": 18
+  },
   "synergies": [],
-  "recruit": {"chapter": 2, "method": "bond", "bond_level": 4},
+  "recruit": {
+    "chapter": 2,
+    "method": "bond",
+    "bond_level": 4
+  },
   "appears_flag": "hulk_arrived"
 }

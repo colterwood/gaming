@@ -7,12 +7,25 @@ and unit-testable; the engine owns the RNG.
 from game import config
 
 
+def effective_rank(rank, boost=0):
+    """M15: what combat actually uses. `rank` is the trained level (1..10),
+    `boost` the character's innate talent for that attribute (0..7).
+
+    Each boost level is worth BOOST_RANK_VALUE flat rank — so talent shows
+    at rank 1 — plus BOOST_PCT percent, which widens the gap as the rank
+    climbs. Enemies pass boost 0 and get their raw rank back.
+    """
+    return (rank + boost * config.BOOST_RANK_VALUE) * (1 + boost * config.BOOST_PCT)
+
+
 def max_hp(stamina, durability):
-    return config.HP_BASE + stamina * config.HP_PER_STAMINA + durability * config.HP_PER_DURABILITY
+    return int(config.HP_BASE + stamina * config.HP_PER_STAMINA
+               + durability * config.HP_PER_DURABILITY)
 
 
 def battle_energy(intelligence):
-    return config.BATTLE_ENERGY_BASE + intelligence * config.BATTLE_ENERGY_PER_INT
+    return int(config.BATTLE_ENERGY_BASE
+               + intelligence * config.BATTLE_ENERGY_PER_INT)
 
 
 def initiative(speed, roll):
@@ -34,7 +47,7 @@ def ability_damage(power, scaling_rank, target_durability, ability_type):
     """Base damage before dodge/crit/defend. Ultimates scale like specials."""
     mult = config.BASIC_SCALING_MULT if ability_type == "basic" else config.SPECIAL_SCALING_MULT
     dmg = power + scaling_rank * mult - target_durability * config.DURABILITY_REDUCTION_MULT
-    return max(config.MIN_DAMAGE, dmg)
+    return max(config.MIN_DAMAGE, int(dmg))
 
 
 def crit_chance(agility):

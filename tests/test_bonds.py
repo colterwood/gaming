@@ -181,12 +181,13 @@ def test_npc_unlocks_fire_at_level_4(content):
 
 def test_npc_data_loads_without_combat_fields(content):
     jarvis = content["characters"]["jarvis"]
-    assert "power_grid" not in jarvis and "abilities" not in jarvis
+    assert "boosts" not in jarvis and "abilities" not in jarvis
     assert jarvis["recruit"]["method"] == "npc"
     hulk = content["characters"]["hulk"]
-    # card-authentic grid from assets/reference/hulk_53_back.jpg
-    assert hulk["power_grid"] == {"strength": 7, "speed": 2, "agility": 2,
-                                  "stamina": 6, "durability": 6, "intelligence": 5}
+    # card-authentic grid from assets/reference/hulk_53_back.jpg, now his
+    # innate boost table (M15)
+    assert hulk["boosts"] == {"strength": 7, "speed": 2, "agility": 2,
+                              "stamina": 6, "durability": 6, "intelligence": 5}
     assert hulk["recruit"] == {"chapter": 2, "method": "bond", "bond_level": 4}
 
 

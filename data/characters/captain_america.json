@@ -3,28 +3,78 @@
   "name": "Captain America",
   "path": "avengers",
   "rarity": "legendary",
-  "power_grid": {
-    "strength": 2, "speed": 2, "agility": 5,
-    "stamina": 4, "durability": 2, "intelligence": 3
+  "boosts": {
+    "strength": 2,
+    "speed": 2,
+    "agility": 5,
+    "stamina": 4,
+    "durability": 2,
+    "intelligence": 3
   },
   "abilities": [
-    {"id": "shield_strike", "name": "Shield Strike", "type": "basic",
-     "power": 12, "scales_with": "strength", "target": "single"},
-    {"id": "shield_throw", "name": "Shield Throw", "type": "special",
-     "power": 28, "cost": 10, "scales_with": "agility", "target": "single"},
-    {"id": "avengers_assemble", "name": "Avengers Assemble", "type": "ultimate",
-     "power": 50, "charge_required": 100, "scales_with": "strength", "target": "all"}
+    {
+      "id": "shield_strike",
+      "name": "Shield Strike",
+      "type": "basic",
+      "power": 12,
+      "scales_with": "strength",
+      "target": "single"
+    },
+    {
+      "id": "shield_throw",
+      "name": "Shield Throw",
+      "type": "special",
+      "power": 28,
+      "cost": 10,
+      "scales_with": "agility",
+      "target": "single",
+      "spread": "random_range",
+      "extra_min": 2,
+      "extra_max": 3
+    },
+    {
+      "id": "avengers_assemble",
+      "name": "Avengers Assemble",
+      "type": "ultimate",
+      "power": 50,
+      "charge_required": 100,
+      "scales_with": "strength",
+      "target": "all"
+    }
   ],
   "gifts": {
-    "loved": ["forties_memorabilia", "war_bonds_poster"],
-    "liked": ["sketchbook", "vintage_vinyl"],
-    "disliked": ["modern_slang_guide"],
-    "hated": ["hydra_propaganda"]
+    "loved": [
+      "forties_memorabilia",
+      "war_bonds_poster"
+    ],
+    "liked": [
+      "sketchbook",
+      "vintage_vinyl"
+    ],
+    "disliked": [
+      "modern_slang_guide"
+    ],
+    "hated": [
+      "hydra_propaganda"
+    ]
   },
-  "birthday": {"issue": 1, "day": 20},
+  "birthday": {
+    "issue": 1,
+    "day": 20
+  },
   "synergies": [
-    {"with": "iron_man", "name": "Old Friends",
-     "effect": {"crit_bonus": 8}, "requires_bond_level": 6, "innate": true}
+    {
+      "with": "iron_man",
+      "name": "Old Friends",
+      "effect": {
+        "crit_bonus": 8
+      },
+      "requires_bond_level": 6,
+      "innate": true
+    }
   ],
-  "recruit": {"chapter": 0, "method": "starter"}
+  "recruit": {
+    "chapter": 0,
+    "method": "starter"
+  }
 }

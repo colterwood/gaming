@@ -2,11 +2,11 @@
   "id": "hydra_siege_captain",
   "name": "HYDRA Siege Captain",
   "power_grid": {
-    "strength": 4,
+    "strength": 5,
     "speed": 3,
     "agility": 3,
-    "stamina": 5,
-    "durability": 4,
+    "stamina": 8,
+    "durability": 5,
     "intelligence": 3
   },
   "abilities": [

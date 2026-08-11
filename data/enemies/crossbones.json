@@ -2,11 +2,11 @@
   "id": "crossbones",
   "name": "Crossbones",
   "power_grid": {
-    "strength": 5,
-    "speed": 3,
-    "agility": 4,
-    "stamina": 6,
-    "durability": 5,
+    "strength": 7,
+    "speed": 4,
+    "agility": 5,
+    "stamina": 13,
+    "durability": 7,
     "intelligence": 3
   },
   "abilities": [

@@ -159,14 +159,16 @@ def test_dispatch_completes_at_sleep_with_rewards(content):
     state = state_with(["iron_man", "captain_america"],
                        ["iron_man", "captain_america"])
     task = task_by_id(content, "calibrate_sensors")             # 1 hero, 2 days
-    dispatch.send(content, state, task, ["iron_man"])
+    mult = dispatch.reward_mult(content, state, ["iron_man"])
+    ok, message = dispatch.send(content, state, task, ["iron_man"])
+    assert ok, message
     assert dispatch.process_day(content, state) == []           # night 1: away
     assert dispatch.is_away(state, "iron_man")
     messages = dispatch.process_day(content, state)             # night 2: home
     assert any("Calibrate Tower Sensors done" in m for m in messages)
-    # M11: pay scales with the sent hero — Iron Man (power 29) earns 1.10x
-    assert state["credits"] == round(task["credits"] * 1.10)
-    assert state["roster"]["iron_man"]["unspent_xp"] == round(task["xp"] * 1.10)
+    # M11: pay scales with the sent hero's power (M15 rank scale)
+    assert state["credits"] == round(task["credits"] * mult)
+    assert state["roster"]["iron_man"]["unspent_xp"] == round(task["xp"] * mult)
     assert not dispatch.is_away(state, "iron_man")
     assert dispatch.active(state) == []
     # free to rejoin now

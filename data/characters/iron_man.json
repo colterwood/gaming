@@ -3,28 +3,76 @@
   "name": "Iron Man",
   "path": "avengers",
   "rarity": "legendary",
-  "power_grid": {
-    "strength": 6, "speed": 6, "agility": 3,
-    "stamina": 4, "durability": 5, "intelligence": 5
+  "boosts": {
+    "strength": 6,
+    "speed": 6,
+    "agility": 3,
+    "stamina": 4,
+    "durability": 5,
+    "intelligence": 5
   },
   "abilities": [
-    {"id": "repulsor_blast", "name": "Repulsor Blast", "type": "basic",
-     "power": 12, "scales_with": "intelligence", "target": "single"},
-    {"id": "unibeam", "name": "Unibeam", "type": "special",
-     "power": 30, "cost": 12, "scales_with": "intelligence", "target": "single"},
-    {"id": "house_party", "name": "House Party Protocol", "type": "ultimate",
-     "power": 55, "charge_required": 100, "scales_with": "intelligence", "target": "all"}
+    {
+      "id": "repulsor_blast",
+      "name": "Repulsor Blast",
+      "type": "basic",
+      "power": 12,
+      "scales_with": "intelligence",
+      "target": "single"
+    },
+    {
+      "id": "unibeam",
+      "name": "Unibeam",
+      "type": "special",
+      "power": 30,
+      "cost": 12,
+      "scales_with": "intelligence",
+      "target": "single",
+      "spread": "adjacent"
+    },
+    {
+      "id": "house_party",
+      "name": "House Party Protocol",
+      "type": "ultimate",
+      "power": 55,
+      "charge_required": 100,
+      "scales_with": "intelligence",
+      "target": "all"
+    }
   ],
   "gifts": {
-    "loved": ["rare_alloy", "double_espresso"],
-    "liked": ["tech_scrap", "vintage_vinyl"],
-    "disliked": ["magnets"],
-    "hated": ["paperwork"]
+    "loved": [
+      "rare_alloy",
+      "double_espresso"
+    ],
+    "liked": [
+      "tech_scrap",
+      "vintage_vinyl"
+    ],
+    "disliked": [
+      "magnets"
+    ],
+    "hated": [
+      "paperwork"
+    ]
   },
-  "birthday": {"issue": 2, "day": 14},
+  "birthday": {
+    "issue": 2,
+    "day": 14
+  },
   "synergies": [
-    {"with": "captain_america", "name": "Old Friends",
-     "effect": {"crit_bonus": 8}, "requires_bond_level": 6, "innate": true}
+    {
+      "with": "captain_america",
+      "name": "Old Friends",
+      "effect": {
+        "crit_bonus": 8
+      },
+      "requires_bond_level": 6,
+      "innate": true
+    }
   ],
-  "recruit": {"chapter": 0, "method": "starter"}
+  "recruit": {
+    "chapter": 0,
+    "method": "starter"
+  }
 }

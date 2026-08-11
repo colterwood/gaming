@@ -7,7 +7,8 @@ from game.combat import formulas
 
 class Combatant:
     def __init__(self, data, trained_ranks=None, is_hero=False, instance_id=None,
-                 name=None, perk_effects=None, synergy_crit=0, energy_frac=1.0):
+                 name=None, perk_effects=None, synergy_crit=0, energy_frac=1.0,
+                 ult_charge=0):
         self.energy_frac = energy_frac      # daily energy %, M9 initiative penalty
         self.id = instance_id or data["id"]
         self.name = name or data["name"]
@@ -15,22 +16,29 @@ class Combatant:
         self.is_hero = is_hero
         self.trained_ranks = dict(trained_ranks or {})
         self.perk_effects = dict(perk_effects or {})
+        # Heroes carry innate boosts (M15); enemies have a flat power_grid.
+        self.boosts = data.get("boosts") or {}
         hp_mult = 1 + self.perk_effects.get("max_hp_pct", 0) / 100
         self.max_hp = int(formulas.max_hp(self.rank("stamina"), self.rank("durability")) * hp_mult)
         self.hp = self.max_hp
         self.max_energy = (formulas.battle_energy(self.rank("intelligence"))
                            + self.perk_effects.get("battle_energy_flat", 0))
         self.energy = self.max_energy
-        self.ult_charge = 0
+        # M15: ultimate charge carries over between battles.
+        self.ult_charge = min(config.ULT_CHARGE_MAX, ult_charge)
         self.defending = False
         self.statuses = {}          # e.g. {"burn": 3, "stun": 1} -> turns remaining
         self.crit_bonus = self.perk_effects.get("crit_bonus", 0) + synergy_crit
 
     def rank(self, attribute):
-        """effective_rank = base grid rank + trained ranks, capped at RANK_MAX (§6.3)."""
-        base = self.data["power_grid"][attribute]
-        trained = self.trained_ranks.get(attribute, 0)
-        return min(config.RANK_MAX, base + trained)
+        """Combat rank (M15): trained rank 1..RANK_MAX lifted by the innate
+        boost. Enemies have no boosts and use their power_grid directly."""
+        if self.boosts:
+            trained = min(config.TRAINED_MAX,
+                          self.trained_ranks.get(attribute, 0))
+            rank = config.RANK_START + trained
+            return formulas.effective_rank(rank, self.boosts.get(attribute, 0))
+        return formulas.effective_rank(self.data["power_grid"][attribute], 0)
 
     @property
     def alive(self):
@@ -53,7 +61,7 @@ class Combatant:
                 self.ult_charge, config.ULT_CHARGE_PER_HIT)
 
     def heal(self, amount):
-        self.hp = min(self.max_hp, self.hp + amount)
+        self.hp = min(self.max_hp, self.hp + int(amount))
 
     def hp_fraction(self):
         return self.hp / self.max_hp

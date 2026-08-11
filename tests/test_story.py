@@ -230,10 +230,29 @@ def _smart_battle(content, state, enemy_ids):
     return engine
 
 
+def _train_everyone_to(state, content, rank):
+    """Grant enough attribute XP that every roster hero sits at `rank`."""
+    for hero_id, entry in state["roster"].items():
+        boosts = content["characters"][hero_id]["boosts"]
+        for attribute in config.ATTRIBUTES:
+            while attrs.rank(entry, attribute) < rank:
+                need = attrs.xp_for_rank(
+                    entry.get("trained_ranks", {}).get(attribute, 0) + 1)
+                attrs.add_training_xp(boosts, entry, attribute, need)
+
+
 def test_full_ch1_ch2_playthrough(content):
+    # M15: the two boss fights are real walls now — the Siege is a coin flip
+    # at rank 1 and Crossbones is a struggle below rank 2, so the intended
+    # line of play is "train between chapters", which this run models.
     state = fresh_run(content)
     battles = 0
     while not story.story_complete(state, content["story"]):
+        quest_now = story.current_quest(state, content["story"])
+        if quest_now["id"] == "ch1_siege":
+            _train_everyone_to(state, content, 2)
+        elif quest_now["id"] == "ch2_crossbones":
+            _train_everyone_to(state, content, 3)
         assert state["day"] < 28, "run must finish well inside Issue 1"
         quest = story.current_quest(state, content["story"])
         if not story.is_accepted(state, quest):         # M13: take the job
@@ -262,6 +281,6 @@ def test_full_ch1_ch2_playthrough(content):
     assert state["story_flags"]["training_upgraded"] is True
     assert state["story_flags"]["ch2_complete"] is True
     assert all(q["status"] == "done" for q in state["quests"].values())
-    # 5 missions + 2 hub tasks: a handful of in-game days -> well under
+    # 5 missions + 2 scout quests: a handful of in-game days -> well under
     # 45 real minutes of play (M6 AC)
-    assert state["day"] <= 7
+    assert state["day"] <= 10

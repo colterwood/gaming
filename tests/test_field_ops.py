@@ -73,12 +73,12 @@ def test_energy_penalty_tiers():
 def test_swap_transfers_task_and_checks_requirement(content):
     state = state_with(content, ["iron_man", "captain_america", "ant_man"],
                        ["captain_america", "ant_man"])
-    ok, _ = passive.assign(content, state, "iron_man", "support")   # INT 4+
+    ok, _ = passive.assign(content, state, "iron_man", "support")   # INT 3+
     assert ok
-    # Cap (INT 3) can't cover support -> blocked
+    # Cap (INT boost 3 -> effective 2.58) can't cover support -> blocked
     ok, reason = party.can_swap_in(content, state, "iron_man", "captain_america")
-    assert not ok and "intelligence 4+" in reason
-    # Ant-Man (INT 5) can -> allowed, and he inherits the task
+    assert not ok and "intelligence 3+" in reason
+    # Ant-Man (INT boost 5) can -> allowed, and he inherits the task
     ok, message = party.swap(content, state, "iron_man", "ant_man")
     assert ok and "takes over their task" in message
     assert state["party"] == ["captain_america", "iron_man"]
@@ -105,7 +105,7 @@ def test_passive_train_gains_and_requirement(content):
     assert state["roster"]["iron_man"]["attribute_xp"]["agility"] == 40
     # requirement rejection: Cap can't take support
     ok, reason = passive.assign(content, state, "captain_america", "support")
-    assert not ok and "intelligence 4+" in reason
+    assert not ok and "intelligence 3+" in reason
 
 
 def test_passive_support_pays_and_socialize_bonds(content):

@@ -27,16 +27,30 @@ def _require(obj, key, kind, where):
     return value
 
 
-def _validate_power_grid(grid, where):
+def _validate_grid(grid, where, field, low, high):
     for attr in config.ATTRIBUTES:
         if attr not in grid:
-            raise DataError(f"{where}: power_grid missing '{attr}'")
+            raise DataError(f"{where}: {field} missing '{attr}'")
         rank = grid[attr]
-        if not isinstance(rank, int) or isinstance(rank, bool) or not (1 <= rank <= config.RANK_MAX):
-            raise DataError(f"{where}: power_grid.{attr} must be an int 1..{config.RANK_MAX}, got {rank!r}")
+        if not isinstance(rank, int) or isinstance(rank, bool) or not (low <= rank <= high):
+            raise DataError(f"{where}: {field}.{attr} must be an int {low}..{high}, got {rank!r}")
     extra = set(grid) - set(config.ATTRIBUTES)
     if extra:
-        raise DataError(f"{where}: power_grid has unknown attributes {sorted(extra)}")
+        raise DataError(f"{where}: {field} has unknown attributes {sorted(extra)}")
+
+
+def _validate_power_grid(grid, where):
+    """Enemies: a flat effective rank per attribute. Bosses are allowed
+    above the hero ladder, up to ENEMY_RANK_MAX."""
+    _validate_grid(grid, where, "power_grid", 1, config.ENEMY_RANK_MAX)
+
+
+def _validate_boosts(grid, where):
+    """Heroes (M15): innate talent 0..BOOST_MAX. Everyone starts at rank 1;
+    the boost is what makes them feel like themselves. 0 is legal and means
+    "no natural talent here" — the card-derived roster happens to have at
+    least 1 everywhere, which is why 'any boost' gates never refuse them."""
+    _validate_grid(grid, where, "boosts", 0, config.BOOST_MAX)
 
 
 def _validate_abilities(abilities, where):
@@ -62,6 +76,21 @@ def _validate_abilities(abilities, where):
             _require(ab, "cost", int, aw)
         if ab_type == "ultimate":
             _require(ab, "charge_required", int, aw)
+        spread = ab.get("spread")               # signature splash (M15)
+        if spread is not None:
+            if spread not in ("adjacent", "random", "random_range"):
+                raise DataError(f"{aw}: spread must be adjacent|random|random_range, "
+                                f"got '{spread}'")
+            if target == "all":
+                raise DataError(f"{aw}: spread is meaningless on an all-target ability")
+            if spread == "random":
+                if _require(ab, "extra_targets", int, aw) < 1:
+                    raise DataError(f"{aw}: extra_targets must be >= 1")
+            if spread == "random_range":
+                low = _require(ab, "extra_min", int, aw)
+                high = _require(ab, "extra_max", int, aw)
+                if low < 1 or high < low:
+                    raise DataError(f"{aw}: needs 1 <= extra_min <= extra_max")
 
 
 RECRUIT_METHODS = ("starter", "story", "bond", "npc")
@@ -79,8 +108,8 @@ def _validate_character(char, where):
         raise DataError(f"{where}: recruit.method must be one of {RECRUIT_METHODS}")
     if method == "bond":
         _require(recruit, "bond_level", int, f"{where} recruit")
-    if method != "npc":     # NPCs never fight: no grid/abilities required
-        _validate_power_grid(_require(char, "power_grid", dict, where), where)
+    if method != "npc":     # NPCs never fight: no boosts/abilities required
+        _validate_boosts(_require(char, "boosts", dict, where), where)
         _validate_abilities(_require(char, "abilities", list, where), where)
     gifts = _require(char, "gifts", dict, where)
     for category in ("loved", "liked", "disliked", "hated"):
@@ -213,6 +242,52 @@ def load_calendar(data_dir=None):
     return calendar
 
 
+def _validate_clause(clause, where):
+    if not isinstance(clause, dict):
+        raise DataError(f"{where}: each requirement clause must be an object")
+    for attribute in clause.get("attributes", []):
+        if attribute not in config.ATTRIBUTES:
+            raise DataError(f"{where}: unknown attribute '{attribute}'")
+    if not ({"min_rank", "min_boost"} & set(clause)):
+        raise DataError(f"{where}: a clause needs min_rank and/or min_boost")
+    rank_min = clause.get("min_rank", config.RANK_START)
+    if not isinstance(rank_min, int) or not config.RANK_START <= rank_min <= config.RANK_MAX:
+        raise DataError(f"{where}: min_rank must be "
+                        f"{config.RANK_START}..{config.RANK_MAX}")
+    boost_min = clause.get("min_boost", 0)
+    if not isinstance(boost_min, int) or not 0 <= boost_min <= config.BOOST_MAX:
+        raise DataError(f"{where}: min_boost must be 0..{config.BOOST_MAX}")
+
+
+def _validate_task_requires(requires, where):
+    """Hidden board-task gates (M15) — see game/hub/requirements.py."""
+    if requires is None:
+        return
+    if not isinstance(requires, dict):
+        raise DataError(f"{where}: requires must be an object")
+    unknown = set(requires) - {"flag", "bond", "hero_any_of", "hero_all_attributes"}
+    if unknown:
+        raise DataError(f"{where}: unknown requires keys {sorted(unknown)}")
+    if "flag" in requires and not isinstance(requires["flag"], str):
+        raise DataError(f"{where}: requires.flag must be a string")
+    bond_gate = requires.get("bond")
+    if bond_gate is not None:
+        _require(bond_gate, "character", str, f"{where} requires.bond")
+        level = _require(bond_gate, "level", int, f"{where} requires.bond")
+        if not 1 <= level <= config.BOND_LEVEL_MAX:
+            raise DataError(f"{where}: requires.bond.level must be "
+                            f"1..{config.BOND_LEVEL_MAX}")
+    clauses = requires.get("hero_any_of")
+    if clauses is not None:
+        if not isinstance(clauses, list) or not clauses:
+            raise DataError(f"{where}: hero_any_of must be a non-empty list")
+        for clause in clauses:
+            _validate_clause(clause, f"{where} hero_any_of")
+    every = requires.get("hero_all_attributes")
+    if every is not None:
+        _validate_clause(every, f"{where} hero_all_attributes")
+
+
 def load_assignments(data_dir=None):
     path = os.path.join(data_dir or DATA_DIR, "quests", "assignments.json")
     tasks = _load_json(path)
@@ -233,6 +308,8 @@ def load_assignments(data_dir=None):
         if days < 1:
             raise DataError(f"{tw}: days must be >= 1")
         _require(task, "xp", int, tw)
+        if "once" in task and not isinstance(task["once"], bool):
+            raise DataError(f"{tw}: once must be a boolean")
         tier = _require(task, "tier", int, tw)          # board tiers (M11)
         if not 1 <= tier <= 3:
             raise DataError(f"{tw}: tier must be 1..3")
@@ -248,6 +325,7 @@ def load_assignments(data_dir=None):
                 or not all(isinstance(v, int) and not isinstance(v, bool)
                            for v in spot[1:])):
             raise DataError(f"{tw}: spot must be [area, x, y]")
+        _validate_task_requires(task.get("requires"), tw)    # M15
         if task["id"] in seen:
             raise DataError(f"{tw}: duplicate id")
         seen.add(task["id"])
@@ -466,6 +544,11 @@ def load_all(data_dir=None):
             raise DataError(
                 f"assignments.json '{task['id']}': requested_by '{requester}' "
                 f"is not a bondable NPC — the bond reward would be invisible")
+    for task in assignments:
+        gate = (task.get("requires") or {}).get("bond")
+        if gate and gate["character"] not in characters:
+            raise DataError(f"assignments.json '{task['id']}': requires.bond "
+                            f"character '{gate['character']}' not found")
     dialogue = load_dialogue(data_dir)
     for char_id in dialogue:
         if char_id not in characters:

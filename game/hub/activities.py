@@ -49,7 +49,7 @@ def start_training(state, content, hero_id, attribute):
         return {"ok": False, "message": f"{character['name']} is already training."}
     if entry.get("dispatch"):
         return {"ok": False, "message": f"{character['name']} is away on assignment."}
-    if not attrs.can_train(character["power_grid"], entry, attribute):
+    if not attrs.can_train(character["boosts"], entry, attribute):
         return {"ok": False, "message": f"{attribute.title()} is already at max."}
     party = state.get("party", [])
     if hero_id not in party:                # M12: rack is party-only, even via
@@ -94,7 +94,7 @@ def finish_training(state, content, hero_id, rejoin=True):
     lock = entry.pop("training", None)
     if not lock:
         return {"ok": False, "message": "They're not training."}
-    gain = attrs.add_training_xp(character["power_grid"], entry,
+    gain = attrs.add_training_xp(character["boosts"], entry,
                                  lock["attribute"], lock["xp"])
     entry["idle_days"] = 0
     message = (f"{character['name']} finishes training "
@@ -102,8 +102,9 @@ def finish_training(state, content, hero_id, rejoin=True):
     if lock.get("banked"):
         message += f" ({lock['banked']} banked)"
     if gain["ranks_gained"]:
-        message += f" - rank up! ({gain['effective_rank']}/{config.RANK_MAX})"
-    if mastery.update_mastery(character["power_grid"], entry):
+        message += (f" - rank up! ({gain['rank']}/{config.RANK_MAX}, "
+                    f"combat {gain['effective_rank']:.1f})")
+    if mastery.update_mastery(character["boosts"], entry):
         message += "  MASTERED - the card goes foil!"
     party = state.setdefault("party", [])
     if rejoin and hero_id not in party and len(party) < config.PARTY_SIZE_MAX:
@@ -146,11 +147,18 @@ def launch_mission(state, mission_id="hydra_patrol"):
 
 def assignment_tasks_today(state, assignments, tier=1):
     """Two rotating tasks per day from each unlocked tier's pool (§7; M10
-    dispatches, M11 tiers). Pass tier = dispatch.roster_tier(...)."""
+    dispatches, M11 tiers). Pass tier = dispatch.roster_tier(...).
+
+    M15: jobs whose story-flag / relationship / once-only gate is shut are
+    not posted at all. Hidden SKILL requirements don't hide a job — those
+    surface as a Coulson refusal when you try to send the wrong hero.
+    """
+    from game.hub import requirements
     base = ((state["issue"] - 1) * config.DAYS_PER_ISSUE + state["day"] - 1) * 2
     today = []
     for level in range(1, tier + 1):
-        pool = sorted((a for a in assignments if a.get("tier", 1) == level),
+        pool = sorted((a for a in assignments if a.get("tier", 1) == level
+                       and requirements.gate_open(state, a)),
                       key=lambda a: a["id"])
         if not pool:
             continue

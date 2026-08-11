@@ -7,7 +7,7 @@
   "support": {
     "label": "Ops support",
     "credits_per_day": 25,
-    "requires": {"attribute": "intelligence", "min": 4}
+    "requires": {"attribute": "intelligence", "min": 3}
   },
   "socialize": {
     "label": "Tower socializing",

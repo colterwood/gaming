@@ -12,6 +12,7 @@ itself lives in state["dispatches"] with its rewards snapshotted.
 """
 
 from game import config
+from game.hub import requirements
 from game.progression import attributes as attrs
 from game.progression import mastery
 from game.social import bonds
@@ -21,7 +22,7 @@ def hero_power(content, state, hero_id):
     """A hero's effective power-grid total (6..42): base + trained ranks."""
     char = content["characters"][hero_id]
     entry = state["roster"][hero_id]
-    return sum(attrs.effective_rank(char["power_grid"], entry, attribute)
+    return sum(attrs.effective_rank(char["boosts"], entry, attribute)
                for attribute in config.ATTRIBUTES)
 
 
@@ -112,6 +113,9 @@ def send(content, state, task, hero_ids):
     party = state.get("party", [])
     if party and not [p for p in party if p not in hero_ids]:
         return False, "Someone has to stay on the team."
+    ok, reason = requirements.check(content, state, task, hero_ids)
+    if not ok:                          # M15: Coulson explains the refusal
+        return False, requirements.coulson_says(reason)
     mult = reward_mult(content, state, hero_ids)        # before they leave
     for hero_id in hero_ids:
         if hero_id in party:
@@ -128,6 +132,8 @@ def send(content, state, task, hero_ids):
         job["bond"] = task.get("bond", 0)
     if task.get("spot"):                                # work site (M13):
         job["spot"] = list(task["spot"])                # they're findable there
+    if task.get("once"):                                # one-shot job (M15)
+        job["once"] = True
     active(state).append(job)
     names = " and ".join(content["characters"][h]["name"] for h in hero_ids)
     return True, (f"{names} head(s) out: {task['name']} "
@@ -163,6 +169,8 @@ def process_day(content, state):
         if job["days_left"] > 0:
             continue
         state["credits"] += job["credits"]
+        if job.get("once"):
+            state.setdefault("completed_tasks", []).append(job["task_id"])
         for hero_id in job["heroes"]:
             entry = state.get("roster", {}).get(hero_id)
             if entry and job["xp"]:

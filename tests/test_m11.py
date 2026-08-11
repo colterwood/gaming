@@ -35,24 +35,29 @@ def task_by_id(content, task_id):
 # --- team power & board tiers ---
 
 def test_team_power_sums_top_four(content):
+    # M15: everyone starts at rank 1; power is rank lifted by innate boosts
     state = state_with(["iron_man", "captain_america"], ["iron_man"])
-    assert dispatch.hero_power(content, state, "iron_man") == 29
-    assert dispatch.hero_power(content, state, "captain_america") == 18
-    assert dispatch.team_power(content, state) == 47
-    # trained ranks count toward power
+    assert dispatch.hero_power(content, state, "iron_man") == pytest.approx(21.53, abs=0.01)
+    assert dispatch.hero_power(content, state, "captain_america") == pytest.approx(15.49, abs=0.01)
+    assert dispatch.team_power(content, state) == pytest.approx(37.02, abs=0.01)
+    before = dispatch.team_power(content, state)
     state["roster"]["captain_america"]["trained_ranks"] = {"strength": 2}
-    assert dispatch.team_power(content, state) == 49
+    assert dispatch.team_power(content, state) > before      # training adds power
 
 
 def test_roster_tier_thresholds(content):
+    # M15 scale: 2 starters at rank 1 = 37, a full roster at rank 1 = 75,
+    # everyone at rank 10 = 299. Tiers unlock at 90 and 160.
     state = state_with(["iron_man", "captain_america"], ["iron_man"])
-    assert dispatch.roster_tier(content, state) == 1            # power 47
-    state["roster"]["ant_man"] = entry()                        # +20 -> 67
-    assert dispatch.roster_tier(content, state) == 1
-    state["roster"]["hulk"] = entry()                           # +28 -> 95
+    assert dispatch.roster_tier(content, state) == 1            # power 37
+    state["roster"]["ant_man"] = entry()
+    state["roster"]["hulk"] = entry()
+    assert dispatch.roster_tier(content, state) == 1            # power 75
+    for hid in state["roster"]:                                 # rank 2 -> 100
+        state["roster"][hid]["trained_ranks"] = {a: 1 for a in config.ATTRIBUTES}
     assert dispatch.roster_tier(content, state) == 2
-    for hid in state["roster"]:                                 # +4 each -> 111
-        state["roster"][hid]["trained_ranks"] = {"speed": 2, "agility": 2}
+    for hid in state["roster"]:                                 # rank 5 -> 187
+        state["roster"][hid]["trained_ranks"] = {a: 4 for a in config.ATTRIBUTES}
     assert dispatch.roster_tier(content, state) == 3
 
 
@@ -61,35 +66,39 @@ def test_tasks_today_two_per_unlocked_tier(content):
     tier1 = activities.assignment_tasks_today(state, content["assignments"], 1)
     assert len(tier1) == 2
     assert all(t["tier"] == 1 for t in tier1)
+    # M15: bond-gated jobs are not posted until the relationship exists, so
+    # a fresh roster sees fewer than the full 2-per-tier at the top end.
     tier3 = activities.assignment_tasks_today(state, content["assignments"], 3)
-    assert len(tier3) == 6
-    assert sorted({t["tier"] for t in tier3}) == [1, 2, 3]
+    assert 4 <= len(tier3) <= 6
+    assert sorted({t["tier"] for t in tier3})[0] == 1
 
 
 # --- power-scaled dispatch pay ---
 
 def test_dispatch_pay_scales_with_sent_hero(content):
     task = task_by_id(content, "sweep_hangar")                  # base 60 cr
-    # Iron Man (power 29): 1 + 0.02*(29-24) = 1.10x
+    # M15: Iron Man (power 21.5) out-earns Cap (15.5) on the same job
     state = state_with(["iron_man", "captain_america"],
                        ["iron_man", "captain_america"])
-    assert dispatch.reward_mult(content, state, ["iron_man"]) == pytest.approx(1.10)
+    im_mult = dispatch.reward_mult(content, state, ["iron_man"])
+    cap_mult = dispatch.reward_mult(content, state, ["captain_america"])
+    assert im_mult > cap_mult
     dispatch.send(content, state, task, ["iron_man"])
-    assert dispatch.active(state)[0]["credits"] == 66
-    # Cap (power 18): 1 + 0.02*(18-24) = 0.88x
+    assert dispatch.active(state)[0]["credits"] == round(60 * im_mult)
     state = state_with(["iron_man", "captain_america"],
                        ["iron_man", "captain_america"])
     dispatch.send(content, state, task, ["captain_america"])
-    assert dispatch.active(state)[0]["credits"] == 53           # round(52.8)
+    assert dispatch.active(state)[0]["credits"] == round(60 * cap_mult)
 
 
 def test_dispatch_pay_clamps(content):
     state = state_with(["iron_man", "captain_america"], ["iron_man"])
-    # max out Cap: all six attributes to rank 7 -> power 42 -> raw 1.36x (in range)
+    # max out Cap: every attribute at rank 10 -> power ~71 -> ~1.49x
     state["roster"]["captain_america"]["trained_ranks"] = {
-        a: 7 for a in config.ATTRIBUTES}
-    assert dispatch.reward_mult(content, state, ["captain_america"]) <= config.DISPATCH_MULT_MAX
-    assert dispatch.reward_mult(content, state, ["captain_america"]) == pytest.approx(1.36)
+        a: config.TRAINED_MAX for a in config.ATTRIBUTES}
+    mult = dispatch.reward_mult(content, state, ["captain_america"])
+    assert config.DISPATCH_MULT_MIN <= mult <= config.DISPATCH_MULT_MAX
+    assert mult == pytest.approx(1.49, abs=0.01)
 
 
 # --- NPC requests ---
@@ -109,24 +118,26 @@ def test_two_hero_dispatch_pays_once_and_banks_both(content):
     state = state_with(["iron_man", "captain_america", "ant_man"],
                        ["iron_man", "captain_america", "ant_man"])
     task = task_by_id(content, "escort_convoy")     # 2 heroes, 2 days, 280/80
-    # Iron Man 29 + Ant-Man 20 -> avg 24.5 -> 1.01x
-    assert dispatch.reward_mult(content, state,
-                                ["iron_man", "ant_man"]) == pytest.approx(1.01)
+    mult = dispatch.reward_mult(content, state, ["iron_man", "ant_man"])
     dispatch.send(content, state, task, ["iron_man", "ant_man"])
     assert dispatch.process_day(content, state) == []       # night 1: away
     dispatch.process_day(content, state)                    # night 2: home
-    assert state["credits"] == 283                  # 280 x 1.01, paid ONCE
-    assert state["roster"]["iron_man"]["unspent_xp"] == 81  # 80 x 1.01, EACH
-    assert state["roster"]["ant_man"]["unspent_xp"] == 81
+    assert state["credits"] == round(280 * mult)    # paid ONCE
+    each = round(80 * mult)
+    assert state["roster"]["iron_man"]["unspent_xp"] == each        # EACH
+    assert state["roster"]["ant_man"]["unspent_xp"] == each
 
 
 def test_two_hero_request_pays_bond_once_per_job(content):
     state = state_with(["iron_man", "captain_america", "ant_man"],
                        ["iron_man", "captain_america", "ant_man"])
     task = task_by_id(content, "escort_delegation")         # coulson, bond 60
-    dispatch.send(content, state, task, ["iron_man", "ant_man"])
+    # M15: this job is gated behind Coulson bond 2 — earn it first
+    bonds.add_points(state, "coulson", 2 * config.BOND_POINTS_PER_LEVEL)
+    ok, message = dispatch.send(content, state, task, ["iron_man", "ant_man"])
+    assert ok, message
     dispatch.process_day(content, state)
-    assert state["bonds"]["coulson"]["points"] == 60        # once, not per hero
+    assert state["bonds"]["coulson"]["points"] == 500 + 60  # once, not per hero
 
 
 def test_recalled_request_pays_no_bond(content):

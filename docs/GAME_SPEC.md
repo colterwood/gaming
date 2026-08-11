@@ -115,9 +115,9 @@ plugs into it.
   "name": "Iron Man",
   "path": "avengers",
   "rarity": "legendary",
-  "power_grid": {
-    "strength": 6, "speed": 5, "agility": 3,
-    "stamina": 5, "durability": 6, "intelligence": 7
+  "boosts": {
+    "strength": 6, "speed": 6, "agility": 3,
+    "stamina": 4, "durability": 5, "intelligence": 5
   },
   "abilities": [
     {"id": "repulsor_blast", "name": "Repulsor Blast", "type": "basic",
@@ -142,15 +142,20 @@ plugs into it.
 }
 ```
 
-> Power-grid values above are placeholders. For card-authentic grids, transcribe
-> the printed ratings from the actual 1991 card backs and adjust. If the cards
-> use a bar length other than 7, change `RANK_MAX` in `config.py` to match —
-> everything else derives from it.
+> `boosts` are the innate-talent table (M15), transcribed from the printed
+> ratings on the real 1991 card backs — Iron Man's above are his actual
+> Series II ratings. They run 0..`BOOST_MAX` (7); 0 means no natural talent.
+> Note the card-derived roster has at least 1 in every attribute, so a
+> board requirement of `min_boost: 1` accepts every current hero. They are NOT the hero's
+> rank: every hero starts at rank 1 in all six and trains toward
+> `RANK_MAX` (10). See §6.3 for how the two combine.
 
 ### 5.2 Enemy (`data/enemies/hydra_grunt.json`)
 
 Same shape as character minus gifts/birthday/synergies, plus:
 `"ai": "aggressive" | "defensive" | "support"` and `"xp_reward"`, `"credit_reward"`.
+Enemies keep a flat `power_grid` (no boosts) whose values ARE their effective
+ranks, valid 1..`ENEMY_RANK_MAX` (20) so bosses can sit above the hero ladder.
 
 ### 5.3 Item (`data/items.json` entries)
 
@@ -227,22 +232,37 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 > that set story flags with real effects (Jarvis +10 daily energy, Pepper
 > 20% shop discount, Coulson +50% mission credits; constants in config).
 
-### 6.3 Attributes & Training
+### 6.3 Attributes & Training  *(reworked in M15)*
 
-- Six attributes, ranks 1–7 (`RANK_MAX = 7`).
-- `effective_rank = base_grid_rank`, plus trained ranks stored separately and
-  added for combat math, capped at 7 total for POC simplicity.
-- Attribute XP to gain trained rank N: `100 × N` (100, 200, … 700).
+- Six attributes. Every hero **starts at rank 1 in all six** and trains up to
+  `RANK_MAX = 10` (trained ranks 0–`TRAINED_MAX` 9).
+- What makes a character feel like themselves is their **innate boost table**
+  (`boosts` in the character JSON, 0–`BOOST_MAX` 7; 0 means no natural
+  talent). This is the old
+  card-back power grid, repurposed — Iron Man is Strength/Speed 6,
+  Durability/Intelligence 5, Stamina 4, Agility 3.
+- Combat uses:
+  `effective_rank = (rank + boost × BOOST_RANK_VALUE) × (1 + boost × BOOST_PCT)`
+  with `BOOST_RANK_VALUE = 0.5` and `BOOST_PCT = 0.01`. The flat half-rank
+  makes talent visible at rank 1 (Iron Man Strength 4.24 vs Cap 2.04); the
+  percentage widens the gap as ranks climb (13.78 vs 11.22 at rank 10), so a
+  fully-trained Iron Man still out-hits a fully-trained Cap on Strength while
+  Cap keeps his Agility edge. Both constants are single-line tunables.
+- Enemies have no boosts — their `power_grid` IS the effective rank, and
+  bosses may be written above the hero ladder up to `ENEMY_RANK_MAX` (20).
+- Attribute XP to gain trained rank N: `100 × N` (100 … 900; 4,500 per
+  attribute to max).
 - Training XP per session: 40 (basic facility) / 80 (upgraded) / 120 (event).
+  Training costs energy and a time lockout — it never costs XP (M12).
 - Perk choice at trained ranks 3 and 6: two options per attribute, flat effects
-  in POC (e.g., Strength 3: `+10% basic damage` vs. `+1 knockback`). Define perk
-  tables in `data/perks.json`.
-- Mastery (all six at 7) is a stub in POC: detect it, show the foil treatment,
-  log Mastery XP, no perk shop yet.
+  in POC. Define perk tables in `data/perks.json`.
+- Mastery (all six at rank 10) is a stub in POC: detect it, show the foil
+  treatment, log Mastery XP, no perk shop yet.
 
 ### 6.4 Combat Formulas (`combat/formulas.py` — pure functions, unit-tested)
 
-Let ranks be effective ranks 1–7.
+Let ranks be **effective** ranks (§6.3: trained rank lifted by the innate
+boost, so a hero's effective value legitimately exceeds 10).
 
 ```
 max_hp        = 50 + stamina*20 + durability*10
@@ -253,13 +273,38 @@ special_damage= ability.power + scaling_rank*5 - target.durability*2   (min 1)
 crit_chance   = agility*4  (percent; crit = damage × 1.5)
 dodge_chance  = agility*3  (percent; roll after hit roll, before crit)
 ultimate      = +20 charge per turn taken, +10 per hit received; fires at 100
+                (M15: charge CARRIES OVER between battles — banked to the
+                 roster entry on finish_battle, restored on the next one)
 ```
 
-Party size 4 (POC uses 2–3). Actions: Basic, Special, Item, Defend (halve
-incoming damage until next turn), Ultimate when charged. Status effects in POC:
-Burn (5 dmg/turn, 3 turns) and Stun (skip 1 turn) only.
+Party size 4 (POC uses 2–3). Menu order (M15): **Basic, Special, Ultimate,
+Defend, Item** — rows show the character's own ability names, with the
+Special row tinted like the energy bar (sky) and the Ultimate row like the
+ultimate bar (gold); no "(N EN)" suffix. Status effects in POC: Burn
+(5 dmg/turn, 3 turns) and Stun (skip 1 turn) only.
 
-Boss 1 (Ch. 1): HYDRA Siege Captain + 2 grunts. Boss 2 (Ch. 2): Crossbones —
+**Signature spread (M15).** A single-target ability may carry a `spread`:
+
+| spread | who | effect |
+|---|---|---|
+| `adjacent` | Iron Man — Unibeam | the target plus its immediate neighbours in the enemy line |
+| `random` + `extra_targets` | Ant-Man — Pym Particle Barrage | the target plus 2 other random enemies (3 distinct in total) |
+| `random_range` + `extra_min`/`extra_max` | Cap — Shield Throw | the target plus 2 or 3 others, the count decided by a coin flip |
+
+Targets are always distinct and a spread never exceeds the living enemies.
+
+**Boss balance (M15).** Bosses previously fielded fewer bodies than an
+ambush and fell in 2–3 rounds. They now field real escorts and enough bulk
+to survive a party's ultimates. Measured win rates for the party the player
+realistically brings (Iron Man + Cap + Ant-Man, competent play):
+
+| fight | rank 1 | rank 2 | rank 3 |
+|---|---|---|---|
+| Siege of the Tower (Captain HP 260 + 3 grunts + 2 enforcers) | ~41% | ~100% | 100% |
+| Crossbones (HP 380 + medic + 2 enforcers + grunt) | ~3% | ~77% | 100% |
+
+Ordinary patrols and ambushes stay at ~100% — they are attrition, not walls.
+Boss 1 (Ch. 1): HYDRA Siege Captain + escort. Boss 2 (Ch. 2): Crossbones —
 enrages below 30% HP (+50% damage).
 
 ### 6.5 Enemy AI (POC)
@@ -417,8 +462,9 @@ interaction point; recruited heroes appear standing in the tower.*
   M13: targets appear only after accepting at Ops — the deadline starts
   at accept — and a cooled-down mission returns as offered.)*
 - **Ambushes**: while walking a zone, ambush chance scales with zone
-  danger and inversely with party size. Squad size rolls 2–8 and the
-  ambush only triggers if it outnumbers the party (max 8).
+  danger and inversely with party size. *(Squad sizing superseded by M15:
+  an ambush always outnumbers the party by 1 (50%), 2 (35%), 3 (10%) or
+  4 (5%), capped at twice the party and at `AMBUSH_MAX_SIZE` 8.)*
 - **XP**: battle XP banks per participating hero only (KO'd participants
   earn KO_XP_MULT 50%); banked XP is consumed as bonus progress when that
   hero trains. Training EN/time scale with the rank being trained
@@ -557,6 +603,32 @@ and the squad appears; case the safehouse by working all three markers on
 foot; walk to the ops floor and find Cap calibrating the sensors, recall
 him face to face; see "Shield Throw (10 EN)" in Cap's battle menu; gift
 Hulk an Energy Bar for +80.*
+
+**M15 — Ranks, talent & real bosses** *(added post-POC)*.
+- **Rank/boost rework** — see §6.3. Everyone starts at rank 1, trains to 10,
+  and is differentiated by an innate boost table (the old card grid). All
+  combat math flows through `formulas.effective_rank(rank, boost)`.
+- **Ultimate charge persists** between battles (§6.4).
+- **Signature spreads** for the three hero specials (§6.4 table).
+- **Battle menu**: Basic / Special / Ultimate / Defend / Item, ability names
+  in the resource colours, no EN suffix.
+- **Ambush sizing** by the §M9 table as amended (50/35/10/5, cap 2× party).
+- **Boss rebalance** — see §6.4. Escorts grew and the two bosses gained bulk
+  so they are the hardest fights in the game rather than the easiest.
+- **Hidden board requirements** (`requires` in assignments.json, resolved by
+  `game/hub/requirements.py`): `hero_any_of` clauses (each clause needs ONE
+  attribute to satisfy all of its `min_rank`/`min_boost` keys),
+  `hero_all_attributes`, plus `flag` and `bond` gates. Skill requirements are
+  never advertised — sending an unqualified hero gets a refusal in Coulson's
+  voice. Flag/bond/`once` gates instead keep a job off the board entirely.
+- **Hulk's one-shot job** ("Spot Hulk at the Heavy Bags", posted once
+  `hulk_arrived` is set) pays +600 bond so recruiting him at Bond 4 is a
+  handful of days rather than weeks.
+*AC: Iron Man out-damages Cap on Strength at rank 1 AND at rank 10 while Cap
+wins Agility at both; walk into a battle with a part-charged ultimate; watch
+Unibeam splash the neighbours and Pym Barrage hit three; lose to Crossbones at
+rank 1 and beat him at rank 2; get refused by Coulson for sending Cap to
+decrypt a data cache.*
 
 ---
 

@@ -29,8 +29,10 @@ def bar(surface, rect, fraction, fg, label=None):
         pixelkit.text(surface, label, 11, "white", center=rect.center, shadow="ink")
 
 
-def menu(surface, rect, options, selected_index, disabled=()):
-    """options: list of strings; pixel comic panel with cursor selection."""
+def menu(surface, rect, options, selected_index, disabled=(), colors=None):
+    """options: list of strings; pixel comic panel with cursor selection.
+    colors maps a label to a palette name (M15: special rows are tinted to
+    match their resource bar); anything unmapped renders white."""
     pixelkit.panel(surface, rect, fill="navy", border="ink")
     row_h = rect.height // max(1, len(options))
     for i, label in enumerate(options):
@@ -40,6 +42,6 @@ def menu(surface, rect, options, selected_index, disabled=()):
             pygame.draw.rect(surface, RED, hl)
             pygame.draw.rect(surface, INK, hl, width=1)
             pixelkit.cursor(surface, (row.x + 6, row.centery))
-        color = "grey" if label in disabled else "white"
+        color = "grey" if label in disabled else (colors or {}).get(label, "white")
         pixelkit.text(surface, label, 15, color,
                       midleft=(row.x + 14, row.centery), shadow="ink")
