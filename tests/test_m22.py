@@ -24,8 +24,10 @@ def task_by_id(content, task_id):
 # --- sparring (1) ---
 
 def test_sparring_is_worth_twenty_to_every_stat(content):
+    # M24: xp is PER ATTRIBUTE and `trains` names them; absent = all six.
     task = task_by_id(content, "spar_rookies")
-    assert task["xp"] == 20 * len(config.ATTRIBUTES) == 120
+    assert task["xp"] == 20
+    assert task.get("trains") is None
 
 
 def test_a_spar_pays_out_across_the_board(content):
@@ -44,9 +46,8 @@ def test_a_spar_pays_out_across_the_board(content):
     for hero_id in crew:
         gains = state["roster"][hero_id]["attribute_xp"]
         assert set(gains) == set(config.ATTRIBUTES), hero_id
-        assert sum(gains.values()) == round(task["xp"] * mult)
-        # baseline crew -> the flat +20 the job advertises
-        assert all(abs(v - 20 * mult) <= 1 for v in gains.values()), gains
+        # +20 into EVERY stat, not 20 split six ways
+        assert all(v == round(task["xp"] * mult) for v in gains.values()), gains
 
 
 # --- no taxi from the Ops console (2) ---

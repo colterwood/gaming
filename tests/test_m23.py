@@ -98,16 +98,19 @@ def test_the_board_spells_out_every_reward(content):
     assert pays, labels
     for line in pays:
         assert "cr" in line
-    assert any("XP" in l and "/stat" in l for l in pays)
+    assert any("XP to " in l for l in pays)
     assert any("bond with" in l for l in pays)
 
 
-def test_a_reward_line_quotes_xp_per_stat(content):
+def test_a_reward_line_names_what_a_job_trains(content):
     scene = HubScene(content)
-    task = next(t for t in content["assignments"] if t["id"] == "spar_rookies")
-    label = scene._reward_label(task)
-    assert "~130 cr" in label
-    assert f"~{task['xp']} XP (+20/stat)" in label
+    spar = next(t for t in content["assignments"] if t["id"] == "spar_rookies")
+    assert scene._reward_label(spar) == "~130 cr, ~20 XP to all skills"
+    sweep = next(t for t in content["assignments"] if t["id"] == "sweep_hangar")
+    assert scene._reward_label(sweep) == "~60 cr, ~20 XP to Stamina"
+    convoy = next(t for t in content["assignments"] if t["id"] == "escort_convoy")
+    assert ("~20 XP to Strength, Stamina, Agility and Durability"
+            in scene._reward_label(convoy))
 
 
 def test_jobs_without_a_reward_do_not_advertise_it(content):
@@ -142,3 +145,58 @@ def test_the_ops_console_never_offers_a_ride(content):
     assert not any("Fly to" in l for l in labels)
     for label, disabled, callback in scene.submenu["items"]:
         assert disabled or label == "Close", label
+
+
+# --- targeted assignment XP (M24) ---
+
+def test_a_job_trains_only_what_it_names(content):
+    from game.hub import dispatch
+
+    state = FakeApp(content).game_state
+    task = next(t for t in content["assignments"] if t["id"] == "sweep_hangar")
+    assert task["trains"] == ["stamina"]
+    dispatch.send(content, state, task, ["iron_man"])
+    dispatch.process_day(content, state)
+    gains = state["roster"]["iron_man"]["attribute_xp"]
+    assert set(gains) == {"stamina"}                # nothing else moved
+    assert gains["stamina"] >= task["xp"] * config.DISPATCH_MULT_MIN
+
+
+def test_award_targets_each_named_attribute_in_full(content):
+    from game.progression import attributes as attrs
+    boosts = content["characters"]["captain_america"]["boosts"]
+    entry = {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
+             "perk_choices": {}, "gear": {}, "ult_charge": 0, "energy": 100}
+    gain = attrs.award_attribute_xp(boosts, entry, 40, ["speed", "agility"])
+    assert gain["per_attribute"] == {"speed": 40, "agility": 40}   # each, not split
+    assert entry["attribute_xp"] == {"speed": 40, "agility": 40}
+    # None means all six
+    fresh = dict(entry, attribute_xp={}, trained_ranks={})
+    attrs.award_attribute_xp(boosts, fresh, 10, None)
+    assert set(fresh["attribute_xp"]) == set(config.ATTRIBUTES)
+
+
+def test_a_maxed_attribute_is_skipped_not_wasted(content):
+    from game.progression import attributes as attrs
+    boosts = content["characters"]["captain_america"]["boosts"]
+    entry = {"trained_ranks": {"speed": config.TRAINED_MAX},
+             "attribute_xp": {}, "perks": [], "perk_choices": {}, "gear": {},
+             "ult_charge": 0, "energy": 100}
+    gain = attrs.award_attribute_xp(boosts, entry, 40, ["speed", "agility"])
+    assert gain["per_attribute"] == {"agility": 40}
+
+
+def test_trains_label_reads_naturally():
+    from game.hub import dispatch
+    assert dispatch.trains_label(None) == "all skills"
+    assert dispatch.trains_label(list(config.ATTRIBUTES)) == "all skills"
+    assert dispatch.trains_label(["stamina"]) == "Stamina"
+    assert dispatch.trains_label(["speed", "agility"]) == "Speed and Agility"
+    assert (dispatch.trains_label(["strength", "stamina", "agility"])
+            == "Strength, Stamina and Agility")
+
+
+def test_every_shipped_job_names_a_real_attribute(content):
+    for task in content["assignments"]:
+        for attribute in task.get("trains") or []:
+            assert attribute in config.ATTRIBUTES, task["id"]

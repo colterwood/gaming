@@ -92,6 +92,16 @@ def backfill_spots(content, state):
                 else list(FALLBACK_SPOT)
 
 
+def trains_label(attributes):
+    """'Stamina' / 'Strength, Stamina and Agility' / 'all skills' (M24)."""
+    if not attributes or len(attributes) >= len(config.ATTRIBUTES):
+        return "all skills"
+    names = [a.title() for a in attributes]
+    if len(names) == 1:
+        return names[0]
+    return ", ".join(names[:-1]) + f" and {names[-1]}"
+
+
 def send(content, state, task, hero_ids):
     """Dispatch hero_ids on a board task. Returns (ok, message)."""
     hero_ids = list(hero_ids)
@@ -126,7 +136,9 @@ def send(content, state, task, hero_ids):
     days = task.get("days", 1)
     job = {"task_id": task["id"], "name": task["name"], "heroes": hero_ids,
            "days_left": days, "credits": int(round(task["credits"] * mult)),
-           "xp": int(round(task.get("xp", 0) * mult))}
+           "xp": int(round(task.get("xp", 0) * mult)),
+           # M24: xp is per-attribute now, and `trains` says which ones.
+           "trains": list(task["trains"]) if task.get("trains") else None}
     if task.get("requested_by"):                        # NPC request (M11)
         job["requested_by"] = task["requested_by"]
         job["bond"] = task.get("bond", 0)
@@ -175,17 +187,19 @@ def process_day(content, state):
             entry = state.get("roster", {}).get(hero_id)
             if entry and job["xp"]:
                 # M21: away work trains them the same way field work does —
-                # straight onto the attributes, not into a bank.
-                attrs.award_battle_xp(
+                # straight onto the attributes, not into a bank. M24: into
+                # the specific attributes the job trains.
+                gain = attrs.award_attribute_xp(
                     content["characters"][hero_id].get("boosts", {}),
-                    entry, job["xp"])
-                mastery.log_mastery_xp(entry, job["xp"])
+                    entry, job["xp"], job.get("trains"))
+                mastery.log_mastery_xp(
+                    entry, job["xp"] * max(1, len(gain["per_attribute"])))
         _release(state, job)
         active(state).remove(job)
         names = " and ".join(content["characters"][h]["name"] for h in job["heroes"])
         reward = f"+{job['credits']} cr"
         if job["xp"]:
-            reward += f", +{job['xp']} XP each"
+            reward += f", +{job['xp']} XP to {trains_label(job.get('trains'))}"
         messages.append(f"{job['name']} done - {names} return(s). {reward}.")
         requester = job.get("requested_by")             # NPC request (M11)
         if requester and job.get("bond"):

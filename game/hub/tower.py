@@ -992,14 +992,13 @@ class HubScene:
                 f"{days} Day{'s' if days != 1 else ''}")
 
     def _reward_label(self, task):
-        """Everything a board job pays out (M23). XP is quoted per stat
-        because M21 splits it across the six; the '~' is the M11 crew-power
-        multiplier, which isn't known until you pick who goes."""
+        """Everything a board job pays out (M23). M24: XP is per attribute
+        and named — a job trains specific things. The '~' is the M11
+        crew-power multiplier, unknown until you pick who goes."""
         parts = [f"~{task['credits']} cr"]
         if task.get("xp"):
-            per_stat = task["xp"] // len(config.ATTRIBUTES)
-            parts.append(f"~{task['xp']} XP (+{per_stat}/stat)"
-                         if per_stat else f"~{task['xp']} XP")
+            parts.append(f"~{task['xp']} XP to "
+                         f"{dispatch.trains_label(task.get('trains'))}")
         if task.get("bond") and task.get("requested_by"):
             name = self.content["characters"][task["requested_by"]]["name"]
             parts.append(f"+{task['bond']} bond with {name}")

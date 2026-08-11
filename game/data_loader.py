@@ -310,7 +310,16 @@ def load_assignments(data_dir=None):
         days = _require(task, "days", int, tw)
         if days < 1:
             raise DataError(f"{tw}: days must be >= 1")
-        _require(task, "xp", int, tw)
+        _require(task, "xp", int, tw)       # M24: PER ATTRIBUTE, not a total
+        trains = task.get("trains")         # which attributes; absent = all six
+        if trains is not None:
+            if not isinstance(trains, list) or not trains:
+                raise DataError(f"{tw}: trains must be a non-empty list")
+            unknown = [a for a in trains if a not in config.ATTRIBUTES]
+            if unknown:
+                raise DataError(f"{tw}: trains has unknown attributes {unknown}")
+            if len(set(trains)) != len(trains):
+                raise DataError(f"{tw}: trains repeats an attribute")
         if "once" in task and not isinstance(task["once"], bool):
             raise DataError(f"{tw}: once must be a boolean")
         tier = _require(task, "tier", int, tw)          # board tiers (M11)

@@ -900,6 +900,38 @@ from that menu.*
 instead of guarding every turn; open the board and read what each job
 pays before sending anyone.*
 
+**M24 — Assignments train specific skills** *(added post-POC)*.
+- A board task's `xp` is now **per attribute**, not a total to divide, and
+  an optional `trains` list names which attributes it feeds (absent = all
+  six). Sweeping the hangar is +20 Stamina; a boot camp is +40 to all six.
+  `attrs.award_attribute_xp` pays it; `dispatch.trains_label` renders it
+  ("Stamina", "Strength, Stamina and Agility", "all skills"); the job
+  snapshots `trains` at send time alongside the M11 crew multiplier.
+- **Budget check** (a dispatched hero is off the team for the whole job,
+  exactly like one on the rack or the passive train assignment, so XP/day
+  is the fair yardstick). Passive "Attribute training" pays 40/day into
+  one attribute; the rack pays 250/day at level 1 rising to 1,200/day at
+  level 7+, all into one attribute. Against that baseline:
+
+  | tier | shape | XP/day | vs passive-40 |
+  |---|---|---|---|
+  | 1 | +20-25 to one attribute | 10-25 | 0.2-0.6x |
+  | 1 | Spar, +20 to all six, 1 day | 120 | 3x |
+  | 2 | +40 to one attribute | 20 | 0.5x |
+  | 2 | Expo/Boot Camp, 3-6 attributes | 120 | 3x |
+  | 3 | Deep Recon, +60 to all six, 2 days | 180 | 4.5x |
+  | 3 | U.N. Delegation, +60 to all six, **1 day** | **360** | **9x** |
+
+  Single-attribute jobs sit *below* the passive assignment and trade that
+  XP for credits — correct. The broad jobs at 3-4.5x are a real but
+  supplementary parallel track. The U.N. Delegation is the outlier: 360
+  XP/day across all six matches the rack's whole-campaign average rate
+  (~333/day) while spreading over every attribute, so repeating it masters
+  a hero in ~125 days for zero energy — as fast as the rack. Halving it,
+  or making it a 2-day job like Deep Recon, brings it in line at 180/day.
+*AC: send a hero to sweep the hangar and see Stamina move and nothing
+else; read "+20 XP to Stamina" on the board before sending them.*
+
 ---
 
 ## 10. CLAUDE.md Starter (place at repo root)

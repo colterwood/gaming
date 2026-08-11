@@ -120,6 +120,25 @@ def award_battle_xp(boosts, roster_entry, xp):
             "ranks_gained": ranks_gained}
 
 
+def award_attribute_xp(boosts, roster_entry, amount, attributes=None):
+    """Targeted XP (M24): `amount` into EACH named attribute — what a board
+    job pays. Unlike award_battle_xp this is not a total to divide up; a job
+    that trains one thing puts the whole amount there. `attributes` None
+    means all six. Maxed attributes are skipped."""
+    amount = max(0, int(amount))
+    wanted = list(attributes) if attributes else list(config.ATTRIBUTES)
+    per_attribute, ranks_gained = {}, []
+    if not amount:
+        return {"per_attribute": per_attribute, "ranks_gained": ranks_gained}
+    for attribute in wanted:
+        if not can_train(boosts, roster_entry, attribute):
+            continue
+        result = add_training_xp(boosts, roster_entry, attribute, amount)
+        per_attribute[attribute] = amount
+        ranks_gained += [(attribute, r) for r in result["ranks_gained"]]
+    return {"per_attribute": per_attribute, "ranks_gained": ranks_gained}
+
+
 def pending_perk_tier(roster_entry, attribute):
     """The lowest §6.3 perk tier (trained rank 3 or 6) reached but not yet
     chosen for this attribute, or None."""

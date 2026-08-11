@@ -117,15 +117,18 @@ def test_npc_request_pays_bond_on_completion(content):
 def test_two_hero_dispatch_pays_once_and_banks_both(content):
     state = state_with(["iron_man", "captain_america", "ant_man"],
                        ["iron_man", "captain_america", "ant_man"])
-    task = task_by_id(content, "escort_convoy")     # 2 heroes, 2 days, 280/80
+    task = task_by_id(content, "escort_convoy")     # 2 heroes, 2 days
     mult = dispatch.reward_mult(content, state, ["iron_man", "ant_man"])
     dispatch.send(content, state, task, ["iron_man", "ant_man"])
     assert dispatch.process_day(content, state) == []       # night 1: away
     dispatch.process_day(content, state)                    # night 2: home
-    assert state["credits"] == round(280 * mult)    # paid ONCE
-    each = round(80 * mult)      # M21: onto the attributes, not into a bank
-    assert sum(state["roster"]["iron_man"]["attribute_xp"].values()) == each
-    assert sum(state["roster"]["ant_man"]["attribute_xp"].values()) == each
+    assert state["credits"] == round(task["credits"] * mult)    # paid ONCE
+    # M21 applies it to attributes; M24 aims it at the ones the job trains
+    each = round(task["xp"] * mult)
+    for hero_id in ("iron_man", "ant_man"):
+        gains = state["roster"][hero_id]["attribute_xp"]
+        assert set(gains) == set(task["trains"]), hero_id
+        assert all(v == each for v in gains.values()), gains
 
 
 def test_two_hero_request_pays_bond_once_per_job(content):
