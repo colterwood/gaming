@@ -12,11 +12,12 @@ import pygame
 
 from game import config
 from game.core import calendar as cal
-from game.core import clock, energy
+from game.core import clock, energy, inventory
 from game.core.state_machine import GameState
-from game.hub import activities, dispatch, field, party as party_mod, passive, story
+from game.hub import (activities, dispatch, field, party as party_mod, passive,
+                      story, unlocks)
 from game.social import bonds, dialogue, events
-from game.ui import pixelkit, sprites, widgets
+from game.ui import audio, pixelkit, sprites, widgets
 
 TILE = 16
 HUD_H = 20
@@ -162,6 +163,7 @@ class HubScene:
         self._search_shade = pygame.Surface((TILE, TILE), pygame.SRCALPHA)
         self._search_shade.fill((0, 0, 0, 110))     # dims rummaged crates
         self.messages = []
+        self.log_scroll = 0         # pages back through the log (M19)
         self.tick_accum = 0.0
         self.ambush_accum = 0.0
         self.rng = random.Random()
@@ -178,7 +180,23 @@ class HubScene:
 
     def log(self, message):
         self.messages.append(message)
-        self.messages = self.messages[-3:]
+        self.messages = self.messages[-config.LOG_HISTORY_MAX:]
+        self.log_scroll = 0     # a new line always snaps back to the newest
+
+    def scroll_log(self, pages):
+        """Page the log window back through history (pages > 0) or forward
+        again (M19). Clamped at both ends; a no-op with nothing to show."""
+        window = config.LOG_VISIBLE_LINES
+        furthest = max(0, len(self.messages) - window)
+        self.log_scroll = max(0, min(furthest, self.log_scroll + pages * window))
+        return self.log_scroll
+
+    def visible_log(self):
+        """(lines, older, newer) — the window on screen plus how many
+        messages sit off it in each direction."""
+        end = len(self.messages) - self.log_scroll
+        start = max(0, end - config.LOG_VISIBLE_LINES)
+        return self.messages[start:end], start, self.log_scroll
 
     def reset_modes(self):
         self.mode = "normal"
@@ -316,6 +334,22 @@ class HubScene:
                 for i, (tx, ty) in enumerate(quest["scout_points"])
                 if i not in done]
 
+    def _grove_targets(self, state):
+        """[(arc, index, label, [(x, y), ...])] for the tree stands a live
+        side arc still wants worked in this zone (M17). Distance is measured
+        to the nearest TILE of the stand, so standing beside any tree of a
+        clump reaches it."""
+        found = []
+        if self.area == "tower":
+            return found
+        for arc in unlocks.active_arcs(self.content, state, self.area):
+            for index in unlocks.searchable(state, arc):
+                tiles = [(tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2)
+                         for tx, ty in arc["search_groves"][index]["tiles"]]
+                found.append((arc, index,
+                              unlocks.action_label(state, arc, index), tiles))
+        return found
+
     def _stations_here(self):
         found = []
         for ty, row in enumerate(self._map()):
@@ -368,6 +402,11 @@ class HubScene:
             if d < best_d:
                 best, best_d = ("scout", i,
                                 quest.get("action_label", "Scout")), d
+        for arc, i, label, tiles in self._grove_targets(state):
+            for x, y in tiles:
+                d = (x - self.px) ** 2 + (y - self.py) ** 2
+                if d < best_d:
+                    best, best_d = ("grove", (arc["id"], i), label), d
         target = self._mission_target(state)
         if target:
             quest, x, y = target
@@ -383,6 +422,10 @@ class HubScene:
             return
         state = app.game_state
         if self.mode == "normal":
+            queued = unlocks.pop_scene(state)    # story-arc beats first (M17)
+            if queued:
+                self._play_scene(queued)
+                return
             pending = events.pending_bond_events(state, self.content["bond_scenes"])
             if pending:
                 self.scene = pending[0]
@@ -468,6 +511,10 @@ class HubScene:
                 self._interact(app, hit)
         elif key == pygame.K_i:
             self._open_rations(app)
+        elif key == pygame.K_PAGEUP:            # M19: read what scrolled by
+            self.scroll_log(1)
+        elif key == pygame.K_PAGEDOWN:
+            self.scroll_log(-1)
         elif key in (pygame.K_p, pygame.K_ESCAPE):
             app.machine.transition(GameState.PAUSE)
 
@@ -508,6 +555,8 @@ class HubScene:
             self._search_crate(app, *ident)
         elif kind == "scout":
             self._do_scout_point(app, ident)
+        elif kind == "grove":
+            self._search_grove(app, *ident)
         elif ident == "bed":
             app.go_to_sleep(passed_out=False)
         elif ident == "elevator":
@@ -564,6 +613,10 @@ class HubScene:
             zone = self.content["zones"][destination]
             self.log(f"{zone['name']} - danger {'!' * zone['danger']}. "
                      f"Stay sharp.")
+            for arc in unlocks.active_arcs(self.content, app.game_state,
+                                           destination):
+                if arc.get("zone_hint"):
+                    self.log(arc["zone_hint"])
         self._place_at_spawn()
         self._after_action(app)
 
@@ -590,6 +643,20 @@ class HubScene:
         self.reset_modes()
         self._after_action(app)
 
+    def _search_grove(self, app, arc_id, index):
+        """Comb one stand of trees for a side arc's lost thing (M17). The
+        stand that hides it rolls straight into the pickup attempt — which
+        only works if the arc's named hero is on the team."""
+        state = app.game_state
+        arc = next((a for a in self.content["unlocks"] if a["id"] == arc_id),
+                   None)
+        if arc is None:
+            return
+        result = unlocks.search(self.content, state, arc, index)
+        self.log(result["message"])
+        self.reset_modes()
+        self._after_action(app)
+
     # ------------------------------------------------- zone searching (M10)
 
     def _search_crate(self, app, tx, ty):
@@ -599,59 +666,64 @@ class HubScene:
         clock.advance(state, config.SEARCH_MINUTES)
         result = field.search_loot(zone, self.rng)
         if result["trap"]:
-            squad = field.trap_squad(zone["danger"], self.rng)
+            squad = field.trap_squad(zone["danger"],
+                                     len(self._party(state)), self.rng)
             self.log(f"Booby-trapped! A HYDRA squad of {len(squad)} springs out!")
             app.start_battle(enemy_ids=squad, ambush=True)
             return
         found = []
+        left_behind = None
         if result["credits"]:
             state["credits"] += result["credits"]
             found.append(f"{result['credits']} cr")
         if result["item"]:
             item = self.content["items"][result["item"]]
-            state["inventory"][item["id"]] = state["inventory"].get(item["id"], 0) + 1
-            found.append(item["name"])
+            if inventory.add(state, item["id"], 1)["ok"]:
+                found.append(item["name"])
+            else:               # M18: a full bag leaves loot in the crate
+                left_behind = item["name"]
         self.log(("Found " + " + ".join(found) + ".") if found
                  else "Nothing but rats and packing foam.")
+        if left_behind:
+            self.log(f"No room for the {left_behind} - {inventory.label(state)}.")
         self._after_action(app)
 
     # -------------------------------------------------------- rations (M10)
 
+    def _rations(self, state):
+        return [(iid, n) for iid, n in sorted(state["inventory"].items())
+                if n > 0 and self.content["items"].get(iid, {}).get("energy")]
+
     def _open_rations(self, app):
         state = app.game_state
-        foods = [(iid, n) for iid, n in sorted(state["inventory"].items())
-                 if n > 0 and self.content["items"].get(iid, {}).get("energy")]
+        foods = self._rations(state)
         if not foods:
             self.log("No rations in the bag - the cafe and street carts sell food.")
             return
+        # M18: a ration feeds the WHOLE team, so there's nobody to pick.
+        full = all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
+                   for h in self._party(state))
         items = []
         for iid, n in foods:
             item = self.content["items"][iid]
-            items.append((f"{item['name']} x{n}  (+{item['energy']} EN)", False,
-                          (lambda a, i=iid: self._open_eat_menu(a, i))))
+            items.append((f"{item['name']} x{n}  (+{item['energy']} EN team)"
+                          + ("  [team full]" if full else ""), full,
+                          (lambda a, i=iid: self._eat(a, i))))
         items.append(("Never mind", False, None))
-        self._open_submenu("Rations", items)
+        self._open_submenu(f"Rations - team EN {energy.team_energy(state)}",
+                           items)
 
-    def _open_eat_menu(self, app, item_id):
+    def _eat(self, app, item_id):
         state = app.game_state
-        item = self.content["items"][item_id]
-        items = []
-        for hero_id in self._party(state):
-            en = energy.hero_energy(state, hero_id)
-            full = en >= config.DAILY_ENERGY
-            name = self.content["characters"][hero_id]["name"]
-            items.append((f"{name}  EN {en}" + ("  [full]" if full else ""),
-                          full, (lambda a, h=hero_id: self._eat(a, h, item_id))))
-        items.append(("Never mind", False, None))
-        self._open_submenu(f"{item['name']}: who eats?", items)
-
-    def _eat(self, app, hero_id, item_id):
-        result = activities.eat_food(app.game_state, self.content,
-                                     hero_id, item_id)
+        result = activities.eat_food(state, self.content, item_id)
         self.log(result["message"])
         self.reset_modes()
-        if result["ok"]:
-            self._open_rations(app)     # keep feeding the team
+        # M18: one ration does the whole team, so only stay in the menu if
+        # there is both something left to eat and someone still short.
+        hungry = any(energy.hero_energy(state, h) < config.DAILY_ENERGY
+                     for h in self._party(state))
+        if result["ok"] and hungry and self._rations(state):
+            self._open_rations(app)
         self._after_action(app)
 
     def _interact_char(self, app, char_id):
@@ -675,7 +747,7 @@ class HubScene:
                     f"{char['name']} - on assignment",
                     [(f"{job['name']} - back in {job['days_left']} day(s)",
                       True, None),
-                     (f"Recall (abandon, no reward)", False,
+                     ("Recall (abandon, no reward)", False,
                       (lambda a, tid=job["task_id"]:
                        self._recall_dispatch(a, tid))),
                      ("Never mind", False, None)])
@@ -705,6 +777,14 @@ class HubScene:
         if entry is not None:
             title += f"  EN {energy.hero_energy(state, char_id)}"
         self._open_submenu(title, items)
+
+    def _play_scene(self, scene):
+        """Put a queued story scene on screen, with its sound if it has one
+        (M17: the Thor signal lands on a thunder crack)."""
+        self.scene = scene
+        self.scene_line = 0
+        self.mode = "scene"
+        audio.play(scene.get("sound"))
 
     def _show_line(self, char_id, line):
         """Pop a one-line dialogue box (transient scene — nothing marked
@@ -813,7 +893,6 @@ class HubScene:
         self.reset_modes()
 
     def _open_assign_menu(self, app, hero_id):
-        state = app.game_state
         name = self.content["characters"][hero_id]["name"]
         items = []
         for attribute in config.ATTRIBUTES:
@@ -857,7 +936,8 @@ class HubScene:
         items.append(("Close", False, None))
         tag = "  (SALE!)" if discount < 1.0 else ""
         title = "Tower Shop" if self.area == "tower" else "Street Cart"
-        self._open_submenu(f"{title} - {state['credits']} cr{tag}", items)
+        self._open_submenu(f"{title} - {state['credits']} cr, "
+                           f"{inventory.label(state)}{tag}", items)
 
     def _buy(self, app, item):
         state = app.game_state
@@ -872,7 +952,8 @@ class HubScene:
         days; they can't rejoin the party until they return or are recalled.
         M11: tiers unlock with team power; NPC requests pay bond."""
         state = app.game_state
-        tier = dispatch.roster_tier(self.content, state)
+        activities.check_board(state)       # M20: read in person, then the
+        tier = dispatch.roster_tier(self.content, state)     # card knows it
         power = dispatch.team_power(self.content, state)
         items = []
         for task in activities.assignment_tasks_today(
@@ -999,24 +1080,45 @@ class HubScene:
                     total = len(quest["scout_points"])
                     items.append((f"  Progress: {worked}/{total} spots worked",
                                   True, None))
-                items.append((f"  Fly to {where} now", False,
-                              (lambda a, z=quest["location"]: self._travel(a, z))))
+                # M22: no taxi. Accepting a job tells you where it is; getting
+                # there is the player's own trip to the Quinjet.
+                items.append(("  Get to the Quinjet when you're ready.",
+                              True, None))
             desc = quest["desc"]
             items.append((desc if len(desc) <= 44 else desc[:41] + "...",
                           True, None))
+        items.extend(self._ops_unlock_rows(state))
         items.append((f"Quest log: {done}/{len(self.content['story'])} complete",
                       True, None))
         items.append(("Close", False, None))
         self._open_submenu("Ops Console", items)
 
+    def _ops_unlock_rows(self, state):
+        """Side arcs run alongside the mission chain (M17), so the console
+        lists whatever signal is currently open and flies you to it."""
+        rows = []
+        for arc in unlocks.active_arcs(self.content, state):
+            zone = self.content["zones"].get(arc["location"], {})
+            where = zone.get("name", "?")
+            rows.append((f"SIGNAL - {arc['name']}", True, None))
+            rows.append((f"  Where: {where}  [{'!' * zone.get('danger', 0)}]",
+                         True, None))
+            if unlocks.status(state, arc) == "found":
+                rows.append(("  Found it - someone has to lift it", True, None))
+            else:
+                total = len(arc["search_groves"])
+                rows.append((f"  Searched: {len(unlocks.searched(state, arc))}"
+                             f"/{total} stands of trees", True, None))
+            rows.append((f"  Fly to {where} now", False,
+                         (lambda a, z=arc["location"]: self._travel(a, z))))
+        return rows
+
     def _accept_quest(self, app, quest):
         result = story.accept(app.game_state, quest)
         self.log(result["message"])
         if result["ok"]:
-            self._open_ops(app)     # reopen showing the flight option, with
-            self.submenu["index"] = next(   # the cursor on an actionable row
-                (i for i, (_, disabled, cb) in enumerate(self.submenu["items"])
-                 if not disabled and cb is not None), 0)
+            self._open_ops(app)     # reopen on the briefing (M22: there is
+            self.submenu["index"] = 0       # no flight to jump the cursor to)
         else:
             self.reset_modes()
 
@@ -1153,11 +1255,9 @@ class HubScene:
         self._draw_entities(surface, state)
         self._draw_hud(surface, state)
         self._draw_prompt(surface, state)
-        for i, msg in enumerate(self.messages):
-            pixelkit.text(surface, msg, 12, "white",
-                          topleft=(6, config.HEIGHT - 42 + i * 13), shadow="ink")
+        self._draw_log(surface)
         if self.mode == "normal":
-            pixelkit.text(surface, "I: rations", 11, "grey",
+            pixelkit.text(surface, "I: rations   PgUp/PgDn: log", 11, "grey",
                           topright=(config.WIDTH - 6, config.HEIGHT - 14))
 
         if self.mode == "submenu" and self.submenu:
@@ -1180,15 +1280,46 @@ class HubScene:
         elif self.mode == "scene" and self.scene:
             self._draw_scene(surface)
 
+    def _draw_log(self, surface):
+        """The message window, with counts of what sits off it either way
+        (M19). Sits clear of the hint bar so a long line can't run into it."""
+        lines, older, newer = self.visible_log()
+        top = config.HEIGHT - 30 - config.LOG_VISIBLE_LINES * 13
+        for i, msg in enumerate(lines):
+            pixelkit.text(surface, msg, 12, "white",
+                          topleft=(6, top + i * 13), shadow="ink")
+        if older:
+            pixelkit.text(surface, f"^{older}", 11, "gold",
+                          topright=(config.WIDTH - 6, top), shadow="ink")
+        if newer:
+            pixelkit.text(surface, f"v{newer}", 11, "gold",
+                          topright=(config.WIDTH - 6, top + 13), shadow="ink")
+
     def _draw_map(self, surface, state):
         in_zone = self.area != "tower"
+        spent = self._worked_grove_tiles(state) if in_zone else set()
         for ty, row in enumerate(self._map()):
             for tx in range(MAP_W):
                 surface.blit(sprites.tile(self._tile_name(row[tx])),
                              (tx * TILE, HUD_H + ty * TILE))
-                if (in_zone and row[tx] == "x"
-                        and activities.spot_searched(state, self.area, tx, ty)):
+                if in_zone and ((row[tx] == "x"
+                                 and activities.spot_searched(state, self.area,
+                                                              tx, ty))
+                                or (tx, ty) in spent):
                     surface.blit(self._search_shade, (tx * TILE, HUD_H + ty * TILE))
+
+    def _worked_grove_tiles(self, state):
+        """Tiles of stands already combed out, dimmed like a rummaged crate.
+        The one still holding the item stays lit even after it's found."""
+        spent = set()
+        for arc in unlocks.active_arcs(self.content, state, self.area):
+            live = set(unlocks.searchable(state, arc))
+            for index in unlocks.searched(state, arc):
+                if index in live:
+                    continue
+                spent.update(tuple(t) for t in
+                             arc["search_groves"][index]["tiles"])
+        return spent
 
     def _draw_entities(self, surface, state):
         entities = [(cid, x, y, False, 0)
@@ -1201,6 +1332,15 @@ class HubScene:
             points = [(x, y - 6), (x + 5, y), (x, y + 6), (x - 5, y)]
             pygame.draw.polygon(surface, pixelkit.color("gold"), points)
             pygame.draw.polygon(surface, pixelkit.color("ink"), points, width=1)
+        for arc, index, _, tiles in self._grove_targets(state):
+            # Only the FOUND stand gets a marker — the hunt itself is on foot.
+            if unlocks.status(state, arc) != "found":
+                continue
+            x = sum(t[0] for t in tiles) // len(tiles)
+            y = sum(t[1] for t in tiles) // len(tiles)
+            points = [(x, y - 7), (x + 6, y), (x, y + 7), (x - 6, y)]
+            pygame.draw.polygon(surface, pixelkit.color("sky"), points)
+            pygame.draw.polygon(surface, pixelkit.color("white"), points, width=1)
         party = self._party(state)
         bob = int(self.walk_bob) % 2
         for i, hero_id in enumerate(party):

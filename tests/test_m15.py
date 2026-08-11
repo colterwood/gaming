@@ -34,7 +34,7 @@ def content():
 
 def entry(**ranks):
     e = {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
-         "perk_choices": {}, "energy": 100, "unspent_xp": 0}
+         "perk_choices": {}, "energy": 100}
     for attribute, rank in ranks.items():
         e["trained_ranks"][attribute] = rank - config.RANK_START
     return e
@@ -270,13 +270,13 @@ def test_ult_charge_carries_in(content):
 
 # --- ambush size table ---
 
-def test_ambush_always_outnumbers_and_never_doubles():
+def test_ambush_always_outnumbers_and_respects_the_cap():
     rng = random.Random(7)
     for party_size in (1, 2, 3, 4):
         for _ in range(400):
             size = field.ambush_size(party_size, rng)
             assert size > party_size
-            assert size <= party_size * config.AMBUSH_PARTY_MULTIPLE
+            assert size <= field.squad_cap(party_size)      # M20
             assert size <= config.AMBUSH_MAX_SIZE
 
 
@@ -292,10 +292,12 @@ def test_ambush_size_distribution_matches_the_table():
     assert counts[4] / 20000 == pytest.approx(0.05, abs=0.02)
 
 
-def test_small_party_ambush_is_capped_at_double():
+def test_small_party_ambush_is_capped_by_party_size():
+    # M20 replaced the "never more than double" rule with an explicit
+    # ceiling per party size: 4 on a lone hero, 6 on a pair.
     rng = random.Random(5)
-    sizes = {field.ambush_size(1, rng) for _ in range(300)}
-    assert sizes == {2}                          # a solo hero faces exactly 2
+    assert max(field.ambush_size(1, rng) for _ in range(400)) == 4
+    assert max(field.ambush_size(2, rng) for _ in range(400)) == 6
 
 
 # --- hidden board requirements + Coulson refusals ---

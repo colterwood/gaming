@@ -36,5 +36,7 @@
   {"id": "shawarma", "name": "Shawarma Wrap", "kind": "consumable",
    "price": 60, "sources": ["tower_cafe", "street_cart"], "energy": 25},
   {"id": "power_smoothie", "name": "Jarvis's Power Smoothie", "kind": "consumable",
-   "price": 110, "sources": ["tower_cafe"], "energy": 40}
+   "price": 110, "sources": ["tower_cafe"], "energy": 40},
+  {"id": "stormbreaker", "name": "Stormbreaker", "kind": "artifact",
+   "price": 0, "sources": ["midtown"]}
 ]

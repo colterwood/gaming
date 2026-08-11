@@ -28,7 +28,7 @@ def content():
 
 def entry():
     return {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
-            "perk_choices": {}, "energy": 100, "unspent_xp": 0}
+            "perk_choices": {}, "energy": 100}
 
 
 def game_state(content):
@@ -179,16 +179,18 @@ def test_training_costs_scale_with_rank(content):
     assert activities.training_cost(9) == (60, 2400)
 
 
-def test_banked_battle_xp_double_dips(content):
+def test_a_session_grants_its_own_yield_and_nothing_else(content):
+    # M21: the battle-XP bank is gone, so a session is worth exactly the
+    # facility-multiplied table value - no top-up, nothing reserved.
     state = game_state(content)
     cap = state["roster"]["captain_america"]
-    cap["unspent_xp"] = 100
     session = config.TRAINING_XP_BY_LEVEL[1]            # 25 at level 1
     activities.start_training(state, content, "captain_america", "strength")
-    assert cap["unspent_xp"] == 100 - session           # banked slice reserved
+    assert cap.get("unspent_xp", 0) == 0        # nothing reserved from a bank
+    assert cap["training"]["xp"] == session
+    assert "banked" not in cap["training"]
     activities.finish_due_training(state, content, force=True)
-    # a session grants its yield plus an equal slice of banked battle XP
-    assert cap["attribute_xp"]["strength"] == session * 2
+    assert cap["attribute_xp"]["strength"] == session
     assert cap["trained_ranks"].get("strength", 0) == 0
 
 

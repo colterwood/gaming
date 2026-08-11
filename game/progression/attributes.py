@@ -92,6 +92,34 @@ def add_training_xp(boosts, roster_entry, attribute, xp):
             "perk_pending": pending_perk_tier(roster_entry, attribute)}
 
 
+def award_battle_xp(boosts, roster_entry, xp):
+    """Earned-in-the-field XP (M21): applied to the hero's attributes on the
+    spot, split evenly across the six.
+
+    It runs through add_training_xp, so the innate boost buys exactly what
+    it buys on the rack — the XP number is the same for everyone, but a
+    high-boost attribute needs fewer of them per rank (xp_for_rank is
+    boost-weighted). Maxed attributes drop out of the split rather than
+    swallowing their share, so nothing earned is lost.
+    """
+    xp = max(0, int(xp))
+    trainable = [a for a in config.ATTRIBUTES
+                 if can_train(boosts, roster_entry, a)]
+    if not xp or not trainable:
+        return {"xp": xp, "per_attribute": {}, "ranks_gained": []}
+    base, extra = divmod(xp, len(trainable))
+    per_attribute, ranks_gained = {}, []
+    for i, attribute in enumerate(trainable):
+        amount = base + (1 if i < extra else 0)      # remainder, not rounding
+        if not amount:
+            continue
+        result = add_training_xp(boosts, roster_entry, attribute, amount)
+        per_attribute[attribute] = amount
+        ranks_gained += [(attribute, r) for r in result["ranks_gained"]]
+    return {"xp": xp, "per_attribute": per_attribute,
+            "ranks_gained": ranks_gained}
+
+
 def pending_perk_tier(roster_entry, attribute):
     """The lowest §6.3 perk tier (trained rank 3 or 6) reached but not yet
     chosen for this attribute, or None."""

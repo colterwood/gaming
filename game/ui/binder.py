@@ -4,7 +4,6 @@ grey slots with silhouettes. NPCs don't occupy pockets. Rendering only."""
 
 import pygame
 
-from game import config
 from game.ui import pixelkit, sprites
 
 

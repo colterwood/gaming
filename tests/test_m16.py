@@ -12,7 +12,6 @@ from game.core import calendar as cal
 from game.core import clock, save
 from game.core.state_machine import GameState
 from game.hub import activities
-from game.progression import attributes as attrs
 
 
 @pytest.fixture(scope="module")
@@ -23,7 +22,7 @@ def content():
 def entry(**levels):
     e = {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
          "perk_choices": {}, "gear": {}, "ult_charge": 0,
-         "energy": 100, "unspent_xp": 0}
+         "energy": 100}
     for attribute, level in levels.items():
         e["trained_ranks"][attribute] = level - config.RANK_START
     return e
@@ -144,7 +143,7 @@ def test_session_cost_and_yield_follow_the_level(content):
 
 # --- battle XP: participants bank it, the fallen bank half ---
 
-def test_ko_participants_bank_half_xp(content):
+def test_ko_participants_earn_half_xp(content):
     from game.__main__ import App
     app = App()
     app.game_state = two_hero_state()
@@ -162,8 +161,12 @@ def test_ko_participants_bank_half_xp(content):
                              rewards=lambda: {"credits": 10, "xp": 100})
     app.finish_battle(engine)
     roster = app.game_state["roster"]
-    assert roster["iron_man"]["unspent_xp"] == 100
-    assert roster["captain_america"]["unspent_xp"] == int(100 * config.KO_XP_MULT)
+    # M21: it lands on the attributes now instead of banking. A KO'd
+    # participant still earns KO_XP_MULT of the standing hero's share.
+    assert sum(roster["iron_man"]["attribute_xp"].values()) == 100
+    assert (sum(roster["captain_america"]["attribute_xp"].values())
+            == int(100 * config.KO_XP_MULT))
+    assert roster["iron_man"].get("unspent_xp", 0) == 0   # nothing banked
 
 
 def test_enemy_levels_drive_battle_xp(content):

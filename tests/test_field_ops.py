@@ -18,7 +18,7 @@ def content():
 
 def entry():
     return {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
-            "perk_choices": {}, "energy": 100, "unspent_xp": 0}
+            "perk_choices": {}, "energy": 100}
 
 
 def state_with(content, roster_ids, party_ids):

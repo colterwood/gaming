@@ -18,7 +18,7 @@ def fresh_state():
     for hid in ("iron_man", "captain_america"):
         state["roster"][hid] = {"trained_ranks": {}, "attribute_xp": {},
                                 "perks": [], "perk_choices": {}, "gear": {},
-                                "ult_charge": 0, "energy": 100, "unspent_xp": 0}
+                                "ult_charge": 0, "energy": 100}
     state["party"] = ["iron_man", "captain_america"]
     return state
 
@@ -137,15 +137,38 @@ def test_mission_costs_and_launches():
     assert state["time_minutes"] == 360 + config.MISSION_MINUTES
 
 
-def test_mission_never_blocked_drains_to_zero():
-    # M11: a tired team can always engage — energy floors at 0 and the
+def test_mission_never_blocked_for_a_tired_team():
+    # M11: a tired team can always engage — energy just drains and the
     # M9 initiative penalty is the price.
     state = fresh_state()
-    state["roster"]["captain_america"]["energy"] = 10
+    state["roster"]["captain_america"]["energy"] = 50
     result = activities.launch_mission(state)
     assert result["ok"] and result["launch_battle"]
-    assert state["roster"]["captain_america"]["energy"] == 0
+    assert not result.get("passed_out")
+    assert state["roster"]["captain_america"]["energy"] == 10
     assert state["roster"]["iron_man"]["energy"] == 60
+
+
+def test_mission_collapse_makes_no_contact():
+    # M18: draining to 0 on the approach means the team never gets there.
+    # No battle launches, so nothing can complete on the way down.
+    state = fresh_state()
+    state["roster"]["captain_america"]["energy"] = config.MISSION_ENERGY
+    result = activities.launch_mission(state)
+    assert result["ok"] and result["passed_out"]
+    assert "launch_battle" not in result
+    assert state["roster"]["captain_america"]["energy"] == 0
+    assert activities.should_pass_out(state)
+
+
+def test_mission_started_too_late_makes_no_contact():
+    # The other way to collapse: three hours that run past 2 AM.
+    state = fresh_state()
+    state["time_minutes"] = config.DAY_END_MINUTES - config.MISSION_MINUTES + 10
+    result = activities.launch_mission(state)
+    assert result["ok"] and result["passed_out"]
+    assert "launch_battle" not in result
+    assert state["time_minutes"] == config.DAY_END_MINUTES
 
 
 def test_training_still_blocked_without_energy():

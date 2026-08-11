@@ -156,6 +156,28 @@ PORTRAITS["hulk"] = [
     "...kkkNNNNNNNNkkk...",
     "....kkkkkkkkkkkk....",
 ]
+PORTRAITS["thor"] = [       # winged helm, blond mane, red cape
+    "....kkkkkkkkkkkk....",
+    "..kkEEEEEEEEEEEEkk..",
+    ".keEEEEEEEEEEEEEEek.",
+    "keeEEEEkyyyykEEEEeek",
+    "keekEEEyyyyyyEEEkeek",
+    "kkeekEyyyyyyyyEkeekk",
+    ".kyyyyssssssssyyyyk.",
+    ".kyyysskssskkssyyyk.",
+    ".kyyyssssssssssyyyk.",
+    ".kyyyssssykssssyyyk.",
+    ".kyyyssskkkksssyyyk.",
+    ".kyyyysssssssyyyyyk.",
+    "..kyyyyyyyyyyyyyyk..",
+    "..krryyyyyyyyyyrrk..",
+    ".krrrreeeeeeeerrrrk.",
+    ".krrreeeggggeeerrrk.",
+    ".krrreeeggggeeerrrk.",
+    "..krrreeeeeeeerrrk..",
+    "...kkrrrrrrrrrrkk...",
+    "....kkkkkkkkkkkk....",
+]
 PORTRAITS["_human"] = [     # template: h=hair, x=jacket, v=shirt
     "....kkkkkkkkkkkk....",
     "..kkhhhhhhhhhhhhkk..",
@@ -294,6 +316,12 @@ def _draw_icon(surf, item_id):
         pygame.draw.rect(surf, c("white"), r(1, 3, 10, 8))
         pygame.draw.rect(surf, c("red"), r(5, 4, 2, 6))
         pygame.draw.rect(surf, c("red"), r(3, 6, 6, 2))
+    elif item_id == "stormbreaker":
+        pygame.draw.rect(surf, c("wood_dark"), r(5, 2, 2, 9))
+        pygame.draw.polygon(surf, c("steel_light"),
+                            [(1, 1), (6, 2), (6, 7), (1, 6)])
+        pygame.draw.polygon(surf, c("steel"), [(6, 2), (9, 3), (9, 6), (6, 7)])
+        pygame.draw.line(surf, c("sky"), (9, 1), (11, 4))
     elif item_id == "energy_bar":
         pygame.draw.rect(surf, c("gold"), r(1, 4, 10, 5))
         pygame.draw.line(surf, c("gold_dark"), (4, 4), (4, 8))
@@ -309,6 +337,36 @@ def icon(item_id):
         _draw_icon(surf, item_id)
         _icon_cache[item_id] = surf
     return _icon_cache[item_id]
+
+
+# --- Avengers pip: the bond-level marker on the card's Social tab (M20) ---
+
+# Ringed "A" with the right stroke carried up through the ring as the
+# arrow. 'o' = ring, 'a' = the letter — both drawn in the same colour, so
+# a pip is either lit or dark.
+AVENGERS_PIP = [
+    "...ooooo...",
+    ".oo.....oo.",
+    ".o...a...o.",
+    "o...a.a...o",
+    "o..a...a..o",
+    "o..aaaaa..o",
+    "o.a.....a.o",
+    ".oa.....ao.",
+    ".oo.....oo.",
+    "...ooooo...",
+]
+
+_pip_cache = {}
+
+
+def avengers_pip(lit=True):
+    """One bond level: lit blue when earned, dark grey when not."""
+    if lit not in _pip_cache:
+        keymap = {"o": "blue" if lit else "grey_dark",
+                  "a": "sky" if lit else "grey_dark"}
+        _pip_cache[lit] = pixelkit.build_sprite(AVENGERS_PIP, keymap)
+    return _pip_cache[lit]
 
 
 # --- standing sprites (12x16) for the walkable tower (§9 M8) ---
@@ -405,6 +463,24 @@ STANDING["hulk"] = [
     "..kuuk.kuuk."[:12],
     "..knnk.knnk."[:12],
     "..kkk..kkk..",
+]
+STANDING["thor"] = [        # winged helm, blond mane, blue tunic, red cape
+    "...kkkkkk...",         # (the cape is what tells him apart from Ant-Man
+    "..kekeekek..",         #  at a glance — never give him a red torso)
+    "..keeeeeek..",
+    "..kyssssyk..",
+    "...kssssk...",
+    "krrkBBBBkrrk",
+    "krrkBeeBkrrk",
+    "krrkBeeBkrrk",
+    "krrkBBBBkrrk",
+    ".krBBBBBBrk.",
+    "..kBBBBBBk..",
+    "..kBBkkBBk..",
+    "..kBBk.kBBk."[:12],
+    "..keek.keek."[:12],
+    "..kkk..kkk..",
+    "............",
 ]
 STANDING["_human"] = [      # template: h=hair, x=jacket, v=shirt
     "...kkkkkk...",

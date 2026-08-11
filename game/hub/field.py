@@ -19,19 +19,27 @@ def ambush_chance(danger, party_size):
                      + config.AMBUSH_PARTY_BONUS * missing)
 
 
+def squad_cap(party_size):
+    """The most bodies that can come at a party this size (M20). Applies to
+    ambushes AND booby-trap squads: 4 against a lone hero, 6 against a
+    pair, the full AMBUSH_MAX_SIZE against three or four."""
+    if party_size <= 0:
+        return 0
+    return min(config.AMBUSH_MAX_SIZE,
+               config.AMBUSH_MAX_BY_PARTY.get(party_size,
+                                              config.AMBUSH_MAX_SIZE))
+
+
 def ambush_size(party_size, rng):
     """M15: an ambush always outnumbers the party — by 1 half the time, by
-    2 a third of the time, rarely by 3 or 4 — and is never more than twice
-    the party's size (nor above AMBUSH_MAX_SIZE)."""
+    2 a third of the time, rarely by 3 or 4 — up to the M20 squad cap."""
     roll = rng.random()
     extra = config.AMBUSH_SIZE_TABLE[-1][1]
     for cumulative, value in config.AMBUSH_SIZE_TABLE:
         if roll < cumulative:
             extra = value
             break
-    return min(party_size + extra,
-               party_size * config.AMBUSH_PARTY_MULTIPLE,
-               config.AMBUSH_MAX_SIZE)
+    return min(party_size + extra, squad_cap(party_size))
 
 
 def roll_ambush(danger, party_size, rng):
@@ -63,9 +71,14 @@ def search_loot(zone, rng):
     return {"credits": rng.randint(lo, hi), "item": item, "trap": False}
 
 
-def trap_squad(danger, rng):
-    """The squad sprung by a booby-trapped crate — any size; no outnumber
-    rule, you walked right into it."""
+def trap_squad(danger, party_size, rng):
+    """The squad sprung by a booby-trapped crate. You walked right into it,
+    so there's no outnumber GUARANTEE the way an ambush has one — but M20
+    holds it to the same squad_cap. It used to roll 2..AMBUSH_MAX_SIZE
+    regardless of who was standing there."""
+    cap = squad_cap(party_size)
+    if cap <= 0:
+        return []
     pool = _POOLS.get(danger, _POOLS[1])
-    size = rng.randint(2, config.AMBUSH_MAX_SIZE)
+    size = rng.randint(min(2, cap), cap)
     return [pool[rng.randrange(len(pool))] for _ in range(size)]

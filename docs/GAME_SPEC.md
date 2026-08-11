@@ -176,7 +176,8 @@ Equipment adds `"slot"` and `"effects"` (flat stat mods only in POC).
 One JSON per slot: current day/issue/time, energy, roster (per hero: trained
 ranks, attribute XP, chosen perks, equipped gear, ultimate charge), bond points +
 gift history (gift_days/last_gift) per character, inventory, credits, story
-flags, quest states.
+flags, quest states, side-arc states (`unlocks`, M17) and the queue of story
+beats waiting to play (`pending_scenes`, M17).
 Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 
 ---
@@ -196,8 +197,9 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
 | Craft action | 15 energy, +60 min |
 | Scout point (M13, replaces hub small tasks) | 5 energy, +20 min per point |
+| Search a side-arc site (M17) | 5 energy, +20 min per stand searched |
 | Talk / gift | 0 energy, +20 min |
-| Eat a ration (M10) | 0 energy, +10 min; restores the item's `energy` EN to one party member, capped at 100 |
+| Eat a ration (M10; M18) | 0 energy, +10 min; restores the item's `energy` EN to EVERY active party member, each capped at 100 |
 | Search a zone crate (M10) | 0 energy, +15 min; daily-respawning loot, trap risk scales with danger |
 | Pass out (0 energy or 2 AM) | next day starts at 80 energy |
 
@@ -316,8 +318,10 @@ crit_chance   = agility*4  (percent; crit = damage × 1.5)
 dodge_chance  = agility*3  (percent; roll after hit roll, before crit)
 battle XP     = per enemy DEFEATED, from its level (M16 ENEMY_XP_BY_LEVEL):
                 lvl 1-10 -> 12, 24, 36, 54, 72, 90, 114, 138, 162, 192.
-                Banked per participating hero; KO'd participants get
-                KO_XP_MULT (50%). No XP on a loss.
+                Paid to each participating hero; KO'd participants get
+                KO_XP_MULT (50%). No XP on a loss. M21: it lands on their
+                six attributes immediately, split evenly — there is no
+                bank and no training top-up.
 ultimate      = +20 charge per turn taken, +10 per hit received; fires at 100
                 (M15: charge CARRIES OVER between battles — banked to the
                  roster entry on finish_battle, restored on the next one)
@@ -698,6 +702,175 @@ decrypt a data cache.*
 22; start a level-9 session and find the hero still on the mats two days
 later; see Hulk's job show up roughly four days in five once he likes you;
 get refused sending Cap to calibrate the sensors at Intelligence rank 1.*
+
+**M17 — Story unlocks: Thor & Stormbreaker** *(added post-POC)*.
+- **Conditional side arcs** (`data/quests/unlocks.json`, resolved by
+  `game/hub/unlocks.py`) run ALONGSIDE the sequential story.json chain
+  instead of taking a slot in it, so an arc can sit dormant for issues
+  without stalling the HYDRA missions queued behind it. An arc's
+  `requires` block takes story `flags` plus `hero_min_rank`, which is a
+  floor across ALL SIX attributes for the named hero — a rounded-out
+  hero, not a one-stat specialist.
+- **Night signal**: requirements are re-checked at the sleep boundary
+  (after the calendar advances). When they come true the arc fires,
+  logs its `signal_message`, and queues a cutscene onto
+  `state["pending_scenes"]`, which the hub pops and plays the moment the
+  player is back on their feet. A scene may carry a `sound`.
+- **Procedural audio** (`game/ui/audio.py`), the first in the project and
+  the same no-assets rule as the art: sounds are generated in code. The
+  Thor signal lands on a synthesized thunder crash. Sound is entirely
+  optional — a dead mixer (headless, no device, odd sample format) makes
+  every call a silent no-op, and no rule depends on it.
+- **Searching on foot**: the arc names a `location` zone and a list of
+  `search_groves` (each a clump of tiles). Standing beside any tile of a
+  clump offers the search; each costs UNLOCK_SEARCH_ENERGY (5) /
+  UNLOCK_SEARCH_MINUTES (20), the same as a scout point. Combed-out
+  stands dim like a rummaged crate; the one holding the prize is picked
+  by a stable crc32 roll so reloading never moves it.
+- **Not everyone can pick it up**: `lift_requires` names a hero who must
+  be ON THE ACTIVE TEAM, not merely on the roster. Finding the thing
+  without them ends the search but not the arc — the stand stays marked,
+  the refusal closes the discovery cutscene, and retrying later with the
+  right hero costs nothing.
+- **The owner comes for it**: the morning after the item is carried home,
+  the arc's `recruit` is standing in the tower. They join (the party if
+  there's room, the roster otherwise), take their property back out of
+  the inventory, and set the arc's `flags`.
+- **Ch. 2 content**: "Something Strange in Midtown" — Crossbones down
+  plus Captain America at rank 2 in all six opens it; Stormbreaker is in
+  one of five stands of Midtown trees; only Cap can lift it; Thor joins
+  and sets `thor_joined`, the hook the next HYDRA chapter gates on.
+*AC: beat Crossbones, train Cap to a rounded 2, and get woken by thunder
+and a message that says "Something strange happened in Midtown..."; comb
+the Midtown trees and find the axe with Cap benched, get told none of
+your heroes are mighty enough; fly back with Cap and pull it free; wake
+the next morning to Thor on the common floor.*
+
+**M18 — Bags, rations, collapse & saving** *(added post-POC)*.
+- **Rations feed the TEAM** (`activities.eat_food`, §6.1): one item, every
+  active party member gets its `energy`, each capped at the daily max.
+  Team energy is the *minimum* across the party, so the old feed-one-hero
+  version could move the HUD bar by nothing at all. There is no longer a
+  "who eats?" step. Benched heroes don't eat — they wake up full anyway.
+- **Bag capacity** (`game/core/inventory.py`): the team carries what its
+  members can carry — `INVENTORY_SLOTS_PER_HERO` (4) per ACTIVE party
+  member, so a full party of four has `INVENTORY_SLOTS_MAX` (16). One
+  slot holds one item id up to `INVENTORY_STACK_MAX` (99); the 100th of
+  anything spills into a second slot. The bag stays a flat
+  `{item_id: count}` on the save; capacity is derived, so benching a hero
+  shrinks it — which never destroys anything, it just blocks new pickups
+  until you're back under. The shop refuses a full bag *before* taking
+  the money; crate loot is left behind with a message; story artifacts
+  pass `force=True` so a full bag can never dead-end an arc.
+- **Collapsing on the job loses the job.** Previously the action that
+  passed the team out still counted, so the last scout point of a quest
+  could land — and COMPLETE it — on the way down. Now:
+  - a scout point that drops the team (0 EN or past 2 AM) is not
+    credited, and that quest's worked points are wiped: it has to be run
+    again. The quest stays accepted; this is a reset, not a `fail_mission`
+    (no HYDRA cooldown).
+  - `launch_mission` keeps the M11 rule that a tired team is never
+    refused, but a team the approach *drops* never makes contact: no
+    battle launches and the mission is untouched.
+- **Saving is a day boundary.** The autosave at lights-out is the only
+  save; the pause screen's Options tab no longer writes one. Quitting
+  mid-day rewinds to 6:00 AM that morning, so a day is played through or
+  not at all. Tests are held to this by an autouse fixture in
+  `conftest.py` that redirects `config.SAVE_DIR`; headless driver scripts
+  must set `GAME_SAVE_DIR`.
+*AC: feed the team a shawarma at 40 EN and watch every member gain 25;
+fill 16 slots with a full party, bench someone and keep every item while
+being refused the next pickup; carry 150 coffees in two slots; pass out on
+the third marker of Case the Safehouse and find it back at 0/3 the next
+morning; engage a mission at 40 EN and never reach the target; save, quit
+mid-afternoon, reload at 6:00 AM the same day.*
+
+**M19 — Message-log scrollback** *(added post-POC)*. The walkable world's
+message log keeps `LOG_HISTORY_MAX` (12) lines instead of 3 and shows the
+newest `LOG_VISIBLE_LINES` (3) above the hint bar. **PgUp/PgDn** page the
+window back and forward through the history, clamped at both ends; gold
+`^N`/`vN` counters show how many messages sit off-window each way. Any new
+message snaps the window back to the newest, so nothing arrives unseen.
+The page keys only bind in the walkable state — inside a menu or cutscene
+their handlers consume input first. This is what makes a busy night
+readable: a pass-out reason logged before the wake-up messages used to be
+pushed off a 3-line log immediately.
+*AC: collapse on a scout marker, sleep through a night with training and
+dispatch returns landing, then PgUp and still find "the team drops where
+they stand".*
+
+**M20 — Squad caps, board discipline & card honesty** *(added post-POC)*.
+- **Squad size is capped by who is actually standing there**
+  (`field.squad_cap`, `AMBUSH_MAX_BY_PARTY`): 4 against a lone hero, 6
+  against a pair, `AMBUSH_MAX_SIZE` (8) against three or four. This
+  replaces the M15 "never more than double the party" rule and — the
+  actual bug — now binds **booby-trap squads too**. `trap_squad` rolled
+  2..8 regardless of party size, so a solo hero could open a crate onto
+  eight HYDRA. It takes `party_size` now.
+- **The power grid shows the trained rank and nothing else.** The gold
+  band that extended each bar by the innate boost read as "this hero is
+  at that level" — they are not; the boost is a bonus applied on top in
+  combat. Bars are the rank; the boost stays as the `+N` marker at the
+  end of the row. The band caption drops to "POWER RATINGS".
+- **Attributes tab wording**: "Chosen perks" -> "Achievements"; "Banked
+  XP: STR 40" -> "XP: STR 40/130", progress over what the next rank
+  costs (or "MAX"), with battle XP still waiting to be spent shown as
+  "Battle XP banked: N" so it isn't invisible between fights.
+- **The board must be read in person.** `activities.check_board` stamps
+  the day when the player opens the assignment board; the pause card's
+  Tasks tab lists postings only for a day that's been read, and says
+  "Check the board by Coulson!" otherwise. The tier is no longer
+  advertised in the card's header.
+- **Bond levels are ten Avengers logos**, lit blue as each level lands
+  and dark grey beyond, replacing the progress bar (`sprites.avengers_pip`).
+- **Old saves survive updates.** Every key added since M16 is read
+  through `.get`/`.setdefault`, so a save from an earlier build loads and
+  plays. `tests/test_m20.py` pins this with a literal M16-era save.
+*AC: with one hero on the team, spring a crate trap and count at most 4
+enemies; open Iron Man's card at rank 1 and see six short pink bars with
+`+6`/`+5` markers, no gold; check the Tasks tab before visiting the board
+and be sent to Coulson; reach Bond 4 with Jarvis and see four blue
+logos of ten; load a save made two milestones ago and keep playing.*
+
+**M21 — Field XP is applied, not banked** *(added post-POC)*.
+- **The battle-XP bank is gone.** M9's `unspent_xp` held battle and
+  dispatch XP until the hero next trained, and a session could only draw
+  out as much as the session itself was worth — so a 270 XP Crossbones
+  win needed **six** separate rack sessions to spend, landed on whatever
+  attribute you happened to train, and showed no progress on the card in
+  the meantime.
+- **`attrs.award_battle_xp` applies it on the spot**, split evenly across
+  the hero's six attributes (the remainder is spread, not rounded away).
+  Battles and completed dispatch jobs both pay this way. Maxed
+  attributes drop out of the split rather than swallowing a share.
+- **The innate boost buys exactly what it buys on the rack.** The award
+  runs through `add_training_xp`, so the XP number is boost-blind while
+  the RANK COST is boost-weighted (`xp_for_rank`) — talent means fewer
+  XP per rank, identical to training. No second mechanism.
+- Total XP earned over a campaign is unchanged; only its timing and
+  spread are. Progression is now: **fights round you out, the rack
+  specialises you.**
+- **Migration**: `load_game` spends any bank an older save still carries
+  onto that hero's attributes, and drops the never-read top-level
+  `state["unspent_xp"]`. Nothing earned is lost.
+*AC: win an ambush and watch every attribute's XP move on the card
+before you go anywhere near the training floor; give the same 300 XP to
+Hulk's Strength (boost 7) and Cap's Strength (boost 2) and see the same
+XP go in but Hulk rank up sooner; load a save with a bank and find it
+already spent.*
+
+**M22 — Sparring pays broad, Ops doesn't drive** *(added post-POC)*.
+- **"Spar with S.H.I.E.L.D. Rookies"** pays `xp` 120 — which under M21's
+  six-way split is **+20 to every stat**. It's a training job, so it
+  trains everything; the M11 dispatch power multiplier still scales it
+  with who you send.
+- **The Ops Console briefs, it doesn't ferry.** Accepting a mission no
+  longer offers "Fly to <zone> now", and the cursor no longer jumps to a
+  travel row. The console tells you where the job is and stops; walking
+  to the elevator (or a zone helipad) is the player's own trip.
+*AC: send two qualifying heroes to spar and see all six attributes move
+by ~20 each; accept a mission at Ops and find no way to leave the room
+from that menu.*
 
 ---
 

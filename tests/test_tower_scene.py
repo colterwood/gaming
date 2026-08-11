@@ -31,7 +31,7 @@ class FakeApp:
                 self.game_state["roster"][c["id"]] = {
                     "trained_ranks": {}, "attribute_xp": {}, "perks": [],
                     "perk_choices": {}, "gear": {}, "ult_charge": 0,
-                    "energy": 100, "unspent_xp": 0}
+                    "energy": 100}
         self.game_state["party"] = sorted(self.game_state["roster"], reverse=True)
         story.init(self.game_state, content["story"])
         self.machine = FakeMachine()
@@ -143,10 +143,14 @@ def test_mission_flow_accept_fly_and_engage(content):
     labels = [i[0] for i in scene.submenu["items"]]     # menu reopened
     assert any("Where: Hudson Docks" in l for l in labels)
     assert any("Deadline: 3 day(s) left" in l for l in labels)
-    # cursor lands on an actionable row, not a disabled info line
-    label, disabled, cb = scene.submenu["items"][scene.submenu["index"]]
-    assert not disabled and cb is not None and "Fly to" in label
-    choose(scene, app, "  Fly to Hudson Docks")
+    # M22: the console briefs you and stops there - no ride to the target
+    assert not any("Fly to" in l for l in labels)
+    assert any("Quinjet when you're ready" in l for l in labels)
+    # so getting there is the player's own trip to the elevator
+    scene.reset_modes()
+    put_player_at(scene, 17, 2)                         # below the elevator
+    scene.handle_key(app, pygame.K_RETURN)
+    choose(scene, app, "Quinjet: Hudson Docks")
     assert scene.area == "docks"
     # walk to the target squad and engage
     zone = content["zones"]["docks"]
@@ -245,15 +249,19 @@ def test_maps_are_wellformed(content):
 
 # --- M10: rations, dispatch board, zone searching, street cart ---
 
-def test_rations_menu_feeds_party_member(content):
+def test_rations_menu_feeds_the_whole_team(content):
+    # M18: no "who eats?" step — the ration goes round the team.
     scene, app = scene_with_app(content)
     state = app.game_state
     state["roster"]["iron_man"]["energy"] = 50
+    state["roster"]["captain_america"]["energy"] = 70
+    energy.sync(state)
     scene.handle_key(app, pygame.K_i)
-    assert scene.mode == "submenu" and scene.submenu["title"] == "Rations"
+    assert scene.mode == "submenu"
+    assert scene.submenu["title"].startswith("Rations")
     choose(scene, app, "Shawarma Wrap")         # starter ration
-    choose(scene, app, "Iron Man")
     assert state["roster"]["iron_man"]["energy"] == 75
+    assert state["roster"]["captain_america"]["energy"] == 95
     assert "shawarma" not in state["inventory"]
     assert any("+25 EN" in m for m in scene.messages)
 
@@ -326,7 +334,6 @@ def test_crate_search_marks_spot_and_pays(content):
 def test_zone_helipad_flies_anywhere(content):
     scene, app = scene_with_app(content)
     scene.area = "docks"
-    zone = content["zones"]["docks"]
     put_player_at(scene, 2, 15)                 # beside the helipad (1-2, 16)
     hit = scene._nearest_interaction(app.game_state)
     assert hit == ("station", "helipad", "Quinjet")
@@ -389,18 +396,37 @@ def test_engage_at_low_energy_fights_first_sleeps_after(content):
     scene, app = scene_with_app(content)
     state = app.game_state
     story.accept(state, story.current_quest(state, content["story"]))
-    state["roster"]["captain_america"]["energy"] = 10
+    state["roster"]["captain_america"]["energy"] = 45    # survives the drain
     energy.sync(state)
     scene.area = "docks"
     zone = content["zones"]["docks"]
     put_player_at(scene, zone["target_spot"][0], zone["target_spot"][1] + 1)
     scene.handle_key(app, pygame.K_RETURN)          # engage the mission squad
     assert app.battles and app.slept == []          # fight first, no sleep yet
-    assert state["roster"]["captain_america"]["energy"] == 0
+    assert state["roster"]["captain_america"]["energy"] == 5
     app.machine.state = GameState.HUB               # battle resolved
     scene._move = lambda dt, a: None                # (headless: no key polling)
     scene.update(0.016, app)
-    assert app.slept == [True]                      # the collapse comes after
+    assert app.slept == []                           # 5 EN: still standing
+
+
+def test_engage_that_would_drop_the_team_never_makes_contact(content):
+    # M18: no battle at all, and the quest is untouched — you sleep and
+    # run it again tomorrow.
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    quest = story.current_quest(state, content["story"])
+    story.accept(state, quest)
+    state["roster"]["captain_america"]["energy"] = config.MISSION_ENERGY
+    energy.sync(state)
+    scene.area = "docks"
+    zone = content["zones"]["docks"]
+    put_player_at(scene, zone["target_spot"][0], zone["target_spot"][1] + 1)
+    scene.handle_key(app, pygame.K_RETURN)
+    assert app.battles == []                        # never reached them
+    assert app.slept == [True]                      # collapsed on the way
+    assert state["quests"][quest["id"]]["status"] == "active"   # still on
+    assert any("never reaches the target" in m for m in scene.messages)
 
 
 def test_rack_is_party_only_and_locks_the_trainee(content):
@@ -408,7 +434,7 @@ def test_rack_is_party_only_and_locks_the_trainee(content):
     state = app.game_state
     state["roster"]["ant_man"] = {"trained_ranks": {}, "attribute_xp": {},
                                   "perks": [], "perk_choices": {}, "gear": {},
-                                  "ult_charge": 0, "energy": 100, "unspent_xp": 0}
+                                  "ult_charge": 0, "energy": 100}
     scene.floor = "training"
     put_player_at(scene, 35, 7)                 # beside the rack (36-37, 6-7)
     scene.handle_key(app, pygame.K_RETURN)

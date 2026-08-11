@@ -35,7 +35,7 @@ def fresh_run(content):
             state["roster"][c["id"]] = {"trained_ranks": {}, "attribute_xp": {},
                                         "perks": [], "perk_choices": {},
                                         "gear": {}, "ult_charge": 0,
-                                        "energy": 100, "unspent_xp": 0}
+                                        "energy": 100}
     state["party"] = sorted(state["roster"], reverse=True)
     story.init(state, content["story"])
     return state
@@ -268,7 +268,9 @@ def test_full_ch1_ch2_playthrough(content):
         if activities.should_pass_out(state):   # M11: engaging never refuses,
             cal.sleep(state)                    # so rest BEFORE a 0-EN fight
             continue
-        activities.launch_mission(state)
+        if activities.launch_mission(state).get("passed_out"):
+            cal.sleep(state)        # M18: collapsed on the approach - no
+            continue                # contact, run it again tomorrow
         engine = _smart_battle(content, state, quest["enemies"])
         battles += 1
         assert engine.outcome == "win", f"lost {quest['id']} with smart play"

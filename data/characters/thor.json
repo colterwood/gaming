@@ -1,0 +1,79 @@
+{
+  "id": "thor",
+  "name": "Thor",
+  "path": "avengers",
+  "rarity": "legendary",
+  "boosts": {
+    "strength": 7,
+    "speed": 6,
+    "agility": 4,
+    "stamina": 7,
+    "durability": 6,
+    "intelligence": 3
+  },
+  "abilities": [
+    {
+      "id": "stormbreaker_swing",
+      "name": "Stormbreaker Swing",
+      "type": "basic",
+      "power": 14,
+      "scales_with": "strength",
+      "target": "single"
+    },
+    {
+      "id": "chain_lightning",
+      "name": "Chain Lightning",
+      "type": "special",
+      "power": 26,
+      "cost": 14,
+      "scales_with": "strength",
+      "target": "single",
+      "spread": "random",
+      "extra_targets": 3
+    },
+    {
+      "id": "bifrost_strike",
+      "name": "Bifrost Strike",
+      "type": "ultimate",
+      "power": 58,
+      "charge_required": 100,
+      "scales_with": "strength",
+      "target": "all"
+    }
+  ],
+  "gifts": {
+    "loved": [
+      "shawarma",
+      "rare_alloy"
+    ],
+    "liked": [
+      "forties_memorabilia",
+      "vintage_vinyl"
+    ],
+    "disliked": [
+      "modern_slang_guide"
+    ],
+    "hated": [
+      "hydra_propaganda"
+    ]
+  },
+  "birthday": {
+    "issue": 2,
+    "day": 8
+  },
+  "synergies": [
+    {
+      "with": "captain_america",
+      "name": "The Worthy",
+      "effect": {
+        "crit_bonus": 6
+      },
+      "requires_bond_level": 6,
+      "innate": true
+    }
+  ],
+  "recruit": {
+    "chapter": 2,
+    "method": "story"
+  }
+}

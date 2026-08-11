@@ -18,7 +18,7 @@ def content():
 
 def entry():
     return {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
-            "perk_choices": {}, "energy": 100, "unspent_xp": 0}
+            "perk_choices": {}, "energy": 100}
 
 
 def state_with(roster_ids, party_ids):
@@ -36,39 +36,59 @@ def task_by_id(content, task_id):
 
 # --- rations (1) ---
 
-def test_eat_restores_energy_and_consumes_item(content):
-    state = state_with(["iron_man", "captain_america"],
+def test_eat_feeds_the_whole_party(content):
+    # M18: one ration, everybody eats. Team EN is the MINIMUM across the
+    # party, so feeding a single hero used to move the bar by nothing.
+    state = state_with(["iron_man", "captain_america", "ant_man"],
                        ["iron_man", "captain_america"])
     state["roster"]["iron_man"]["energy"] = 40
+    state["roster"]["captain_america"]["energy"] = 60
+    state["roster"]["ant_man"]["energy"] = 30           # benched: doesn't eat
     state["inventory"]["shawarma"] = 2
-    result = activities.eat_food(state, content, "iron_man", "shawarma")
+    result = activities.eat_food(state, content, "shawarma")
     assert result["ok"]
-    assert state["roster"]["iron_man"]["energy"] == 65          # +25
+    assert state["roster"]["iron_man"]["energy"] == 65              # +25
+    assert state["roster"]["captain_america"]["energy"] == 85        # +25
+    assert state["roster"]["ant_man"]["energy"] == 30                # benched
     assert state["inventory"]["shawarma"] == 1
     assert state["time_minutes"] == 360 + config.EAT_MINUTES
-    assert state["energy"] == 65                                 # team synced
+    assert state["energy"] == 65                                     # team min
 
 
-def test_eat_caps_at_daily_max(content):
-    state = state_with(["iron_man"], ["iron_man"])
+def test_eat_caps_each_member_at_daily_max(content):
+    state = state_with(["iron_man", "captain_america"],
+                       ["iron_man", "captain_america"])
     state["roster"]["iron_man"]["energy"] = 95
+    state["roster"]["captain_america"]["energy"] = 20
     state["inventory"]["power_smoothie"] = 1
-    result = activities.eat_food(state, content, "iron_man", "power_smoothie")
+    result = activities.eat_food(state, content, "power_smoothie")
     assert result["ok"]
     assert state["roster"]["iron_man"]["energy"] == config.DAILY_ENERGY
-    assert "+5 EN" in result["message"]                          # only what fit
+    assert state["roster"]["captain_america"]["energy"] == 60
+    assert state["energy"] == 60
 
 
 def test_eat_refuses_full_missing_and_inedible(content):
     state = state_with(["iron_man"], ["iron_man"])
     state["inventory"]["shawarma"] = 1
-    assert not activities.eat_food(state, content, "iron_man", "shawarma")["ok"]
+    assert not activities.eat_food(state, content, "shawarma")["ok"]  # full
     state["roster"]["iron_man"]["energy"] = 50
-    assert not activities.eat_food(state, content, "iron_man", "med_kit")["ok"]
-    assert not activities.eat_food(state, content, "iron_man", "coffee")["ok"]
+    assert not activities.eat_food(state, content, "med_kit")["ok"]
+    assert not activities.eat_food(state, content, "coffee")["ok"]   # none held
     # last one is removed from the bag entirely
-    activities.eat_food(state, content, "iron_man", "shawarma")
+    activities.eat_food(state, content, "shawarma")
     assert "shawarma" not in state["inventory"]
+
+
+def test_eat_refuses_when_only_some_of_the_team_is_full(content):
+    # One hero short of the cap is enough reason to break out a ration.
+    state = state_with(["iron_man", "captain_america"],
+                       ["iron_man", "captain_america"])
+    state["roster"]["captain_america"]["energy"] = 90
+    state["inventory"]["coffee"] = 1
+    assert activities.eat_food(state, content, "coffee")["ok"]
+    assert state["roster"]["iron_man"]["energy"] == config.DAILY_ENERGY
+    assert state["roster"]["captain_america"]["energy"] == config.DAILY_ENERGY
 
 
 # --- zone searching (2) ---
@@ -106,11 +126,15 @@ def test_trap_rate_scales_with_danger(content):
     assert traps[3] > traps[1] > 0
 
 
-def test_trap_squad_any_size(content):
+def test_trap_squad_respects_the_party_cap(content):
+    # M20: a trap has no outnumber GUARANTEE (you walked into it), but it
+    # can no longer drop eight HYDRA on a lone hero.
     rng = random.Random(9)
-    for _ in range(200):
-        squad = field.trap_squad(3, rng)
-        assert 2 <= len(squad) <= config.AMBUSH_MAX_SIZE
+    for party_size, cap in ((1, 4), (2, 6), (3, 8), (4, 8)):
+        sizes = {len(field.trap_squad(3, party_size, rng)) for _ in range(400)}
+        assert min(sizes) >= 2
+        assert max(sizes) == cap
+        assert cap <= config.AMBUSH_MAX_SIZE
 
 
 def test_searched_spots_reset_at_sleep():
@@ -173,7 +197,8 @@ def test_dispatch_completes_at_sleep_with_rewards(content):
     assert any("Calibrate Tower Sensors done" in m for m in messages)
     # M11: pay scales with the sent hero's power (M15 rank scale)
     assert state["credits"] == round(task["credits"] * mult)
-    assert state["roster"]["iron_man"]["unspent_xp"] == round(task["xp"] * mult)
+    assert (sum(state["roster"]["iron_man"]["attribute_xp"].values())
+            == round(task["xp"] * mult))            # M21: applied, not banked
     assert not dispatch.is_away(state, "iron_man")
     assert dispatch.active(state) == []
     # free to rejoin now

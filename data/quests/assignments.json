@@ -52,7 +52,7 @@
     "heroes": 2,
     "days": 1,
     "credits": 130,
-    "xp": 40,
+    "xp": 120,
     "spot": ["training", 25, 5],
     "requires": {
       "hero_any_of": [

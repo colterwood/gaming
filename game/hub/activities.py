@@ -9,7 +9,7 @@ Battles and sleep are not resolved here — the caller reacts to
 
 from game import config
 from game.core import calendar as cal
-from game.core import clock, energy
+from game.core import clock, energy, inventory
 
 
 def _spend(state, energy_cost, minutes):
@@ -42,8 +42,10 @@ def start_training(state, content, hero_id, attribute):
     """M12: training is a lockout, not a clock jump. The trainee pays the
     EN up front, leaves the party, and is unavailable until they have put
     in the session's hours (M16: measured in WAKING minutes, so a
-    high-level session genuinely spans several days). XP (facility +
-    banked battle XP double-dip) is granted on completion."""
+    high-level session genuinely spans several days). The session's XP
+    (facility-multiplied) is granted on completion. M21: there is no
+    battle-XP top-up any more — field XP lands on attributes when it is
+    earned, not the next time someone uses the rack."""
     from game.progression import attributes as attrs
 
     character = content["characters"][hero_id]
@@ -68,9 +70,6 @@ def start_training(state, content, hero_id, attribute):
         return {"ok": False, "message": f"{character['name']} is too exhausted."}
     energy.spend_hero(state, hero_id, en_cost)
     xp = attrs.session_xp(state, content["calendar"], level)
-    banked = min(entry.get("unspent_xp", 0), xp)        # battle XP double-dips
-    if banked:
-        entry["unspent_xp"] = entry.get("unspent_xp", 0) - banked
     if hero_id in party:
         party.remove(hero_id)
     entry.pop("assignment", None)
@@ -79,7 +78,7 @@ def start_training(state, content, hero_id, attribute):
     # distinguishable and can be migrated — see migrate_training_locks.
     entry["training"] = {"attribute": attribute,
                          "ends_abs": clock.absolute_minutes(state) + minutes,
-                         "xp": xp + banked, "banked": banked}
+                         "xp": xp}
     energy.sync(state)
     return {"ok": True, "minutes": minutes,
             "message": (f"{character['name']} hits the mats: "
@@ -105,8 +104,6 @@ def finish_training(state, content, hero_id, rejoin=True):
     entry["idle_days"] = 0
     message = (f"{character['name']} finishes training "
                f"{lock['attribute'].title()}: +{lock['xp']} XP")
-    if lock.get("banked"):
-        message += f" ({lock['banked']} banked)"
     if gain["ranks_gained"]:
         message += (f" - rank up! ({gain['rank']}/{config.RANK_MAX}, "
                     f"combat {gain['effective_rank']:.1f})")
@@ -162,12 +159,36 @@ def craft(state):
 
 
 def launch_mission(state, mission_id="hydra_patrol"):
-    """M11: engaging is never blocked by low EN. The team drains toward 0
-    and fights with the M9 initiative penalty instead of being refused."""
+    """M11: engaging is never blocked by low EN — the team drains toward 0
+    and fights with the M9 initiative penalty rather than being refused.
+
+    M18: but a team that COLLAPSES on the approach (drained to 0, or the
+    three hours run past 2 AM) never makes contact. No battle, and the
+    mission stays exactly as it was — it has to be run again after a
+    night's sleep."""
     energy.drain(state, config.MISSION_ENERGY)
     hit_end = clock.advance(state, config.MISSION_MINUTES)
+    if should_pass_out(state):
+        return {"ok": True, "hit_day_end": hit_end, "passed_out": True,
+                "message": ("The team never reaches the target - they're "
+                            "spent. The mission will have to keep.")}
     return {"ok": True, "hit_day_end": hit_end, "launch_battle": mission_id,
             "message": "Mission launched."}
+
+
+def _abs_day(state):
+    return (state["issue"] - 1) * config.DAYS_PER_ISSUE + state["day"]
+
+
+def board_checked_today(state):
+    """Has anyone actually walked up to the assignment board today (M20)?
+    Until they have, the pause card can't list what's posted."""
+    return state.get("board_checked_day") == _abs_day(state)
+
+
+def check_board(state):
+    """Called when the player opens the board in person."""
+    state["board_checked_day"] = _abs_day(state)
 
 
 def assignment_tasks_today(state, assignments, tier=1):
@@ -198,31 +219,32 @@ def assignment_tasks_today(state, assignments, tier=1):
     return today
 
 
-def eat_food(state, content, hero_id, item_id):
-    """Eat a ration (M10): restores the item's EN to one hero, costs a few
-    minutes, no energy. Anywhere — tower or field."""
+def eat_food(state, content, item_id):
+    """Break out a ration (M10; M18: the TEAM shares it). Every active
+    party member gets the item's EN, capped at the daily max — team energy
+    is the minimum across the party, so feeding one hero moved nothing.
+    Costs a few minutes, no energy. Anywhere — tower or field."""
     item = content["items"].get(item_id, {})
     restore = item.get("energy", 0)
     if not restore:
         return {"ok": False, "message": "That's not edible."}
     if state["inventory"].get(item_id, 0) <= 0:
         return {"ok": False, "message": f"No {item['name']} left."}
-    if state["roster"].get(hero_id) is None:
-        return {"ok": False, "message": "They're not on the roster."}
-    before = energy.hero_energy(state, hero_id)
-    if before >= config.DAILY_ENERGY:
-        name = content["characters"][hero_id]["name"]
-        return {"ok": False, "message": f"{name} is already at full energy."}
-    state["inventory"][item_id] -= 1
-    if state["inventory"][item_id] <= 0:
-        del state["inventory"][item_id]
-    energy.set_hero_energy(state, hero_id, before + restore)
-    gained = energy.hero_energy(state, hero_id) - before
-    energy.sync(state)
+    members = energy.party(state)
+    if not members:
+        return {"ok": False, "message": "Nobody on the team to eat it."}
+    if all(energy.hero_energy(state, h) >= config.DAILY_ENERGY for h in members):
+        return {"ok": False, "message": "The team is already at full energy."}
+    inventory.remove(state, item_id, 1)
+    before = energy.team_energy(state)
+    for hero_id in members:
+        energy.set_hero_energy(state, hero_id,
+                               energy.hero_energy(state, hero_id) + restore)
+    after = energy.sync(state)
     hit_end = clock.advance(state, config.EAT_MINUTES)
-    name = content["characters"][hero_id]["name"]
-    return {"ok": True, "hit_day_end": hit_end,
-            "message": f"{name} eats the {item['name']}: +{gained} EN."}
+    return {"ok": True, "hit_day_end": hit_end, "gained": after - before,
+            "message": (f"The team shares the {item['name']}: +{restore} EN "
+                        f"each - team EN {before} to {after}.")}
 
 
 def search_spot_key(zone_id, tx, ty):
@@ -259,8 +281,11 @@ def buy_item(state, item, discount=1.0):
     price = int(item["price"] * discount)
     if state["credits"] < price:
         return {"ok": False, "message": "Not enough credits."}
+    if inventory.room_for(state, item["id"]) <= 0:      # M18: check BEFORE
+        return {"ok": False,                            # taking their money
+                "message": f"No room for it - {inventory.label(state)}."}
     state["credits"] -= price
-    state["inventory"][item["id"]] = state["inventory"].get(item["id"], 0) + 1
+    inventory.add(state, item["id"], 1)
     return {"ok": True, "message": f"Bought {item['name']} for {price} cr."}
 
 

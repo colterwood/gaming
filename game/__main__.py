@@ -48,7 +48,7 @@ class App:
                 self.game_state["roster"][char["id"]] = {
                     "trained_ranks": {}, "attribute_xp": {}, "perks": [],
                     "perk_choices": {}, "gear": {}, "ult_charge": 0,
-                    "energy": config.DAILY_ENERGY, "unspent_xp": 0}
+                    "energy": config.DAILY_ENERGY}
         self.game_state["party"] = sorted(self.game_state["roster"],
                                           reverse=True)[:config.PARTY_SIZE_MAX]
         energy.sync(self.game_state)
@@ -67,10 +67,18 @@ class App:
         from game.hub import activities, dispatch
         dispatch.backfill_spots(self.content, self.game_state)  # pre-M13 jobs
         activities.migrate_training_locks(self.game_state)      # pre-M16 locks
-        for entry in self.game_state["roster"].values():
+        for hero_id, entry in self.game_state["roster"].items():
             attrs.sanitize_perk_choices(entry, self.content["perks"])
             entry.setdefault("energy", self.game_state.get("energy", config.DAILY_ENERGY))
-            entry.setdefault("unspent_xp", 0)
+            # M21: the battle-XP bank is gone. Anything a save still has
+            # sitting in it was EARNED — spend it onto the attributes now
+            # rather than dropping it on the floor.
+            owed = entry.pop("unspent_xp", 0)
+            if owed:
+                attrs.award_battle_xp(
+                    self.content["characters"][hero_id].get("boosts", {}),
+                    entry, owed)
+        self.game_state.pop("unspent_xp", None)     # top-level copy: never read
         if not self.game_state.get("party"):
             self.game_state["party"] = sorted(self.game_state["roster"],
                                               reverse=True)[:config.PARTY_SIZE_MAX]
@@ -83,7 +91,7 @@ class App:
 
     def go_to_sleep(self, passed_out=False):
         from game.core import energy
-        from game.hub import activities, dispatch, passive, story
+        from game.hub import activities, dispatch, passive, story, unlocks
         messages = passive.process_day(self.content, self.game_state)
         messages += dispatch.process_day(self.content, self.game_state)
         result = activities.go_to_sleep(self.game_state, passed_out=passed_out)
@@ -92,6 +100,10 @@ class App:
         # rest of the day the hero spent on the mats.
         messages += activities.finish_due_training(self.game_state, self.content)
         messages += story.check_deadlines(self.game_state, self.content["story"])
+        # M17: side arcs fire on the night boundary — a signal when its
+        # requirements have come true, an arrival the morning after the
+        # team carries its prize home.
+        messages += unlocks.process_night(self.content, self.game_state)
         energy.sync(self.game_state)
         self.autosave()
         if self.hub:
@@ -150,6 +162,7 @@ class App:
                     entry["ult_charge"] = hero.ult_charge
         if state and engine.outcome == "win":
             from game.hub import activities, story
+            from game.progression import attributes as attrs
             from game.progression import mastery
             from game.social import bonds
             if ambush:      # M12: an unplanned fight still takes time
@@ -158,20 +171,31 @@ class App:
             credits = rewards["credits"] if ambush else \
                 activities.mission_credits(state, rewards["credits"])
             state["credits"] += credits
-            # M9: XP only to participants; KO'd participants earn half
+            # M9: XP only to participants; KO'd participants earn half.
+            # M21: it lands on their attributes NOW, split across the six,
+            # instead of banking for a future rack session.
             for hero in engine.heroes:
                 entry = state["roster"].get(hero.id)
-                if entry:
-                    xp = rewards["xp"] if hero.alive else int(
-                        rewards["xp"] * config.KO_XP_MULT)
-                    entry["unspent_xp"] = entry.get("unspent_xp", 0) + xp
-                    mastery.log_mastery_xp(entry, xp)
+                if not entry:
+                    continue
+                xp = rewards["xp"] if hero.alive else int(
+                    rewards["xp"] * config.KO_XP_MULT)
+                boosts = self.content["characters"][hero.id].get("boosts", {})
+                gain = attrs.award_battle_xp(boosts, entry, xp)
+                mastery.log_mastery_xp(entry, xp)
+                if self.hub and gain["ranks_gained"]:
+                    name = self.content["characters"][hero.id]["name"]
+                    ups = ", ".join(f"{a.title()} {r + config.RANK_START}"
+                                    for a, r in gain["ranks_gained"])
+                    self.hub.log(f"{name} ranks up from the field: {ups}!")
             bonds.mission_bond(state,
                                [h.id for h in engine.heroes
                                 if bonds.bondable(self.content["characters"][h.data["id"]])])
             if self.hub:
                 label = "Ambush repelled" if ambush else "Mission complete"
-                self.hub.log(f"{label}: +{credits} cr, +{rewards['xp']} XP to the team")
+                share = rewards["xp"] // len(config.ATTRIBUTES)
+                self.hub.log(f"{label}: +{credits} cr, +{rewards['xp']} XP each "
+                             f"(+{share} to every skill)")
             if quest:
                 for msg in story.complete_battle_quest(state, quest, self.content):
                     if self.hub:

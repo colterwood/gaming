@@ -156,7 +156,6 @@ class BattleScene:
             self.phase = "result"
             return
 
-        actor = self._actor()
         if self.phase == "turn_start":
             turn_before = self.engine.turn_counter
             events = self.engine.begin_turn()

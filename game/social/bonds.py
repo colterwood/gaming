@@ -2,6 +2,7 @@
 Pure Python — no pygame."""
 
 from game import config
+from game.core import inventory
 
 
 def ensure_bond(state, char_id):
@@ -89,9 +90,7 @@ def give_gift(state, character, item_id):
     ok, reason = gift_allowed(state, char_id)
     if not ok:
         return {"ok": False, "message": f"{character['name']} {reason}."}
-    state["inventory"][item_id] -= 1
-    if state["inventory"][item_id] <= 0:
-        del state["inventory"][item_id]
+    inventory.remove(state, item_id, 1)
     today = _abs_day(state)
     bond["gift_days"].append(today)
     category = gift_category(character, item_id)
@@ -145,8 +144,7 @@ def check_bond_progress(state, content):
             state["roster"][char["id"]] = {"trained_ranks": {}, "attribute_xp": {},
                                            "perks": [], "perk_choices": {},
                                            "gear": {}, "ult_charge": 0,
-                                           "energy": config.DAILY_ENERGY,
-                                           "unspent_xp": 0}
+                                           "energy": config.DAILY_ENERGY}
             messages.append(f"{char['name']} joins the roster!")
         for unlock in char.get("bond_unlocks", []):
             flags = state.setdefault("story_flags", {})

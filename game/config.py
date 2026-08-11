@@ -1,5 +1,7 @@
 """Tunable constants. Every number here is sourced from docs/GAME_SPEC.md §6/§8."""
 
+import os
+
 # --- Display (§9 M7: 16-bit pixel pipeline) ---
 # All scenes lay out in INTERNAL coordinates; the frame is scaled up
 # nearest-neighbor to the window for chunky uniform pixels.
@@ -85,6 +87,12 @@ TALK_GIFT_MINUTES = 20              # talking/gifting costs time, no energy
 MAP_TILES_W = 40
 MAP_TILES_H = 21
 
+# --- Message log (M19) ---
+# Three lines sit above the hint bar; PgUp/PgDn page back through the
+# rest so a message that scrolls past on a busy night can still be read.
+LOG_VISIBLE_LINES = 3
+LOG_HISTORY_MAX = 12
+
 # --- Calendar (§6.2 / §7) ---
 DAYS_PER_ISSUE = 28
 DAYS_PER_WEEK = 7                   # weeks are 7-day rows of the 28-day Issue
@@ -134,13 +142,24 @@ AMBUSH_TICK_SECONDS = 0.6           # walking time between ambush rolls
 # M15: an ambush always outnumbers the party, by this many (cumulative
 # probability, extra attackers) — and never by more than double the party.
 AMBUSH_SIZE_TABLE = ((0.50, 1), (0.85, 2), (0.95, 3), (1.00, 4))
-AMBUSH_PARTY_MULTIPLE = 2           # hard ceiling: squad <= party x2
+# M20: hard ceiling on a squad by how many heroes are actually standing
+# there. This binds for booby-trap squads too — those used to ignore party
+# size completely, so a lone hero could open a crate onto eight HYDRA.
+AMBUSH_MAX_BY_PARTY = {1: 4, 2: 6, 3: 8, 4: 8}
 
 ATROPHY_GRACE_DAYS = 2              # same-spot days before decay starts
 ATROPHY_XP_PER_DAY = 20             # XP drained per unworked attribute
 
 MISSION_FAIL_COOLDOWN_DAYS = 2
 TRAVEL_MINUTES = 30                 # Quinjet hop tower <-> zone
+
+# --- Bag capacity (M18) ---
+# The team carries what its members can carry: 4 slots each, so a full
+# party of 4 has 16. One slot holds one item id up to STACK_MAX — the
+# 100th of anything spills into a second slot.
+INVENTORY_SLOTS_PER_HERO = 4
+INVENTORY_SLOTS_MAX = 16            # = SLOTS_PER_HERO x PARTY_SIZE_MAX (4)
+INVENTORY_STACK_MAX = 99
 
 # --- Field life (M10) ---
 EAT_MINUTES = 10                    # eating a ration advances the clock
@@ -150,6 +169,10 @@ SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
 # --- Scout quests (M13): field work per scout point ---
 SCOUT_ENERGY = 5
 SCOUT_MINUTES = 20
+
+# --- Story unlocks (M17): combing a search site in a side arc ---
+UNLOCK_SEARCH_ENERGY = 5
+UNLOCK_SEARCH_MINUTES = 20
 
 # --- Battle time & defeat (M12) ---
 # Engaging a mission costs MISSION_ENERGY/MISSION_MINUTES up front (§6.1).
@@ -232,7 +255,11 @@ AI_DEFENSIVE_HP_THRESHOLD = 0.40    # defensive: Defend below 40% HP
 AI_SUPPORT_HP_THRESHOLD = 0.50     # support: heal/buff ally below 50% HP
 
 # --- Save (§5.4) ---
-SAVE_DIR = "saves"
+# GAME_SAVE_DIR redirects the slots somewhere scratch. Any headless driver
+# that boots a real App MUST set it: App.autosave() and go_to_sleep() write
+# the live slot, so a verification script left pointed here will silently
+# eat the player's game.
+SAVE_DIR = os.environ.get("GAME_SAVE_DIR", "saves")
 SAVE_SLOTS = 3
 
 # --- General UI palette (era-inspired; hub/battle screens) ---

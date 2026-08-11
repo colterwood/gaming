@@ -10,7 +10,7 @@ import pygame
 
 from game import config
 from game.core import calendar as cal
-from game.core import save
+from game.core import inventory
 from game.core.state_machine import GameState
 from game.hub import activities, dispatch
 from game.progression import attributes as attrs
@@ -81,8 +81,10 @@ class ImpelCardScene:
                 if ids:
                     self.hero_index = (self.hero_index + step) % len(ids)
         elif key == pygame.K_RETURN and TABS[self.tab_index] == "Options":
-            save.save_game(state, app.SAVE_SLOT)
-            self.message = f"Saved to slot {app.SAVE_SLOT}."
+            # M18: no mid-day saving. The autosave at lights-out is the only
+            # save, so quitting mid-day rewinds to that morning rather than
+            # letting the player bank a good afternoon and retry a bad one.
+            self.message = "The tower saves itself at lights-out."
 
     # --- drawing ---
 
@@ -191,26 +193,16 @@ class ImpelCardScene:
         for i, attribute in enumerate(config.ATTRIBUTES):
             row_y = paper.y + i * config.CARD_GRID_ROW_HEIGHT
             row = pygame.Rect(paper.x, row_y, paper.width, config.CARD_GRID_ROW_HEIGHT)
-            # M15: pink = the trained rank (1..10), gold = what the innate
-            # boost adds on top of it in combat.
+            # M20: the bar is the TRAINED RANK and nothing else. It used to
+            # be extended by a gold band for the innate boost, which read as
+            # "this hero is at that level" — they aren't. The boost is a
+            # bonus on top, shown as the +N marker at the end of the row.
             rank = attrs.rank(entry, attribute)
-            effective = attrs.effective_rank(boosts, entry, attribute)
             bar = pygame.Rect(row.x + 1, row.y + 4,
                               int((rank + 1) * unit) - 2, row.height - 8)
             pygame.draw.rect(surface, pixelkit.color(PINK), bar)
             pygame.draw.line(surface, pixelkit.color("white"),
                              (bar.x, bar.y), (bar.right - 1, bar.y))
-            # The grid only has RANK_MAX columns, but a boosted combat value
-            # runs past it — clamp the gold band to the paper so it never
-            # spills over the card edge.
-            shown = min(config.RANK_MAX, effective)
-            if shown > rank:
-                left = row.x + int((rank + 1) * unit)
-                right = min(paper.right - 1, row.x + int((shown + 1) * unit) - 1)
-                if right > left:
-                    pygame.draw.rect(surface, pixelkit.color(GOLD),
-                                     pygame.Rect(left, row.y + 4,
-                                                 right - left, row.height - 8))
             btext(surface, attribute.upper(), 12, INK,
                   midleft=(row.x + 5, row.centery))
             boost = boosts.get(attribute, 0)
@@ -222,8 +214,7 @@ class ImpelCardScene:
 
         band = pygame.Rect(paper.x, paper.bottom + 3, paper.width, 16)
         pygame.draw.rect(surface, pixelkit.color(INK), band)
-        label = ("POWER RATINGS  (gold = innate boost)"
-                 + ("  * MASTERED *" if mastered else ""))
+        label = "POWER RATINGS" + ("  * MASTERED *" if mastered else "")
         btext(surface, label, 14, GOLD if mastered else "white", center=band.center)
 
     def _foil_sparkle(self, surface, row, hero_id, row_index):
@@ -259,6 +250,27 @@ class ImpelCardScene:
             pixelkit.text(surface, "v", 11, GREY,
                           bottomright=(panel.right - 6, panel.bottom - 1))
 
+    def _draw_quest_column(self, surface, panel, state, half, pad):
+        """The Tasks tab's right-hand quest list — drawn whether or not
+        today's board has been read (M20)."""
+        qx = panel.x + half + pad
+        btext(surface, "Quests", 12, INK, topleft=(qx, panel.y + 5))
+        quest_w = (half - 2 * pad) // 2 - 4
+        quests = sorted(state.get("quests", {}).items())
+        if not quests:
+            pixelkit.text(surface, "(no active quests)", 11, GREY,
+                          topleft=(qx, panel.y + 18))
+            return
+        col_w = (half - 2 * pad) // 2
+        for i, (qid, quest) in enumerate(quests[:8]):
+            col, row = divmod(i, 4)
+            done = quest.get("status") == "done"
+            mark = "[x]" if done else "[>]"
+            pixelkit.text(
+                surface, self._fit(f"{mark} {quest.get('name', qid)}", quest_w, 10),
+                10, GREY if done else INK,
+                topleft=(qx + col * col_w, panel.y + 18 + row * 12))
+
     # --- lower panel per tab ---
 
     def _draw_lower_panel(self, surface, panel, app, tab):
@@ -270,7 +282,8 @@ class ImpelCardScene:
         if tab == "Inventory":
             items = [(iid, n) for iid, n in sorted(state["inventory"].items()) if n > 0]
             extra = f"  (+{len(items) - 10} more)" if len(items) > 10 else ""
-            btext(surface, f"Inventory - {state['credits']} credits{extra}", 13, INK,
+            btext(surface, f"Inventory - {state['credits']} credits - "
+                           f"{inventory.label(state)}{extra}", 13, INK,
                   topleft=(panel.x + pad, panel.y + 5))
             slot_w, slot_h = 116, 20
             for i, (iid, n) in enumerate(items[:10]):
@@ -291,7 +304,7 @@ class ImpelCardScene:
             entry = state["roster"].get(hero_id, {})
             chosen = sorted(entry.get("perk_choices", {}).items())
             extra = f"  (+{len(chosen) - 6} more)" if len(chosen) > 6 else ""
-            btext(surface, f"Chosen perks:{extra}", 13, INK,
+            btext(surface, f"Achievements:{extra}", 13, INK,
                   topleft=(panel.x + pad, panel.y + 5))
             if chosen:
                 by_id = {p["id"]: p for a in self.content["perks"].values()
@@ -315,10 +328,22 @@ class ImpelCardScene:
             else:
                 pixelkit.text(surface, "(none yet - train to rank 3)", 12, GREY,
                               topleft=(panel.x + pad + 6, panel.y + 21))
+            # M20: XP toward the NEXT rank, as progress/needed rather than a
+            # bare running total. "MAX" once an attribute is at RANK_MAX.
             banked = entry.get("attribute_xp", {})
-            summary = "  ".join(f"{a[:3].upper()} {banked.get(a, 0)}"
-                                for a in config.ATTRIBUTES)
-            pixelkit.text(surface, "Banked XP:  " + summary, 11, INK,
+            hero_boosts = self.content["characters"].get(hero_id, {}).get(
+                "boosts", {})
+            parts = []
+            for attribute in config.ATTRIBUTES:
+                got = banked.get(attribute, 0)
+                if not attrs.can_train(hero_boosts, entry, attribute):
+                    parts.append(f"{attribute[:3].upper()} MAX")
+                    continue
+                need = attrs.xp_for_rank(attrs.rank(entry, attribute),
+                                         hero_boosts.get(attribute, 0))
+                parts.append(f"{attribute[:3].upper()} {got}/{need}")
+            line = "XP:  " + "  ".join(parts)
+            pixelkit.text(surface, line, 11, INK,
                           topleft=(panel.x + pad, panel.bottom - 14))
         elif tab == "Social":
             row_h = 15
@@ -334,19 +359,19 @@ class ImpelCardScene:
                 bond = bonds.ensure_bond(state, char_id)
                 level = bonds.bond_level(bond["points"])
                 birthday = char["birthday"]
-                bar = pygame.Rect(panel.right - pad - 110, y + 1, 110, 6)
                 pixelkit.text(
                     surface,
                     f"{char['name']} - Bond {level} ({bond['points']}pts) "
                     f"bday I{birthday['issue']}D{birthday['day']}",
                     11, INK, topleft=(panel.x + pad, y))
-                into = bond["points"] - level * config.BOND_POINTS_PER_LEVEL
-                frac = 1.0 if level >= config.BOND_LEVEL_MAX else into / config.BOND_POINTS_PER_LEVEL
-                pygame.draw.rect(surface, pixelkit.color(CREAM), bar)
-                pygame.draw.rect(surface, pixelkit.color(PINK),
-                                 pygame.Rect(bar.x, bar.y, max(1, int(bar.width * frac)),
-                                             bar.height))
-                pygame.draw.rect(surface, pixelkit.color(INK), bar, width=1)
+                # M20: ten Avengers logos instead of a progress bar - one
+                # lights up per bond level earned.
+                pip = sprites.avengers_pip(True)
+                step = pip.get_width() + 1
+                left = panel.right - pad - config.BOND_LEVEL_MAX * step
+                for slot in range(config.BOND_LEVEL_MAX):
+                    surface.blit(sprites.avengers_pip(slot < level),
+                                 (left + slot * step, y + 1))
                 y += row_h
             if not names:
                 pixelkit.text(surface, "(no relationships yet)", 12, GREY,
@@ -356,10 +381,18 @@ class ImpelCardScene:
             half = panel.width // 2
             board_w = half - pad - 4
             tier = dispatch.roster_tier(self.content, state)
-            btext(surface, f"Board (today) - Tier {tier}", 12, INK,
+            btext(surface, "Board (today)", 12, INK,
                   topleft=(panel.x + pad, panel.y + 5))
             row_h = 11
             list_top = panel.y + 18
+            if not activities.board_checked_today(state):
+                # M20: the card is a notebook, not a wire. Postings only get
+                # written down once someone has actually read the board.
+                pixelkit.text(surface, "Check the board by Coulson!", 12, RED,
+                              topleft=(panel.x + pad, list_top))
+                self._draw_quest_column(surface, panel, state, half, pad)
+                surface.set_clip(None)
+                return
             today = activities.assignment_tasks_today(
                 state, self.content["assignments"], tier)
             today_ids = {t["id"] for t in today}
@@ -394,33 +427,21 @@ class ImpelCardScene:
             board_panel = pygame.Rect(panel.x, list_top, half, panel.bottom - list_top)
             self._scroll_arrows(surface, board_panel, more_above, more_below)
 
-            qx = panel.x + half + pad
-            btext(surface, "Quests", 12, INK, topleft=(qx, panel.y + 5))
-            quest_w = (half - 2 * pad) // 2 - 4
-            quests = sorted(state.get("quests", {}).items())
-            if quests:
-                col_w = (half - 2 * pad) // 2
-                for i, (qid, q) in enumerate(quests[:8]):
-                    col, row = divmod(i, 4)
-                    done = q.get("status") == "done"
-                    mark = "[x]" if done else "[>]"
-                    pixelkit.text(
-                        surface, self._fit(f"{mark} {q.get('name', qid)}", quest_w, 10),
-                        10, GREY if done else INK,
-                        topleft=(qx + col * col_w, panel.y + 18 + row * 12))
-            else:
-                pixelkit.text(surface, "(no active quests)", 11, GREY,
-                              topleft=(qx, panel.y + 18))
+            self._draw_quest_column(surface, panel, state, half, pad)
         elif tab == "Map":
             btext(surface, "WORLD MAP - coming in a later issue", 15, GREY,
                   center=panel.center)
         elif tab == "Options":
-            btext(surface, "Enter: save game", 14, INK,
+            btext(surface, f"The day autosaves when you sleep - "
+                           f"slot {app.SAVE_SLOT}", 14, INK,
                   topleft=(panel.x + pad, panel.y + 7))
+            pixelkit.text(surface, "Quit before bed and you wake up back at "
+                                   "6:00 AM this morning.", 12, INK,
+                          topleft=(panel.x + pad, panel.y + 25))
             for ev in cal.active_events(state, self.content["calendar"]):
                 pixelkit.text(surface, f"Active event: {ev['name']}", 12, RED,
-                              topleft=(panel.x + pad, panel.y + 25))
+                              topleft=(panel.x + pad, panel.y + 40))
             if self.message:
                 pixelkit.text(surface, self.message, 13, RED,
-                              topleft=(panel.x + pad, panel.y + 42))
+                              topleft=(panel.x + pad, panel.y + 55))
         surface.set_clip(None)

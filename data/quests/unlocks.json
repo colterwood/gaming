@@ -1,0 +1,73 @@
+[
+  {
+    "id": "thor_stormbreaker",
+    "name": "Something Strange in Midtown",
+    "desc": "Something came down in the Midtown trees. Search the stands - and bring someone who can lift it.",
+    "requires": {
+      "flags": ["ch2_complete"],
+      "hero_min_rank": {"captain_america": 2}
+    },
+    "location": "midtown",
+    "zone_hint": "The air over the park still tastes like a struck match.",
+    "search_label": "Search the trees",
+    "lift_label": "Take Stormbreaker",
+    "search_groves": [
+      {"name": "the little park on the north corner",
+       "tiles": [[3, 2], [4, 2], [3, 3], [4, 3]]},
+      {"name": "the planters above the east crossing",
+       "tiles": [[35, 2], [36, 2], [35, 3], [36, 3]]},
+      {"name": "the green strip south of the avenue",
+       "tiles": [[3, 13], [4, 13], [3, 14], [4, 14]]},
+      {"name": "the median stand mid-block",
+       "tiles": [[20, 13], [21, 13], [20, 14], [21, 14]]},
+      {"name": "the corner lot by the fence",
+       "tiles": [[36, 14], [37, 14], [36, 15], [37, 15]]}
+    ],
+    "empty_message": "Nothing in {grove} but bark and startled pigeons.",
+    "item": "stormbreaker",
+    "lift_requires": "captain_america",
+    "lift_refusal": "None of your heroes are mighty enough to get this found item.",
+    "lift_message": "{hero} pulls Stormbreaker free. The park goes white for half a second.",
+    "recruit": "thor",
+    "flags": {"thor_joined": true},
+    "signal_message": "Something strange happened in Midtown...",
+    "signal_scene": {
+      "title": "2:41 AM",
+      "sound": "thunder",
+      "lines": [
+        "Something strange happened in Midtown...",
+        "The alert lands on every screen in the tower at once. A heartbeat later the thunder catches up with it - one crack, close enough to walk the glasses off the counter.",
+        "There is no storm on the forecast. There is no storm now. Only a white scar burned across the clouds above the park, already fading.",
+        "Whatever came down, came down in the trees."
+      ]
+    },
+    "found_scene": {
+      "title": "The Trees",
+      "lines": [
+        "Ozone. Splintered bark. A furrow of scorched grass ten feet long, and at the end of it a haft of grey wood standing up out of the dirt.",
+        "The axe is buried to the beard. The soil around it has been cooked to glass."
+      ]
+    },
+    "lift_scene": {
+      "character": "captain_america",
+      "title": "Captain America",
+      "lines": [
+        "Cap sets his shield in the grass, takes the haft in both hands, and pulls. It comes up like it was waiting on him.",
+        "\"...Huh,\" he says, turning it over. \"That's new.\"",
+        "It hums against his glove the whole flight home. Nobody in the Quinjet sleeps."
+      ]
+    },
+    "arrival_scene": {
+      "character": "thor",
+      "title": "Thor Odinson",
+      "lines": [
+        "Morning. There is a man standing on the common floor who was not there when the lights went out - nine feet of red cape and wet blond hair, holding the coffee machine up to the light like a suspect.",
+        "\"HAIL. I am Thor, Odinson, of Asgard. I have come for a thing that fell - a thing of storms.\"",
+        "\"You have it. I felt it wake when your shield-brother took it up, which should not have been possible.\" He looks at Captain America for a long, quiet moment. \"Worthy. Huh.\"",
+        "\"Stormbreaker is mine to carry. But the hand that lifted it has earned an accounting, and this HYDRA of yours has been reaching into places that were never theirs to reach.\"",
+        "\"So. I shall stay. Point me at them, and let us hear what mortal thunder sounds like.\""
+      ]
+    },
+    "arrival_message": "Thor takes Stormbreaker back - and stays."
+  }
+]

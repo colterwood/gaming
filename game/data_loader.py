@@ -229,7 +229,7 @@ def load_calendar(data_dir=None):
     path = os.path.join(data_dir or DATA_DIR, "calendar.json")
     calendar = _load_json(path)
     if not isinstance(calendar, dict):
-        raise DataError(f"calendar.json: top-level JSON must be an object")
+        raise DataError("calendar.json: top-level JSON must be an object")
     for issue in _require(calendar, "issues", list, "calendar.json"):
         _require(issue, "number", int, "calendar.json issue")
         _require(issue, "days", int, "calendar.json issue")
@@ -437,6 +437,96 @@ def load_story(data_dir=None):
     return story
 
 
+def _validate_scene(scene, where):
+    """A queued cutscene (M17): title + lines, optional portrait and sound."""
+    if scene is None:
+        return
+    if not isinstance(scene, dict):
+        raise DataError(f"{where}: must be an object")
+    _require(scene, "title", str, where)
+    lines = _require(scene, "lines", list, where)
+    if not lines or not all(isinstance(l, str) and l for l in lines):
+        raise DataError(f"{where}: lines must be a non-empty list of strings")
+    for key in ("character", "sound"):
+        if key in scene and not isinstance(scene[key], str):
+            raise DataError(f"{where}: {key} must be a string")
+
+
+def _validate_template(text, where, **sample):
+    """Catch a typo'd {placeholder} at load time, not mid-playthrough."""
+    try:
+        text.format(**sample)
+    except (KeyError, IndexError, ValueError) as e:
+        raise DataError(f"{where}: bad message template — {e}") from e
+
+
+UNLOCK_SCENES = ("signal_scene", "found_scene", "lift_scene", "arrival_scene")
+
+
+def load_unlocks(data_dir=None):
+    """Conditional side arcs (M17) — see game/hub/unlocks.py."""
+    path = os.path.join(data_dir or DATA_DIR, "quests", "unlocks.json")
+    arcs = _load_json(path)
+    if not isinstance(arcs, list):
+        raise DataError("unlocks.json: top-level JSON must be a list")
+    seen = set()
+    for arc in arcs:
+        if not isinstance(arc, dict):
+            raise DataError("unlocks.json: each arc must be an object")
+        aw = f"unlocks.json arc '{arc.get('id', '?')}'"
+        _require(arc, "id", str, aw)
+        _require(arc, "name", str, aw)
+        _require(arc, "desc", str, aw)
+        _require(arc, "location", str, aw)
+        _require(arc, "signal_message", str, aw)
+        _require(arc, "arrival_message", str, aw)
+        _validate_template(_require(arc, "empty_message", str, aw),
+                           f"{aw} empty_message", grove="a grove")
+        requires = arc.get("requires", {})
+        if not isinstance(requires, dict):
+            raise DataError(f"{aw}: requires must be an object")
+        for flag in requires.get("flags", []):
+            if not isinstance(flag, str):
+                raise DataError(f"{aw}: requires.flags entries must be strings")
+        for hero_id, min_rank in requires.get("hero_min_rank", {}).items():
+            if (not isinstance(min_rank, int) or isinstance(min_rank, bool)
+                    or not config.RANK_START <= min_rank <= config.RANK_MAX):
+                raise DataError(f"{aw}: requires.hero_min_rank['{hero_id}'] must "
+                                f"be {config.RANK_START}..{config.RANK_MAX}")
+        groves = _require(arc, "search_groves", list, aw)
+        if not groves:
+            raise DataError(f"{aw}: search_groves must be non-empty")
+        for grove in groves:
+            gw = f"{aw} grove '{(grove or {}).get('name', '?') if isinstance(grove, dict) else '?'}'"
+            if not isinstance(grove, dict):
+                raise DataError(f"{gw}: each grove must be an object")
+            _require(grove, "name", str, gw)
+            tiles = _require(grove, "tiles", list, gw)
+            if not tiles or not all(
+                    isinstance(t, list) and len(t) == 2
+                    and all(isinstance(v, int) and not isinstance(v, bool)
+                            for v in t) for t in tiles):
+                raise DataError(f"{gw}: tiles must be a non-empty list of [x, y]")
+        if "lift_requires" in arc:
+            _require(arc, "lift_requires", str, aw)
+            _require(arc, "lift_refusal", str, aw)
+        _validate_template(_require(arc, "lift_message", str, aw),
+                           f"{aw} lift_message", hero="Someone")
+        if "item" in arc:
+            _require(arc, "item", str, aw)
+        if "recruit" in arc:
+            _require(arc, "recruit", str, aw)
+        flags = arc.get("flags", {})
+        if not isinstance(flags, dict):
+            raise DataError(f"{aw}: flags must be an object")
+        for key in UNLOCK_SCENES:
+            _validate_scene(arc.get(key), f"{aw} {key}")
+        if arc["id"] in seen:
+            raise DataError(f"{aw}: duplicate id")
+        seen.add(arc["id"])
+    return arcs
+
+
 def load_zones(data_dir=None):
     path = os.path.join(data_dir or DATA_DIR, "zones.json")
     zones = _load_json(path)
@@ -616,7 +706,30 @@ def load_all(data_dir=None):
                 if not (0 <= y < len(zone_map) and 0 <= x < len(zone_map[y])):
                     raise DataError(f"story.json '{quest['id']}': scout point "
                                     f"[{x}, {y}] is outside the zone map")
+    unlocks = load_unlocks(data_dir)
+    for arc in unlocks:
+        aw = f"unlocks.json '{arc['id']}'"
+        if arc["location"] not in zones:
+            raise DataError(f"{aw}: zone '{arc['location']}' not found")
+        zone_map = zones[arc["location"]]["map"]
+        for grove in arc["search_groves"]:
+            for x, y in grove["tiles"]:
+                # An off-map stand would be unreachable and the arc would
+                # dead-end with the item un-findable.
+                if not (0 <= y < len(zone_map) and 0 <= x < len(zone_map[y])):
+                    raise DataError(f"{aw}: grove tile [{x}, {y}] is outside "
+                                    f"the '{arc['location']}' map")
+        if arc.get("item") and arc["item"] not in items:
+            raise DataError(f"{aw}: item '{arc['item']}' not found in items.json")
+        referenced = [arc.get("lift_requires"), arc.get("recruit")]
+        referenced += list(arc.get("requires", {}).get("hero_min_rank", {}))
+        referenced += [(arc.get(key) or {}).get("character")
+                       for key in UNLOCK_SCENES]
+        for char_id in referenced:
+            if char_id and char_id not in characters:
+                raise DataError(f"{aw}: character '{char_id}' not found")
     return {"characters": characters, "enemies": enemies, "items": items,
             "calendar": load_calendar(data_dir), "assignments": assignments,
             "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story,
-            "zones": zones, "passive": load_passive(data_dir), "dialogue": dialogue}
+            "zones": zones, "passive": load_passive(data_dir), "dialogue": dialogue,
+            "unlocks": unlocks}

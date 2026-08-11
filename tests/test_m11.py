@@ -16,7 +16,7 @@ def content():
 
 def entry():
     return {"trained_ranks": {}, "attribute_xp": {}, "perks": [],
-            "perk_choices": {}, "energy": 100, "unspent_xp": 0}
+            "perk_choices": {}, "energy": 100}
 
 
 def state_with(roster_ids, party_ids):
@@ -123,9 +123,9 @@ def test_two_hero_dispatch_pays_once_and_banks_both(content):
     assert dispatch.process_day(content, state) == []       # night 1: away
     dispatch.process_day(content, state)                    # night 2: home
     assert state["credits"] == round(280 * mult)    # paid ONCE
-    each = round(80 * mult)
-    assert state["roster"]["iron_man"]["unspent_xp"] == each        # EACH
-    assert state["roster"]["ant_man"]["unspent_xp"] == each
+    each = round(80 * mult)      # M21: onto the attributes, not into a bank
+    assert sum(state["roster"]["iron_man"]["attribute_xp"].values()) == each
+    assert sum(state["roster"]["ant_man"]["attribute_xp"].values()) == each
 
 
 def test_two_hero_request_pays_bond_once_per_job(content):

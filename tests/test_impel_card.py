@@ -23,7 +23,7 @@ def fresh_app(content):
         if c["recruit"]["method"] == "starter":
             state["roster"][cid] = {"trained_ranks": {}, "attribute_xp": {},
                                     "perks": [], "perk_choices": {}, "gear": {},
-                                    "ult_charge": 0, "energy": 100, "unspent_xp": 0}
+                                    "ult_charge": 0, "energy": 100}
     state["party"] = sorted(state["roster"])
 
     class FakeApp:
@@ -49,7 +49,7 @@ def test_all_bondable_npcs_gift_no_overflow(content):
     app.game_state["roster"]["hulk"] = {"trained_ranks": {}, "attribute_xp": {},
                                         "perks": [], "perk_choices": {},
                                         "gear": {}, "ult_charge": 0,
-                                        "energy": 100, "unspent_xp": 0}
+                                        "energy": 100}
     scene.tab_index = TABS.index("Social")
     draw_all_tabs(scene, app)   # must not raise
     assert scene.scroll["Social"] == 0   # all 4 fit — no scroll needed
@@ -105,8 +105,7 @@ def test_tasks_board_scrolls_at_tier_3(content):
                                            "stamina", "durability", "intelligence")},
                                          "attribute_xp": {}, "perks": [],
                                          "perk_choices": {}, "gear": {},
-                                         "ult_charge": 0, "energy": 100,
-                                         "unspent_xp": 0}
+                                         "ult_charge": 0, "energy": 100}
     scene.tab_index = TABS.index("Tasks")
     draw_all_tabs(scene, app)   # must not raise even with a long board
     for _ in range(10):

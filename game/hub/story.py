@@ -128,6 +128,15 @@ def do_scout(state, quest, index, story_data=None):
         return {"ok": False, "message": "Too exhausted — sleep to recover."}
     energy.spend(state, config.SCOUT_ENERGY)
     hit_end = clock.advance(state, config.SCOUT_MINUTES)
+    if energy.is_exhausted(state) or clock.is_past_end(state):
+        # M18: collapsing ON the job loses the job. The point isn't
+        # credited and the night's work goes with it — previously the
+        # last point still landed and could even COMPLETE the quest on
+        # the way down.
+        done.clear()
+        return {"ok": True, "hit_day_end": True, "reset": True,
+                "message": (f"The team drops where they stand. "
+                            f"{quest['name']} will have to be worked again.")}
     done.append(index)
     remaining = len(quest["scout_points"]) - len(done)
     if remaining:
@@ -151,8 +160,7 @@ def complete_battle_quest(state, quest, content):
         state["roster"][recruit_id] = {"trained_ranks": {}, "attribute_xp": {},
                                        "perks": [], "perk_choices": {},
                                        "gear": {}, "ult_charge": 0,
-                                       "energy": config.DAILY_ENERGY,
-                                       "unspent_xp": 0}
+                                       "energy": config.DAILY_ENERGY}
         name = content["characters"][recruit_id]["name"]
         messages.append(f"{name} joins the roster!")
     for flag, value in quest.get("flags", {}).items():

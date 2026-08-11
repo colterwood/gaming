@@ -174,14 +174,18 @@ def process_day(content, state):
         for hero_id in job["heroes"]:
             entry = state.get("roster", {}).get(hero_id)
             if entry and job["xp"]:
-                entry["unspent_xp"] = entry.get("unspent_xp", 0) + job["xp"]
+                # M21: away work trains them the same way field work does —
+                # straight onto the attributes, not into a bank.
+                attrs.award_battle_xp(
+                    content["characters"][hero_id].get("boosts", {}),
+                    entry, job["xp"])
                 mastery.log_mastery_xp(entry, job["xp"])
         _release(state, job)
         active(state).remove(job)
         names = " and ".join(content["characters"][h]["name"] for h in job["heroes"])
         reward = f"+{job['credits']} cr"
         if job["xp"]:
-            reward += f", +{job['xp']} XP banked each"
+            reward += f", +{job['xp']} XP each"
         messages.append(f"{job['name']} done - {names} return(s). {reward}.")
         requester = job.get("requested_by")             # NPC request (M11)
         if requester and job.get("bond"):

@@ -23,7 +23,7 @@ def app():
         a.game_state["roster"][hid] = {
             "trained_ranks": {}, "attribute_xp": {}, "perks": [],
             "perk_choices": {}, "gear": {}, "ult_charge": 0,
-            "energy": 70, "unspent_xp": 0}
+            "energy": 70}
     a.game_state["party"] = ["iron_man", "captain_america"]
     for to in (GameState.TITLE, GameState.PATH_SELECT, GameState.HUB,
                GameState.BATTLE):
