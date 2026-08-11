@@ -298,10 +298,13 @@ class ImpelCardScene:
                 shown += 1
         elif tab == "Tasks":
             half = panel.width // 2
-            btext(surface, "Board (today)", 13, INK,
+            tier = dispatch.roster_tier(self.content, state)
+            btext(surface, f"Board (today) - Tier {tier}", 13, INK,
                   topleft=(panel.x + pad, panel.y + 5))
             y = panel.y + 20
-            for task in activities.assignment_tasks_today(state, self.content["assignments"]):
+            today = activities.assignment_tasks_today(
+                state, self.content["assignments"], tier)
+            for task in today:
                 job = dispatch.find(state, task["id"])
                 mark = "[>]" if job else "[ ]"
                 line = f"{mark} {task['name']} - {task['credits']}cr"
@@ -311,8 +314,7 @@ class ImpelCardScene:
                               topleft=(panel.x + pad, y))
                 y += 13
             for job in dispatch.active(state):
-                if any(t["id"] == job["task_id"] for t in
-                       activities.assignment_tasks_today(state, self.content["assignments"])):
+                if any(t["id"] == job["task_id"] for t in today):
                     continue        # already shown above
                 names = ", ".join(self.content["characters"][h]["name"]
                                   for h in job["heroes"])

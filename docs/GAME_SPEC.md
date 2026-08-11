@@ -181,7 +181,7 @@ Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 | Tick | 10 in-game minutes per 7 real seconds (cosmetic in POC; activities also advance the clock in fixed jumps) |
 | Daily energy | 100 |
 | Training session | 25 energy, +90 min clock |
-| Combat mission | 40 energy, +3 h clock |
+| Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
 | Craft action | 15 energy, +60 min |
 | Small task | 10–20 energy |
 | Talk / gift | 0 energy, +20 min |
@@ -271,7 +271,7 @@ Avengers Tower rooms and activities:
 
 | Room | Activities |
 |---|---|
-| Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating tasks per day; since M10 these are dispatch jobs — see §9 M10) |
+| Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating tasks per day per unlocked board tier; dispatch jobs — see §9 M10/M11) |
 | Training Floor | Attribute training (pick hero + attribute); upgrades to tier 2 via story flag after Ch. 1 boss |
 | Ops Floor | Launch story missions, view quest log |
 
@@ -444,6 +444,45 @@ and observe passive gains and post-grace atrophy; all text crisp.*
 have it respawn next day; spring at least one trap; dispatch a hero, see
 them refuse party re-entry until they return with rewards; win a mission
 and walk back to the helipad yourself.*
+
+**M11 — Progression, dialogue & free flight** *(added post-POC)*.
+- **Never blocked from battle**: engaging a mission target always works.
+  `launch_mission` drains MISSION_ENERGY from each party member flooring
+  at 0 (energy.drain) instead of refusing; a tired team just fights with
+  the M9 initiative penalty (and passes out after, if it hits 0).
+  Training, crafting, and hub tasks still require the energy.
+- **Quinjet free flight**: a zone helipad opens a destination menu —
+  tower or any other zone (TRAVEL_MINUTES per hop) — instead of only
+  flying home.
+- **Board tiers**: team power = sum of the top-4 roster heroes' effective
+  grid totals. Tier 2 unlocks at 70, tier 3 at 110 (BOARD_TIER_POWER).
+  Each unlocked tier contributes 2 rotating tasks/day to the board; the
+  board teases the next tier's threshold. assignments.json tasks carry
+  `tier` 1–3.
+- **Dispatch pay scales with who you send**: multiplier =
+  1 + 0.02 × (avg sent-hero grid total − 24), clamped 0.8–1.5
+  (DISPATCH_POWER_* / DISPATCH_MULT_*), applied to credits and XP and
+  snapshotted on the job when it starts.
+- **NPC requests**: tasks may carry `requested_by` (an NPC id) and
+  `bond`; completion pays the bond points to that NPC (feeding the
+  existing level-4 unlock flags: Jarvis energy, Pepper discount, Coulson
+  credits) on top of credits/XP. The board labels these "for <name>".
+- **Tiered dialogue** (`data/dialogue.json`): every character has talk-line
+  pools keyed by minimum tier. Bondable characters (NPCs, bond-recruits)
+  use their bond level; non-bonding teammates use story stage instead
+  (0 → 2 after the Ch. 1 boss via `training_upgraded`, → 4 at
+  `ch2_complete`). Talking/chatting shows the line in the dialogue box
+  (a transient scene, nothing marked seen), picked from the richest
+  unlocked pool and rotated daily. Lines grow more personal per tier.
+- **Gift reactions**: gift results now include the category and a visible
+  reaction ("loves it!", "hates it!") so per-character gift relevance
+  (§6.2 loved/liked/disliked/hated tables in each character JSON) is
+  legible in play.
+*AC: engage a mission at 0 EN and fight (slowly); fly zone→zone direct;
+watch board tiers unlock as the roster's top-4 power crosses 70/110; send
+a strong hero and see a bigger payout than a weak one; complete an NPC
+request and see the bond gain; talk to an NPC at bond 0 and 4+ and hear
+different registers; get a "loves it!" and a "hates it!" reaction.*
 
 ---
 

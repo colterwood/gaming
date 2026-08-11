@@ -54,6 +54,15 @@ def spend(state, amount):
     return True
 
 
+def drain(state, amount):
+    """Team action that can't be refused (M11: engaging a battle): drain
+    every party member, flooring at 0. Fighting on fumes is allowed — the
+    cost is the M9 initiative penalty, and passing out after."""
+    for hero_id in party(state):
+        set_hero_energy(state, hero_id, hero_energy(state, hero_id) - amount)
+    return sync(state)
+
+
 def spend_hero(state, hero_id, amount):
     """Individual drain (e.g. the trainee in a training session)."""
     if hero_energy(state, hero_id) < amount:

@@ -75,21 +75,28 @@ def craft(state):
 
 
 def launch_mission(state, mission_id="hydra_patrol"):
-    result = _spend(state, config.MISSION_ENERGY, config.MISSION_MINUTES)
-    if result["ok"]:
-        result["launch_battle"] = mission_id
-        result["message"] = "Mission launched."
-    return result
+    """M11: engaging is never blocked by low EN. The team drains toward 0
+    and fights with the M9 initiative penalty instead of being refused."""
+    energy.drain(state, config.MISSION_ENERGY)
+    hit_end = clock.advance(state, config.MISSION_MINUTES)
+    return {"ok": True, "hit_day_end": hit_end, "launch_battle": mission_id,
+            "message": "Mission launched."}
 
 
-def assignment_tasks_today(state, assignments):
-    """Two rotating tasks per day from the assignment pool (§7). Doing them
-    is a dispatch now — see game.hub.dispatch (M10)."""
-    pool = sorted(assignments, key=lambda a: a["id"])
-    if not pool:
-        return []
+def assignment_tasks_today(state, assignments, tier=1):
+    """Two rotating tasks per day from each unlocked tier's pool (§7; M10
+    dispatches, M11 tiers). Pass tier = dispatch.roster_tier(...)."""
     base = ((state["issue"] - 1) * config.DAYS_PER_ISSUE + state["day"] - 1) * 2
-    return [pool[base % len(pool)], pool[(base + 1) % len(pool)]]
+    today = []
+    for level in range(1, tier + 1):
+        pool = sorted((a for a in assignments if a.get("tier", 1) == level),
+                      key=lambda a: a["id"])
+        if not pool:
+            continue
+        today.append(pool[base % len(pool)])
+        if len(pool) > 1:
+            today.append(pool[(base + 1) % len(pool)])
+    return today
 
 
 def eat_food(state, content, hero_id, item_id):

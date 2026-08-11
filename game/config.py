@@ -130,6 +130,15 @@ EAT_MINUTES = 10                    # eating a ration advances the clock
 SEARCH_MINUTES = 15                 # rummaging a crate/dumpster
 SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
 
+# --- Board tiers & dispatch scaling (M11) ---
+# Team power = sum of the top-4 roster heroes' effective grid totals
+# (start: Iron Man 29 + Cap 18 = 47; max 42 per hero).
+BOARD_TIER_POWER = {2: 70, 3: 110}  # team power to unlock board tier N
+DISPATCH_POWER_BASELINE = 24        # avg sent-hero grid total paying 1.0x
+DISPATCH_POWER_BONUS = 0.02         # pay multiplier step per point of avg power
+DISPATCH_MULT_MIN = 0.8
+DISPATCH_MULT_MAX = 1.5
+
 # --- Attributes & Training (§6.3) ---
 ATTRIBUTE_XP_PER_RANK = 100         # XP to gain trained rank N = 100 * N
 TRAINING_XP_BASIC = 40

@@ -233,6 +233,16 @@ def load_assignments(data_dir=None):
         if days < 1:
             raise DataError(f"{tw}: days must be >= 1")
         _require(task, "xp", int, tw)
+        tier = _require(task, "tier", int, tw)          # board tiers (M11)
+        if not 1 <= tier <= 3:
+            raise DataError(f"{tw}: tier must be 1..3")
+        if "requested_by" in task:                      # NPC requests (M11)
+            _require(task, "requested_by", str, tw)
+            if not task["requested_by"]:
+                raise DataError(f"{tw}: requested_by must be non-empty")
+            bond = _require(task, "bond", int, tw)
+            if bond < 1:
+                raise DataError(f"{tw}: bond must be >= 1")
         if task["id"] in seen:
             raise DataError(f"{tw}: duplicate id")
         seen.add(task["id"])
@@ -365,6 +375,32 @@ def load_zones(data_dir=None):
     return {z["id"]: z for z in zones}
 
 
+def load_dialogue(data_dir=None):
+    """Bond/story-tiered talk lines (M11): {char_id: {"0": [...], "2": [...]}}.
+    Tier keys are the minimum bond level (or story stage for non-bonding
+    teammates) at which the pool unlocks."""
+    path = os.path.join(data_dir or DATA_DIR, "dialogue.json")
+    dialogue = _load_json(path)
+    if not isinstance(dialogue, dict):
+        raise DataError("dialogue.json: top-level JSON must be an object")
+    for char_id, pools in dialogue.items():
+        dw = f"dialogue.json '{char_id}'"
+        if not isinstance(pools, dict) or not pools:
+            raise DataError(f"{dw}: must be a non-empty object of tier pools")
+        for tier, lines in pools.items():
+            # Canonical ASCII integers only: "04" would silently shadow "4"
+            # and Unicode digits pass isdigit() but break int() at talk time.
+            if not (tier.isascii() and tier.isdigit() and str(int(tier)) == tier):
+                raise DataError(f"{dw}: tier keys must be canonical non-negative "
+                                f"integers, got '{tier}'")
+            if (not isinstance(lines, list) or not lines
+                    or not all(isinstance(l, str) and l for l in lines)):
+                raise DataError(f"{dw} tier {tier}: must be a non-empty list of strings")
+        if "0" not in pools:
+            raise DataError(f"{dw}: needs a tier '0' pool (the default lines)")
+    return dialogue
+
+
 def load_passive(data_dir=None):
     path = os.path.join(data_dir or DATA_DIR, "passive.json")
     passive = _load_json(path)
@@ -405,6 +441,22 @@ def load_all(data_dir=None):
     for scene in bond_scenes:
         if scene["character"] not in characters:
             raise DataError(f"bond_scenes.json: character '{scene['character']}' not found")
+    assignments = load_assignments(data_dir)
+    for task in assignments:
+        requester = task.get("requested_by")
+        if requester is None:
+            continue
+        if requester not in characters:
+            raise DataError(
+                f"assignments.json '{task['id']}': requested_by '{requester}' not found")
+        if characters[requester]["recruit"]["method"] not in ("bond", "npc"):
+            raise DataError(
+                f"assignments.json '{task['id']}': requested_by '{requester}' "
+                f"is not a bondable NPC — the bond reward would be invisible")
+    dialogue = load_dialogue(data_dir)
+    for char_id in dialogue:
+        if char_id not in characters:
+            raise DataError(f"dialogue.json: character '{char_id}' not found")
     story = load_story(data_dir)
     zones = load_zones(data_dir)
     for zone in zones.values():
@@ -425,6 +477,6 @@ def load_all(data_dir=None):
                     not isinstance(quest["deadline_days"], int) or quest["deadline_days"] < 1):
                 raise DataError(f"story.json '{quest['id']}': deadline_days must be a positive int")
     return {"characters": characters, "enemies": enemies, "items": items,
-            "calendar": load_calendar(data_dir), "assignments": load_assignments(data_dir),
+            "calendar": load_calendar(data_dir), "assignments": assignments,
             "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story,
-            "zones": zones, "passive": load_passive(data_dir)}
+            "zones": zones, "passive": load_passive(data_dir), "dialogue": dialogue}

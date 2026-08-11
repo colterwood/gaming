@@ -15,7 +15,7 @@ from game.core import calendar as cal
 from game.core import clock, energy
 from game.core.state_machine import GameState
 from game.hub import activities, dispatch, field, party as party_mod, passive, story
-from game.social import bonds, events
+from game.social import bonds, dialogue, events
 from game.ui import pixelkit, sprites, widgets
 
 TILE = 16
@@ -35,7 +35,7 @@ STATION_KINDS = {"E": "elevator", "S": "shop", "b": "board", "O": "ops",
 STATION_LABELS = {"elevator": "Elevator", "shop": "Tower Shop",
                   "board": "Assignment Board", "ops": "Ops Console",
                   "bed": "Sleep", "training": "Training Rack",
-                  "helipad": "Return to Tower"}
+                  "helipad": "Quinjet"}
 ZONE_STATION_KINDS = {"helipad", "shop"}    # what works in the field (M10)
 
 FLOORS = {
@@ -134,28 +134,7 @@ def _normalize(rows):
 for _floor in FLOORS.values():
     _floor["map"] = _normalize(_floor["map"])
 
-FLAVOR = {
-    "iron_man": [
-        "TONY: JARVIS ran the numbers. We're statistically overdue for a Tuesday.",
-        "TONY: If anyone asks, the scorch mark on floor twelve was already there.",
-        "TONY: Coffee's on Jarvis. Everything else in this tower is on me. Literally.",
-    ],
-    "captain_america": [
-        "STEVE: Morning. Already did my ten miles. The city looks good from up here.",
-        "STEVE: HYDRA doesn't rest, but you should. Take the couch sometime.",
-        "STEVE: Keep the team close. That's the mission under the mission.",
-    ],
-    "ant_man": [
-        "SCOTT: I've been small enough to hear ants argue. They're big on committee.",
-        "SCOTT: House arrest to Avengers Tower. Massive upgrade. Huge. Well - variable.",
-        "SCOTT: If you see a really big crumb in the kitchen, that was me. Sorry.",
-    ],
-    "hulk": [
-        "HULK: ...",
-        "HULK: Hulk smashed HYDRA good today.",
-        "HULK: Metal man talks too much. You talk okay amount.",
-    ],
-}
+# Talk lines live in data/dialogue.json, tiered by relationship (M11).
 
 # Benched heroes stand where their assignment happens
 ASSIGNMENT_SPOTS = {
@@ -205,6 +184,8 @@ class HubScene:
         self.submenu_index = 0
         self.train_hero_id = None
         self.perk_ctx = None
+        self.scene = None
+        self.scene_line = 0
 
     def return_to_tower(self):
         self.reset_modes()
@@ -365,6 +346,10 @@ class HubScene:
                 self.mode = "scene"
                 return
             self._move(dt, app)
+            if app.machine.state is not GameState.HUB:
+                return      # an ambush started a battle this frame — the
+                            # pass-out check must not fire on top of it
+                            # (BATTLE -> SLEEP is an illegal transition)
         self.tick_accum += dt
         if self.tick_accum >= config.TICK_REAL_SECONDS:
             self.tick_accum -= config.TICK_REAL_SECONDS
@@ -415,7 +400,8 @@ class HubScene:
             if key == pygame.K_RETURN:
                 self.scene_line += 1
                 if self.scene_line >= len(self.scene["lines"]):
-                    events.mark_seen(app.game_state, self.scene["id"])
+                    if self.scene.get("id"):    # transient talk lines have none
+                        events.mark_seen(app.game_state, self.scene["id"])
                     self.scene = None
                     self.mode = "normal"
             return
@@ -477,7 +463,7 @@ class HubScene:
         elif ident == "elevator":
             self._open_elevator(app)
         elif ident == "helipad":
-            self._travel(app, "tower")
+            self._open_helipad(app)
         elif ident == "shop":
             self._open_shop(app)
         elif ident == "board":
@@ -496,6 +482,18 @@ class HubScene:
             items.append((f"Quinjet: {zone['name']}  [{danger}]", False,
                           (lambda a, zid=zone["id"]: self._travel(a, zid))))
         self._open_submenu("Elevator", items)
+
+    def _open_helipad(self, app):
+        """M11: the Quinjet flies anywhere from a zone helipad, not just home."""
+        items = [("Avengers Tower", False,
+                  (lambda a: self._travel(a, "tower")))]
+        for zone in sorted(self.content["zones"].values(), key=lambda z: z["danger"]):
+            if zone["id"] == self.area:
+                continue
+            items.append((f"{zone['name']}  [{'!' * zone['danger']}]", False,
+                          (lambda a, zid=zone["id"]: self._travel(a, zid))))
+        items.append(("Stay here", False, None))
+        self._open_submenu("Quinjet: fly to...", items)
 
     def _switch_floor(self, floor):
         self.area = "tower"
@@ -626,10 +624,20 @@ class HubScene:
             title += f"  EN {energy.hero_energy(state, char_id)}"
         self._open_submenu(title, items)
 
+    def _show_line(self, char_id, line):
+        """Pop a one-line dialogue box (transient scene — nothing marked
+        seen). M11: talk lines live in data/dialogue.json by tier."""
+        self.scene = {"character": char_id, "lines": [line],
+                      "title": self.content["characters"][char_id]["name"]}
+        self.scene_line = 0
+        self.mode = "scene"
+
     def _flavor(self, app, char_id):
-        lines = FLAVOR.get(char_id, ["..."])
-        self.log(lines[(app.game_state["day"] + len(char_id)) % len(lines)])
+        char = self.content["characters"][char_id]
+        line = dialogue.line_for(app.game_state, char, self.content["dialogue"])
         self.reset_modes()
+        if line:
+            self._show_line(char_id, line)
 
     def _talk(self, app, char_id):
         state = app.game_state
@@ -643,10 +651,17 @@ class HubScene:
             self.log(message)
             for m in bonds.check_bond_progress(state, self.content):
                 self.log(m)
+            self.reset_modes()
+            if activities.should_pass_out(state):
+                self._after_action(app)     # 2 AM mid-chat: no line tonight
+                return
+            line = dialogue.line_for(state, char, self.content["dialogue"])
+            if line:
+                self._show_line(char_id, line)
         else:
             self.log(result["message"])
-        self.reset_modes()
-        self._after_action(app)
+            self.reset_modes()
+            self._after_action(app)
 
     def _open_gift_menu(self, app, char_id):
         state = app.game_state
@@ -770,17 +785,31 @@ class HubScene:
 
     def _open_board(self, app):
         """M10: board tasks are dispatches — pick heroes, send them away for
-        days; they can't rejoin the party until they return or are recalled."""
+        days; they can't rejoin the party until they return or are recalled.
+        M11: tiers unlock with team power; NPC requests pay bond."""
         state = app.game_state
+        tier = dispatch.roster_tier(self.content, state)
+        power = dispatch.team_power(self.content, state)
         items = []
-        for task in activities.assignment_tasks_today(state, self.content["assignments"]):
+        for task in activities.assignment_tasks_today(
+                state, self.content["assignments"], tier):
             under_way = dispatch.find(state, task["id"]) is not None
-            label = (f"{task['name']} - {task['heroes']} hero(es), "
-                     f"{task['days']}d, +{task['credits']} cr")
+            label = (f"{task['name']} - {task['heroes']}h/{task['days']}d, "
+                     f"~{task['credits']} cr")
             if under_way:
                 label += "  [under way]"
             items.append((label, under_way,
                           (lambda a, t=task: self._open_dispatch_picker(a, t))))
+            requester = task.get("requested_by")
+            if requester and not under_way:
+                requester_name = self.content["characters"][requester]["name"]
+                items.append((f"   for {requester_name} (+{task.get('bond', 0)}"
+                              f" bond)", True, None))
+        next_tier = tier + 1
+        if next_tier in config.BOARD_TIER_POWER:
+            need = config.BOARD_TIER_POWER[next_tier]
+            items.append((f"Tier {next_tier} jobs at team power {need} "
+                          f"(now {power})", True, None))
         for job in dispatch.active(state):
             names = ", ".join(self.content["characters"][h]["name"]
                               for h in job["heroes"])
@@ -790,7 +819,7 @@ class HubScene:
                           (lambda a, tid=job["task_id"]:
                            self._recall_dispatch(a, tid))))
         items.append(("Close", False, None))
-        self._open_submenu("Assignment Board", items)
+        self._open_submenu(f"Assignment Board - Tier {tier}", items)
 
     def _open_dispatch_picker(self, app, task, picked=()):
         state = app.game_state
@@ -803,7 +832,8 @@ class HubScene:
                 continue
             name = self.content["characters"][hero_id]["name"]
             en = energy.hero_energy(state, hero_id)
-            label = f"Send {name}  (EN {en})"
+            power = dispatch.hero_power(self.content, state, hero_id)
+            label = f"Send {name}  (EN {en}, PWR {power})"
             would_empty = hero_id in party and len(remaining_party) <= 1
             if hero_id in party:
                 label += "  [on team]"

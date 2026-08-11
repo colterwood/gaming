@@ -42,6 +42,16 @@ def gift_category(character, item_id):
     return "neutral"
 
 
+# Reaction flavor so gift relevance is visible in play (M11)
+GIFT_REACTIONS = {
+    "loved": "loves it!",
+    "liked": "likes it.",
+    "neutral": "accepts it politely.",
+    "disliked": "frowns at it.",
+    "hated": "hates it!",
+}
+
+
 def is_birthday(state, character):
     return (character["birthday"]["issue"] == state["issue"]
             and character["birthday"]["day"] == state["day"])
@@ -60,11 +70,13 @@ def give_gift(state, character, item_id):
     if state["inventory"][item_id] <= 0:
         del state["inventory"][item_id]
     bond["gifts_this_week"] += 1
-    points = config.GIFT_POINTS[gift_category(character, item_id)]
+    category = gift_category(character, item_id)
+    points = config.GIFT_POINTS[category]
     if is_birthday(state, character):
         points *= config.BIRTHDAY_GIFT_MULTIPLIER
     result = add_points(state, char_id, points)
-    result.update(ok=True, message=f"{points:+d} bond"
+    result.update(ok=True, category=category,
+                  message=f"{GIFT_REACTIONS[category]} {points:+d} bond"
                   + (" (birthday!)" if is_birthday(state, character) else ""))
     return result
 

@@ -197,9 +197,10 @@ def test_full_ch1_ch2_playthrough(content):
             if not story.do_hub_task(state, quest)["ok"]:
                 cal.sleep(state)
             continue
-        if not activities.launch_mission(state)["ok"]:
-            cal.sleep(state)
+        if activities.should_pass_out(state):   # M11: engaging never refuses,
+            cal.sleep(state)                    # so rest BEFORE a 0-EN fight
             continue
+        activities.launch_mission(state)
         engine = _smart_battle(content, state, quest["enemies"])
         battles += 1
         assert engine.outcome == "win", f"lost {quest['id']} with smart play"

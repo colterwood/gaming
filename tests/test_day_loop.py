@@ -144,12 +144,24 @@ def test_mission_costs_and_launches():
     assert state["time_minutes"] == 360 + config.MISSION_MINUTES
 
 
-def test_activity_blocked_without_energy():
+def test_mission_never_blocked_drains_to_zero():
+    # M11: a tired team can always engage — energy floors at 0 and the
+    # M9 initiative penalty is the price.
     state = fresh_state()
-    state["roster"]["captain_america"]["energy"] = 10   # weakest member blocks
+    state["roster"]["captain_america"]["energy"] = 10
     result = activities.launch_mission(state)
+    assert result["ok"] and result["launch_battle"]
+    assert state["roster"]["captain_america"]["energy"] == 0
+    assert state["roster"]["iron_man"]["energy"] == 60
+
+
+def test_training_still_blocked_without_energy():
+    state = fresh_state()
+    for entry in state["roster"].values():
+        entry["energy"] = 5
+    result = activities.training_session(state)
     assert not result["ok"]
-    assert state["roster"]["iron_man"]["energy"] == 100  # nothing spent
+    assert state["roster"]["iron_man"]["energy"] == 5    # nothing spent
 
 
 def test_assignments_rotate_daily(content):

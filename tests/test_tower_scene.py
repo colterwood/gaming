@@ -5,7 +5,8 @@ import pygame
 import pytest
 
 from game import config, data_loader
-from game.core import save
+from game.core import energy, save
+from game.core.state_machine import GameState
 from game.hub import story
 from game.hub.tower import FLOORS, HUD_H, TILE, HubScene
 
@@ -13,9 +14,11 @@ from game.hub.tower import FLOORS, HUD_H, TILE, HubScene
 class FakeMachine:
     def __init__(self):
         self.transitions = []
+        self.state = GameState.HUB
 
     def transition(self, to):
         self.transitions.append(to)
+        self.state = to
 
 
 class FakeApp:
@@ -40,6 +43,7 @@ class FakeApp:
 
     def start_battle(self, enemy_ids=None, quest=None, ambush=False):
         self.battles.append((tuple(enemy_ids), quest["id"] if quest else None))
+        self.machine.transition(GameState.BATTLE)   # like the real App
 
 
 @pytest.fixture(scope="module")
@@ -77,7 +81,12 @@ def test_talk_to_jarvis_gives_bond(content):
     assert scene.mode == "submenu"
     choose(scene, app, "Talk")
     assert app.game_state["bonds"]["jarvis"]["points"] == 15
+    # M11: the talk line shows in a dialogue box (transient scene)
+    assert scene.mode == "scene"
+    assert scene.scene["lines"][0] in content["dialogue"]["jarvis"]["0"]
+    scene.handle_key(app, pygame.K_RETURN)      # dismiss the line
     assert scene.mode == "normal"
+    assert app.game_state.get("bond_scenes_seen", []) == []   # nothing marked
 
 
 def test_gift_jarvis_loved(content):
@@ -101,9 +110,9 @@ def test_benched_starter_chats_no_bonds(content):
     scene.handle_key(app, pygame.K_RETURN)
     assert scene.mode == "submenu"
     choose(scene, app, "Chat")
-    assert scene.mode == "normal"                     # a flavor line, no points
+    assert scene.mode == "scene"                      # a flavor line, no points
+    assert scene.scene["lines"][0] in content["dialogue"]["iron_man"]["0"]
     assert "iron_man" not in app.game_state.get("bonds", {})
-    assert scene.messages
 
 
 def test_party_members_are_not_placed_in_world(content):
@@ -242,7 +251,7 @@ def test_board_dispatch_and_recall(content):
     state = app.game_state
     put_player_at(scene, 34, 12)                # next to the board (35, 12)
     scene.handle_key(app, pygame.K_RETURN)
-    assert scene.submenu["title"] == "Assignment Board"
+    assert scene.submenu["title"] == "Assignment Board - Tier 1"
     choose(scene, app, "Calibrate Tower Sensors")     # day-1 task, 1 hero 2d
     choose(scene, app, "Send Iron Man")
     assert state["roster"]["iron_man"]["dispatch"] == "calibrate_sensors"
@@ -288,6 +297,37 @@ def test_crate_search_marks_spot_and_pays(content):
     assert app.battles == []                    # no trap on this seed
 
 
+def test_zone_helipad_flies_anywhere(content):
+    scene, app = scene_with_app(content)
+    scene.area = "docks"
+    zone = content["zones"]["docks"]
+    put_player_at(scene, 2, 15)                 # beside the helipad (1-2, 16)
+    hit = scene._nearest_interaction(app.game_state)
+    assert hit == ("station", "helipad", "Quinjet")
+    scene.handle_key(app, pygame.K_RETURN)
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any(l.startswith("Avengers Tower") for l in labels)
+    assert any(l.startswith("Midtown") for l in labels)
+    assert any(l.startswith("HYDRA District") for l in labels)
+    assert any(l.startswith("Stay here") for l in labels)
+    assert not any(l.startswith("Hudson Docks") for l in labels)   # already here
+    choose(scene, app, "Midtown")
+    assert scene.area == "midtown"              # zone-to-zone, no tower stop
+    # exactly one Quinjet hop on the clock (spec M11: TRAVEL_MINUTES per hop)
+    assert app.game_state["time_minutes"] == 360 + config.TRAVEL_MINUTES
+
+
+def test_board_shows_tier_teaser_and_request_label(content):
+    scene, app = scene_with_app(content)
+    app.game_state["day"] = 3                   # rotation shows the request tasks
+    put_player_at(scene, 34, 12)
+    scene.handle_key(app, pygame.K_RETURN)
+    assert scene.submenu["title"] == "Assignment Board - Tier 1"
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any("Tier 2 jobs at team power 70 (now 47)" in l for l in labels)
+    assert any(l.strip().startswith("for ") for l in labels)   # NPC request
+
+
 def test_street_cart_stocks_field_food(content):
     scene, app = scene_with_app(content)
     scene.area = "midtown"
@@ -300,3 +340,47 @@ def test_street_cart_stocks_field_food(content):
     assert any(l.startswith("Shawarma Wrap") for l in labels)
     assert any(l.startswith("Med Kit") for l in labels)
     assert not any("Vintage Vinyl" in l for l in labels)   # tower-only stock
+
+
+def test_ambush_frame_never_stacks_pass_out(content):
+    # M11 regression pin: an ambush and a pass-out on the same update frame
+    # must not fire together (BATTLE -> SLEEP is an illegal transition).
+    scene, app = scene_with_app(content)
+    scene.area = "docks"
+    for entry in app.game_state["roster"].values():
+        entry["energy"] = 0
+    energy.sync(app.game_state)
+    scene._move = lambda dt, a: a.start_battle(     # walking springs an ambush
+        enemy_ids=["hydra_grunt"] * 5, ambush=True)
+    scene.update(0.016, app)
+    assert app.battles                              # the ambush fired
+    assert app.slept == []                          # and pass-out did not stack
+
+
+def test_engage_at_low_energy_fights_first_sleeps_after(content):
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    state["roster"]["captain_america"]["energy"] = 10
+    energy.sync(state)
+    scene.area = "docks"
+    zone = content["zones"]["docks"]
+    put_player_at(scene, zone["target_spot"][0], zone["target_spot"][1] + 1)
+    scene.handle_key(app, pygame.K_RETURN)          # engage the mission squad
+    assert app.battles and app.slept == []          # fight first, no sleep yet
+    assert state["roster"]["captain_america"]["energy"] == 0
+    app.machine.state = GameState.HUB               # battle resolved
+    scene._move = lambda dt, a: None                # (headless: no key polling)
+    scene.update(0.016, app)
+    assert app.slept == [True]                      # the collapse comes after
+
+
+def test_talk_at_2am_sleeps_without_dialogue_box(content):
+    scene, app = scene_with_app(content)
+    state = app.game_state
+    state["time_minutes"] = config.DAY_END_MINUTES - 15     # 1:45 AM
+    put_player_at(scene, 4, 7)                              # Jarvis
+    scene.handle_key(app, pygame.K_RETURN)
+    choose(scene, app, "Talk")
+    assert app.slept == [True]                              # pass-out won
+    assert scene.mode != "scene"                            # no orphaned box
+    assert state["bonds"]["jarvis"]["points"] == 15         # talk still counted

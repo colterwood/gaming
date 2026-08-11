@@ -178,3 +178,28 @@ def test_bad_item_kind_raises(tmp_path):
                                           "price": 1, "sources": []}])
     with pytest.raises(DataError, match="kind"):
         data_loader.load_items(d)
+
+
+def test_dialogue_noncanonical_tier_key_raises(tmp_path):
+    # "04" would pass isdigit() but line_for indexes pools[str(int(k))] -> "4"
+    (tmp_path / "dialogue.json").write_text(
+        json.dumps({"someone": {"0": ["hi"], "04": ["later"]}}))
+    with pytest.raises(DataError, match="canonical"):
+        data_loader.load_dialogue(str(tmp_path))
+
+
+def test_dialogue_unicode_digit_tier_key_raises(tmp_path):
+    # "²" passes isdigit() but int() raises at talk time
+    (tmp_path / "dialogue.json").write_text(
+        json.dumps({"someone": {"0": ["hi"], "²": ["boom"]}}))
+    with pytest.raises(DataError, match="canonical"):
+        data_loader.load_dialogue(str(tmp_path))
+
+
+def test_assignment_empty_requester_raises(tmp_path):
+    (tmp_path / "quests").mkdir()
+    task = {"id": "t", "name": "T", "credits": 10, "heroes": 1, "days": 1,
+            "xp": 5, "tier": 1, "requested_by": "", "bond": 10}
+    (tmp_path / "quests" / "assignments.json").write_text(json.dumps([task]))
+    with pytest.raises(DataError, match="non-empty"):
+        data_loader.load_assignments(str(tmp_path))

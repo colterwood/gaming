@@ -3,11 +3,52 @@ spot — you send 1+ roster heroes away for 1+ days. Sent heroes leave the
 party and can't rejoin until the job completes at sleep (rewards paid) or
 you recall them (nothing paid). Pure Python — no pygame.
 
+M11 additions: board tiers unlock as the roster's top-4 power grows;
+rewards scale with the power of the heroes you send; NPC-requested jobs
+pay bond points with the requester on completion.
+
 A hero away on a job carries roster_entry["dispatch"] = task_id; the job
 itself lives in state["dispatches"] with its rewards snapshotted.
 """
 
+from game import config
+from game.progression import attributes as attrs
 from game.progression import mastery
+from game.social import bonds
+
+
+def hero_power(content, state, hero_id):
+    """A hero's effective power-grid total (6..42): base + trained ranks."""
+    char = content["characters"][hero_id]
+    entry = state["roster"][hero_id]
+    return sum(attrs.effective_rank(char["power_grid"], entry, attribute)
+               for attribute in config.ATTRIBUTES)
+
+
+def team_power(content, state):
+    """Sum of the top-4 roster heroes' power totals — the board's measure
+    of how advanced the team is (M11)."""
+    totals = sorted((hero_power(content, state, hid)
+                     for hid in state.get("roster", {})), reverse=True)
+    return sum(totals[:config.PARTY_SIZE_MAX])
+
+
+def roster_tier(content, state):
+    """Highest board tier this roster has unlocked (1..3)."""
+    power = team_power(content, state)
+    tier = 1
+    for level, threshold in sorted(config.BOARD_TIER_POWER.items()):
+        if power >= threshold:
+            tier = level
+    return tier
+
+
+def reward_mult(content, state, hero_ids):
+    """Stronger heroes negotiate better: pay scales with the average power
+    of who you send, clamped to [MULT_MIN, MULT_MAX]."""
+    avg = sum(hero_power(content, state, h) for h in hero_ids) / len(hero_ids)
+    mult = 1.0 + config.DISPATCH_POWER_BONUS * (avg - config.DISPATCH_POWER_BASELINE)
+    return max(config.DISPATCH_MULT_MIN, min(config.DISPATCH_MULT_MAX, mult))
 
 
 def active(state):
@@ -44,6 +85,7 @@ def send(content, state, task, hero_ids):
     party = state.get("party", [])
     if party and not [p for p in party if p not in hero_ids]:
         return False, "Someone has to stay on the team."
+    mult = reward_mult(content, state, hero_ids)        # before they leave
     for hero_id in hero_ids:
         if hero_id in party:
             party.remove(hero_id)
@@ -51,11 +93,16 @@ def send(content, state, task, hero_ids):
         roster[hero_id]["idle_days"] = 0
         roster[hero_id]["dispatch"] = task["id"]
     days = task.get("days", 1)
-    active(state).append({"task_id": task["id"], "name": task["name"],
-                          "heroes": hero_ids, "days_left": days,
-                          "credits": task["credits"], "xp": task.get("xp", 0)})
+    job = {"task_id": task["id"], "name": task["name"], "heroes": hero_ids,
+           "days_left": days, "credits": int(round(task["credits"] * mult)),
+           "xp": int(round(task.get("xp", 0) * mult))}
+    if task.get("requested_by"):                        # NPC request (M11)
+        job["requested_by"] = task["requested_by"]
+        job["bond"] = task.get("bond", 0)
+    active(state).append(job)
     names = " and ".join(content["characters"][h]["name"] for h in hero_ids)
-    return True, f"{names} head(s) out: {task['name']} ({days} day(s))."
+    return True, (f"{names} head(s) out: {task['name']} "
+                  f"({days} day(s), ~{job['credits']} cr).")
 
 
 def recall(content, state, task_id):
@@ -99,4 +146,10 @@ def process_day(content, state):
         if job["xp"]:
             reward += f", +{job['xp']} XP banked each"
         messages.append(f"{job['name']} done - {names} return(s). {reward}.")
+        requester = job.get("requested_by")             # NPC request (M11)
+        if requester and job.get("bond"):
+            bonds.add_points(state, requester, job["bond"])
+            requester_name = content["characters"][requester]["name"]
+            messages.append(f"{requester_name} is grateful (+{job['bond']} bond).")
+            messages.extend(bonds.check_bond_progress(state, content))
     return messages

@@ -1,0 +1,141 @@
+{
+  "jarvis": {
+    "0": [
+      "Good day. The kitchen is stocked, the towels are fresh, and nothing is on fire. A banner morning.",
+      "I've taken the liberty of pressing your field suits. Do try to bring them back in one piece.",
+      "Master Stark left his breakfast untouched again. I trust you'll have better manners."
+    ],
+    "2": [
+      "You've been good for this house. It's louder, mind you, but the good kind of loud.",
+      "I baked rather more than the occasion strictly demands. Take a plate before the others descend.",
+      "My tenure covers two Starks and one ceiling collapse. You're rather less trouble. So far."
+    ],
+    "4": [
+      "Between us: when the tower is empty, I still set out cups for everyone. Habit. Or hope.",
+      "I served through the Blitz, you know. HYDRA doesn't frighten me. Empty chairs at supper do.",
+      "If you ever need an ear that doesn't file reports, my pantry door is always open."
+    ],
+    "6": [
+      "I've kept this family's secrets for decades. Here's one more: you've become part of it.",
+      "Whatever happens out there, there will be a light on and a kettle warm. Always.",
+      "You needn't knock anymore, you know. Family doesn't."
+    ]
+  },
+  "pepper_potts": {
+    "0": [
+      "I have nine meetings and a board that thinks 'Avenger' is a line item. Walk with me.",
+      "If anything explodes today, please route the invoice through legal, not my desk.",
+      "Requisitions go in the bin marked 'requisitions'. Not the bin marked 'Tony'."
+    ],
+    "2": [
+      "You actually file paperwork. Do you know how rare that is in this building?",
+      "I moved your team's supply requests to the top of the pile. Don't tell the accountants.",
+      "Coffee? I only share the good machine with people who don't scare the interns."
+    ],
+    "4": [
+      "Some nights I watch the news choppers circle and just count until all of you are home.",
+      "I keep a drawer of spare watches. Tony breaks his every mission. Don't ask what that costs.",
+      "You've seen this company at its worst quarter ever. Thank you for pretending otherwise."
+    ],
+    "6": [
+      "Honestly? Stark Industries would survive without me. I stay for the people. You're one of them.",
+      "When the board asks if the Avengers are worth it, I show them the disasters we DIDN'T file.",
+      "Family dinner Friday. Attendance is mandatory. CEO's orders."
+    ]
+  },
+  "coulson": {
+    "0": [
+      "Agent Coulson, S.H.I.E.L.D. liaison. It is a genuinely great day to be this liaison.",
+      "I've read all your after-action reports. Twice. Purely professional enthusiasm.",
+      "Director Fury says hello. Well - he nodded. From him that's practically a hug."
+    ],
+    "2": [
+      "I keep vintage trading cards in my locker. Near-mint. One day I'll risk asking for autographs.",
+      "I flagged your team's file 'priority support'. Fury thinks it's about logistics. Sure.",
+      "You want the good intel, you bring me coffee and I 'accidentally' leave the folder open."
+    ],
+    "4": [
+      "Half my job is convincing scared people the good guys are real. You make that half easy.",
+      "I was there when they pulled Cap from the ice. Cried in the van. That stays between us.",
+      "If S.H.I.E.L.D. ever tells you to stand down and it smells wrong - call me first."
+    ],
+    "6": [
+      "There are maybe five people I'd take a bullet for without doing the math. You made the list.",
+      "The cards. I'd like you to sign them. All of them. I have a special pen.",
+      "Whatever the file says tomorrow, today I know exactly which side I'm on. Yours."
+    ]
+  },
+  "hulk": {
+    "0": [
+      "...",
+      "Hulk not talk. Hulk lift.",
+      "Small person still here. Fine."
+    ],
+    "2": [
+      "Hulk smashed HYDRA good today.",
+      "Metal man talks too much. You talk okay amount.",
+      "Tower food good. Hulk stays for food. Only food."
+    ],
+    "4": [
+      "Banner likes you. Hulk... does not hate you.",
+      "You not scared of Hulk. Hulk noticed.",
+      "Hulk keeps team safe. You keep Hulk... calm. That the word. Calm."
+    ],
+    "6": [
+      "Hulk strongest there is. But you... you okay too.",
+      "Friend.",
+      "Hulk smash for you anytime. That Hulk promise."
+    ]
+  },
+  "iron_man": {
+    "0": [
+      "JARVIS ran the numbers. We're statistically overdue for a Tuesday.",
+      "If anyone asks, the scorch mark on floor twelve was already there.",
+      "Coffee's on Jarvis. Everything else in this tower is on me. Literally."
+    ],
+    "2": [
+      "That siege was too organized. Someone's writing HYDRA better software. I hate sequels.",
+      "Upgraded the training floor. If you break this one too, I'm charging rent.",
+      "I don't say this often, so record it: nice work out there. Deleting it from the logs now."
+    ],
+    "4": [
+      "Crossbones is down and I slept four whole hours. New record. Don't tell Pepper.",
+      "Whatever Kang's watching us with, I want one. Two. A patent, actually.",
+      "We're actually good at this team thing. Weird. Let's never examine it too closely."
+    ]
+  },
+  "captain_america": {
+    "0": [
+      "Morning. Already did my ten miles. The city looks good from up here.",
+      "HYDRA doesn't rest, but you should. Take the couch sometime.",
+      "Keep the team close. That's the mission under the mission."
+    ],
+    "2": [
+      "We held the line at the siege. That's what I'll remember - everyone held.",
+      "Saw kids playing Avengers in the park today. Made every bruise worth it.",
+      "Lang's settling in well. Everyone deserves a second chance. Most people only need one."
+    ],
+    "4": [
+      "Crossbones was one of ours once. Days like that, you fight for who they could've been.",
+      "Something bigger is moving behind HYDRA. Stay ready. Stay together.",
+      "Seventy years I slept. This team is the first thing since that feels like waking up."
+    ]
+  },
+  "ant_man": {
+    "0": [
+      "I've been small enough to hear ants argue. They're big on committee.",
+      "House arrest to Avengers Tower. Massive upgrade. Huge. Well - variable.",
+      "If you see a really big crumb in the kitchen, that was me. Sorry."
+    ],
+    "2": [
+      "Cap said 'good work' to me and I called my daughter about it. She wants his autograph. And a shield.",
+      "The ants have unionized the vents. I'm mediating. Don't ask about Local 626.",
+      "First team I've been on where nobody checks their wallet after I leave. It's nice."
+    ],
+    "4": [
+      "Kang, huh? Time stuff? Because I have a THEORY about time stuff nobody lets me finish.",
+      "Cassie has an Avengers lunchbox now. I'm on it. Tiny. In the corner. STILL ON IT.",
+      "From ex-con to this. Thanks for not making it weird. Okay, Tony makes it weird. Once a day."
+    ]
+  }
+}
