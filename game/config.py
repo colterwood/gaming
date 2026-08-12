@@ -213,9 +213,14 @@ MINE_MINUTES = 30
 # is gone for. Keyed by the level being upgraded TO.
 GEAR_UPGRADE_CREDITS = {2: 250, 3: 600}
 GEAR_UPGRADE_DAYS = {2: 2, 3: 3}
+# PLACEHOLDER recipes. Advanced materials (vibranium, adamantium, uru...)
+# exist in items.json but nothing yields them: the material ladder — which
+# tier drops where, and what each metal DOES to a piece — is an open design
+# question, and Ch. 1-2 is explicitly meant to hand out basic stock only.
+# Until then both levels cost the basic material, level 3 in bulk.
 GEAR_UPGRADE_MATERIALS = {
     2: {"iso8": 3},
-    3: {"vibranium": 2, "adamantium": 1},
+    3: {"iso8": 8},
 }
 
 # --- Battle time & defeat (M12) ---

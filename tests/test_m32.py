@@ -49,20 +49,36 @@ class Rolls:
 
 # --- ore in the ground (1) ------------------------------------------------
 
-def test_every_zone_yields_something_and_the_worst_yields_the_best(content):
-    docks = content["zones"]["docks"]["mining"]
-    hydra = content["zones"]["hydra_district"]["mining"]
-    assert docks and hydra
-    assert hydra.get("adamantium", 0) > docks.get("adamantium", 0)
+ADVANCED = ("vibranium", "adamantium")
+
+
+def test_chapters_one_and_two_hand_out_basic_stock_only(content):
+    # The material ladder (what tier drops where, what each metal DOES to a
+    # piece) is an open design question. Until it exists, nothing advanced
+    # is reachable — the early game must not be handing out adamantium.
+    for zone in content["zones"].values():
+        assert set(zone.get("mining", {})) == {"iso8"}, zone["id"]
+
+
+def test_the_worse_the_district_the_better_the_odds(content):
+    chance = {z["id"]: sum(z.get("mining", {}).values())
+              for z in content["zones"].values()}
+    assert chance["docks"] < chance["midtown"] < chance["hydra_district"]
+
+
+def test_no_recipe_asks_for_a_metal_the_world_cannot_give(content):
+    mineable = {m for z in content["zones"].values()
+                for m in z.get("mining", {})}
+    for materials in config.GEAR_UPGRADE_MATERIALS.values():
+        assert set(materials) <= mineable
+        assert not set(materials) & set(ADVANCED)
 
 
 def test_the_mining_table_is_rolled_cumulatively(content):
-    zone = content["zones"]["hydra_district"]        # 0.20/0.35/0.30 sorted
-    # sorted order is adamantium, iso8, vibranium
-    assert field.mine_node(zone, Rolls([1.0, 0.10]))["item"] == "adamantium"
-    assert field.mine_node(zone, Rolls([1.0, 0.40]))["item"] == "iso8"
-    assert field.mine_node(zone, Rolls([1.0, 0.80]))["item"] == "vibranium"
-    assert field.mine_node(zone, Rolls([1.0, 0.99]))["item"] is None
+    zone = content["zones"]["hydra_district"]        # iso8 at 0.75
+    assert field.mine_node(zone, Rolls([1.0, 0.10]))["item"] == "iso8"
+    assert field.mine_node(zone, Rolls([1.0, 0.74]))["item"] == "iso8"
+    assert field.mine_node(zone, Rolls([1.0, 0.80]))["item"] is None
 
 
 def test_a_watched_seam_springs_a_squad(content):
