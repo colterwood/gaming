@@ -46,6 +46,12 @@ STATION_LABELS = {"elevator": "Elevator", "shop": "Tower Shop",
                   "medbay": "Treatment Station", "techlab": "Tech Bench",
                   "pymlab": "Pym Bench"}
 ZONE_STATION_KINDS = {"helipad", "shop"}    # what works in the field (M10)
+# M35: furniture worth turning over while a repair is in hand. Nothing is
+# marked — the hunt is walking the floor and searching things. Mats are
+# searched as one field (you roll them back), everything else tile by tile.
+SEARCHABLE_FURNITURE = {"c": "couch", "t": "table", "p": "plant",
+                        "Z": "bunk", "m": "mats"}
+FURNITURE_GROUPS = {"m"}                    # searched as a whole, not per tile
 
 FLOORS = {
     "common": {
@@ -513,6 +519,33 @@ class HubScene:
                                   HUD_H + ty * TILE + TILE // 2))
         return found
 
+    def _furniture_here(self, state):
+        """Searchable furniture on this screen (M35) — only while a hunt for
+        hidden parts is on, and only what hasn't been turned over today."""
+        if self.area != "tower" or not repairs.searching_for_parts(
+                self.content, state):
+            return []
+        found = []
+        for ty, row in enumerate(self._map()):
+            for tx, ch in enumerate(row):
+                if ch not in SEARCHABLE_FURNITURE:
+                    continue
+                if activities.spot_searched(state, self.floor, tx, ty):
+                    continue
+                found.append((tx, ty, SEARCHABLE_FURNITURE[ch],
+                              tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2))
+        return found
+
+    def _search_group(self, tx, ty):
+        """Every tile one search covers. A mat field is rolled back in one
+        go; a couch is a couch."""
+        rows = self._map()
+        ch = rows[ty][tx]
+        if ch not in FURNITURE_GROUPS:
+            return [(tx, ty)]
+        return [(x, y) for y, row in enumerate(rows)
+                for x, c in enumerate(row) if c == ch]
+
     def _ore_here(self, state):
         """Unworked ore nodes in the current zone (M32). Same daily respawn
         as a crate — one swing per node per day."""
@@ -547,6 +580,10 @@ class HubScene:
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
                 best, best_d = ("ore", (tx, ty), "Mine"), d
+        for tx, ty, name, x, y in self._furniture_here(state):
+            d = (x - self.px) ** 2 + (y - self.py) ** 2
+            if d < best_d:
+                best, best_d = ("furniture", (tx, ty), f"Search the {name}"), d
         for quest, i, x, y in self._scout_targets(state):
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
@@ -723,6 +760,8 @@ class HubScene:
             self._search_crate(app, *ident)
         elif kind == "ore":
             self._mine_node(app, *ident)
+        elif kind == "furniture":
+            self._search_furniture(app, *ident)
         elif kind == "scout":
             self._do_scout_point(app, ident)
         elif kind == "grove":
@@ -868,12 +907,41 @@ class HubScene:
         job = repairs.job_by_id(self.content, job_id)
         if job is None:
             return
+        self._take_part(app, job, index)
+
+    def _search_furniture(self, app, tx, ty):
+        """Turn something over (M35). Costs minutes, never energy — the
+        hunt is attention, not attrition. Most of it is empty."""
+        state = app.game_state
+        tiles = self._search_group(tx, ty)
+        for x, y in tiles:
+            activities.mark_spot_searched(state, self.floor, x, y)
+        clock.advance(state, config.FURNITURE_SEARCH_MINUTES)
+        job = index = None
+        for x, y in tiles:
+            job, index = repairs.hidden_at(self.content, state, self.floor,
+                                           x, y)
+            if job is not None:
+                break
+        if job is None:
+            self.log("Nothing but dust and somebody's old ID badge.")
+            self._after_action(app)
+            return
+        self._claim_hidden(app, job, index)
+
+    def _claim_hidden(self, app, job, index):
+        """Wrestle a found piece out of wherever it was stashed."""
+        self._take_part(app, job, index)
+
+    def _take_part(self, app, job, index):
+        """Pick a piece up, however it was found. M35: only a HEAVY part
+        costs energy, and only a heavy part is worth the leader saying
+        something about — the rest go in a pocket."""
+        state = app.game_state
         result = repairs.work_part(state, job, index)
         self.log(result["message"])
         self.reset_modes()
-        # M34: hauling one of these costs energy, so the leader gets to say
-        # something about it — in their own voice, in a box you can't miss.
-        if result["ok"] and not result.get("hit_day_end"):
+        if result["ok"] and result.get("heavy") and not result.get("hit_day_end"):
             line = self._flavor_line(state, "part_lift")
             if line:
                 self._show_line(self._leader(state), line)
@@ -1139,6 +1207,11 @@ class HubScene:
         zone = self._zone()
         activities.mark_spot_searched(state, self.area, tx, ty)
         clock.advance(state, config.SEARCH_MINUTES)
+        # M35: a repair part stashed in this box comes out instead of loot.
+        job, index = repairs.hidden_at(self.content, state, self.area, tx, ty)
+        if job is not None:
+            self._claim_hidden(app, job, index)
+            return
         result = field.search_loot(zone, self.rng)
         if result["trap"]:
             squad = field.trap_squad(zone["danger"],
@@ -1174,6 +1247,11 @@ class HubScene:
         energy.spend(state, config.MINE_ENERGY)
         activities.mark_spot_searched(state, self.area, tx, ty)
         clock.advance(state, config.MINE_MINUTES)
+        # M35: a part buried in this seam comes out ahead of any ore.
+        job, index = repairs.hidden_at(self.content, state, self.area, tx, ty)
+        if job is not None:
+            self._claim_hidden(app, job, index)
+            return
         result = field.mine_node(zone, self.rng)
         if result["trap"]:
             squad = field.trap_squad(zone["danger"],

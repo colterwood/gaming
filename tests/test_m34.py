@@ -194,29 +194,46 @@ def test_a_part_in_a_zone_shows_up_there_and_not_in_the_tower(content):
     state = app.game_state
     state["repairs"] = {}
     state["story_flags"] = {"board_unlocked": True}
-    repairs.accept(content, state, job(content, "repair_med_bay"))
+    repairs.accept(content, state, job(content, "repair_training"))
 
-    scene._switch_floor("med_bay")
-    assert len(scene._repair_targets(state)) == 2
-    scene.area = "docks"
-    assert len(scene._repair_targets(state)) == 1
+    # The Midtown piece is in the open; the two tower pieces are hidden and
+    # therefore unmarked, so the only marker in the game is out in the city.
+    scene._switch_floor("training")
+    assert scene._repair_targets(state) == []
     scene.area = "midtown"
+    assert len(scene._repair_targets(state)) == 1
+    scene.area = "docks"
     assert scene._repair_targets(state) == []
 
 
 # --- the team says something (4) -----------------------------------------
 
-def test_hauling_a_part_gets_a_line_from_the_leader(day_one):
+def test_hauling_a_HEAVY_part_gets_a_line_from_the_leader(day_one):
+    scene, app = day_one
+    state = app.game_state
+    state["story_flags"]["elevator_repaired"] = True
+    quinjet = job(app.content, "repair_quinjet")
+    repairs.accept(app.content, state, quinjet)
+    heavy = next(i for i, p in enumerate(quinjet["parts"])
+                 if p.get("heavy") and p.get("area") == "ops")
+    scene._switch_floor("ops")
+
+    scene._salvage_part(app, quinjet["id"], heavy)
+
+    assert scene.mode == "scene"
+    assert scene.scene["character"] == state["party"][0]
+
+
+def test_a_pocket_sized_part_passes_without_comment(day_one):
     scene, app = day_one
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
     repairs.accept(app.content, state, elevator)
-    index, tx, ty = repairs.parts_on(state, elevator, "common")[0]
+    index = repairs.parts_on(state, elevator, "common")[0][0]
 
     scene._salvage_part(app, elevator["id"], index)
 
-    assert scene.mode == "scene"
-    assert scene.scene["character"] == state["party"][0]
+    assert scene.mode == "normal"               # no speech for a capacitor
 
 
 def test_mining_reads_in_the_leaders_voice(content):

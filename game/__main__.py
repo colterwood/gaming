@@ -11,6 +11,7 @@ directory slot 1 is occupied and the walk stops on the overwrite prompt.
 """
 
 import os
+import random
 
 import pygame
 
@@ -224,6 +225,15 @@ class App:
                     ups = ", ".join(f"{a.title()} {r + config.RANK_START}"
                                     for a, r in gain["ranks_gained"])
                     self.hub.log(f"{name} ranks up from the field: {ups}!")
+            # M35: some repair parts only turn up in the wreckage of a
+            # fight — a dice roll for the Tech Lab's, a certainty the first
+            # time Scott is along for the Pym Lab's.
+            from game.hub import repairs as repairs_mod
+            for message in repairs_mod.battle_drop(
+                    self.content, state, [h.id for h in engine.heroes],
+                    random.Random()):
+                if self.hub:
+                    self.hub.log(message)
             bonds.mission_bond(state,
                                [h.id for h in engine.heroes
                                 if bonds.bondable(self.content["characters"][h.data["id"]])])

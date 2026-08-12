@@ -142,28 +142,108 @@ def accept(content, state, job):
 
 # ------------------------------------------------------------ the work
 
+def part_kind(part):
+    """How a piece is come by (M35):
+
+      plain  — lying in the open; a marker shows where
+      hidden — inside the furniture/crate/seam at that tile, no marker;
+               you get it by searching the thing, like anything else there
+      npc    — in someone's pocket, handed over when you speak to them
+      battle — falls out of a fight you win
+    """
+    if part.get("from"):
+        return "npc"
+    if part.get("battle"):
+        return "battle"
+    return "hidden" if part.get("hidden") else "plain"
+
+
 def parts_on(state, job, area):
-    """[(index, x, y)] for this job's unfound parts lying in one place — a
-    tower floor or a zone (M34: some pieces are out in the city, which is
-    what the Quinjet is for)."""
+    """[(index, x, y)] for unfound parts lying IN THE OPEN in one place — a
+    tower floor or a zone. Hidden parts deliberately aren't here: a marker
+    on one would turn the search into an instruction."""
     if not is_active(state, job):
         return []
     done = found(state, job)
     return [(i, part["x"], part["y"])
             for i, part in enumerate(job["parts"])
-            if part.get("area") == area and i not in done]
+            if part.get("area") == area and i not in done
+            and part_kind(part) == "plain"]
+
+
+def hidden_at(content, state, area, x, y):
+    """(job, index) for a hidden piece stashed at this tile, or (None, None).
+    Whatever is there — a couch, a crate, an ore seam — gives it up when
+    searched in the ordinary way."""
+    for job in content["repairs"]:
+        if not is_active(state, job):
+            continue
+        done = found(state, job)
+        for index, part in enumerate(job["parts"]):
+            if (index not in done and part_kind(part) == "hidden"
+                    and part.get("area") == area
+                    and part.get("x") == x and part.get("y") == y):
+                return job, index
+    return None, None
+
+
+def searching_for_parts(content, state):
+    """True while a job with hidden pieces is in hand — which is when the
+    tower's furniture is worth turning over at all."""
+    for job in content["repairs"]:
+        if not is_active(state, job):
+            continue
+        done = found(state, job)
+        if any(part_kind(p) == "hidden" and i not in done
+               for i, p in enumerate(job["parts"])):
+            return True
+    return False
 
 
 def npc_part(state, job, char_id):
-    """(index, part) for a piece this character is holding and hasn't
-    handed over yet, or (None, None)."""
+    """(index, part) for a piece this character is holding and willing to
+    hand over, or (None, None). `after_found` keeps one back until the
+    hunt is nearly done — Jarvis produces the last Tech Lab component only
+    once everything else is in."""
     if not is_active(state, job):
         return None, None
     done = found(state, job)
     for index, part in enumerate(job["parts"]):
-        if part.get("from") == char_id and index not in done:
-            return index, part
+        if part.get("from") != char_id or index in done:
+            continue
+        if len(done) < part.get("after_found", 0):
+            continue
+        return index, part
     return None, None
+
+
+def battle_drop(content, state, hero_ids, rng):
+    """Pieces that fall out of a won fight (M35). A `chance` part rolls for
+    it; a `with` part is certain the first time that hero is in the party.
+    Returns log messages."""
+    messages = []
+    for job in content["repairs"]:
+        if not is_active(state, job):
+            continue
+        done = found(state, job)
+        for index, part in enumerate(job["parts"]):
+            spec = part.get("battle")
+            if not spec or index in done:
+                continue
+            wanted = spec.get("with")
+            if wanted and wanted not in hero_ids:
+                continue
+            if not wanted and rng.random() >= spec.get("chance", 1.0):
+                continue
+            entry_of(state, job)["found"].append(index)
+            left = parts_left(state, job)
+            messages.append(
+                f"{spec.get('message', 'Salvage in the wreckage')} - "
+                f"{job['name']}: "
+                + (f"{left} piece(s) still missing." if left
+                   else "that's the last piece."))
+            break               # one piece per fight, however lucky you are
+    return messages
 
 
 def take_npc_part(state, job, index):
@@ -188,19 +268,23 @@ def can_repair(state, job):
 
 
 def work_part(state, job, index):
-    """Salvage one part. Costs the same as a scout point — this is field
-    work that happens to be indoors."""
+    """Salvage one part. Every piece costs the minutes; only a HEAVY one
+    (M35 `"heavy": true`) costs energy as well — a capacitor goes in your
+    pocket, a nacelle strut does not."""
     if not is_active(state, job):
         return {"ok": False, "message": "Take the job at the board first."}
     entry = state["repairs"][job["id"]]
     if index in entry["found"] or not 0 <= index < len(job["parts"]):
         return {"ok": False, "message": "Nothing here."}
-    if job["parts"][index].get("from"):
-        # In somebody's pocket, not lying on the floor — you have to ask.
-        return {"ok": False, "message": "Somebody's holding that one."}
-    if not energy.can_afford(state, config.REPAIR_PART_ENERGY):
-        return {"ok": False, "message": "Too exhausted — sleep to recover."}
-    energy.spend(state, config.REPAIR_PART_ENERGY)
+    part = job["parts"][index]
+    if part.get("from") or part.get("battle"):
+        # In somebody's pocket, or still out there in a fight somewhere.
+        return {"ok": False, "message": "That one isn't lying around."}
+    heavy = bool(part.get("heavy"))
+    if heavy and not energy.can_afford(state, config.REPAIR_PART_ENERGY):
+        return {"ok": False, "message": "Too exhausted to shift that."}
+    if heavy:
+        energy.spend(state, config.REPAIR_PART_ENERGY)
     hit_end = clock.advance(state, config.REPAIR_PART_MINUTES)
     if energy.is_exhausted(state) or clock.is_past_end(state):
         # M18's rule: collapsing ON the job loses the work. Parts already
@@ -212,9 +296,10 @@ def work_part(state, job, index):
     left = parts_left(state, job)
     message = job.get("part_message", "One more piece.")
     if left:
-        return {"ok": True, "hit_day_end": hit_end,
+        return {"ok": True, "hit_day_end": hit_end, "heavy": heavy,
                 "message": f"{message} {left} piece(s) still missing."}
     return {"ok": True, "hit_day_end": hit_end, "complete": True,
+            "heavy": heavy,
             "message": f"{message} That's all of it — go and fit it."}
 
 

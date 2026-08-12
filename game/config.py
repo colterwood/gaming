@@ -182,6 +182,10 @@ REPAIR_PART_ENERGY = 5
 REPAIR_PART_MINUTES = 20
 REPAIR_ENERGY = 15
 REPAIR_MINUTES = 60
+# M35: turning over a couch costs MINUTES and nothing else — the hunt is
+# meant to eat the day, not the team. Only wrestling the found part out
+# costs energy (REPAIR_PART_ENERGY above).
+FURNITURE_SEARCH_MINUTES = 5
 
 # --- Med Bay (M30) ---
 # Sit in the chair and the clock runs while you mend: 10% of the daily

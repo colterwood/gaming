@@ -591,7 +591,31 @@ def load_repairs(data_dir=None):
             if "from" in part:
                 _require(part, "from", str, f"{jw} part")
                 _validate_scene(part.get("scene"), f"{jw} part scene")
+                after = part.get("after_found", 0)
+                if not isinstance(after, int) or isinstance(after, bool) \
+                        or not 0 <= after < len(parts):
+                    raise DataError(f"{jw}: after_found must be a count of "
+                                    f"other parts, 0..{len(parts) - 1}")
                 continue
+            if "battle" in part:                # M35: falls out of a fight
+                spec = _require(part, "battle", dict, f"{jw} part")
+                unknown = set(spec) - {"chance", "with", "message"}
+                if unknown:
+                    raise DataError(f"{jw}: unknown battle keys "
+                                    f"{sorted(unknown)}")
+                if "chance" in spec:
+                    chance = spec["chance"]
+                    if not isinstance(chance, (int, float)) \
+                            or isinstance(chance, bool) \
+                            or not 0.0 < chance <= 1.0:
+                        raise DataError(f"{jw}: battle.chance must be 0..1")
+                elif "with" not in spec:
+                    raise DataError(f"{jw}: a battle part needs a chance or "
+                                    f"a `with` hero, or it can never drop")
+                continue
+            for key in ("hidden", "heavy"):     # M35: no marker / costs EN
+                if key in part and not isinstance(part[key], bool):
+                    raise DataError(f"{jw}: {key} must be true/false")
             area = _require(part, "area", str, f"{jw} part")
             for key in ("x", "y"):
                 value = _require(part, key, int, f"{jw} part")
@@ -875,6 +899,11 @@ def load_all(data_dir=None):
             if holder:
                 if holder not in characters:
                     raise DataError(f"{jw}: part holder '{holder}' not found")
+                continue
+            if "battle" in part:                # nowhere on a map to check
+                wanted = part["battle"].get("with")
+                if wanted and wanted not in characters:
+                    raise DataError(f"{jw}: battle.with '{wanted}' not found")
                 continue
             area = part["area"]
             if area in TOWER_FLOORS:

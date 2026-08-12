@@ -6,7 +6,9 @@
     "board_line": "The tower runs on that elevator. Everything else waits on it.",
     "station": "elevator",
     "floor": "common",
-    "trigger": {"character": "jarvis"},
+    "trigger": {
+      "character": "jarvis"
+    },
     "intro_scene": {
       "character": "jarvis",
       "title": "J.A.R.V.I.S.",
@@ -18,17 +20,29 @@
       ]
     },
     "parts": [
-      {"area": "common", "x": 6, "y": 10},
-      {"area": "common", "x": 30, "y": 6},
-      {"from": "coulson",
-       "scene": {
-         "character": "coulson",
-         "title": "Agent Coulson",
-         "lines": [
-           "\"A contactor relay.\" Coulson turns it over once and hands it across. \"It was in the debris by the stairwell. I was going to bin it.\"",
-           "\"For the record, I did ask what it was for. J.A.R.V.I.S. said, and I quote, 'nothing important.'\"",
-           "\"Go and make the elevator work. I'd like to stop taking the stairs.\""
-         ]}}
+      {
+        "from": "coulson",
+        "scene": {
+          "character": "coulson",
+          "title": "Agent Coulson",
+          "lines": [
+            "\"A contactor relay.\" Coulson turns it over once and hands it across. \"It was in the debris by the stairwell. I was going to bin it.\"",
+            "\"For the record, I did ask what it was for. J.A.R.V.I.S. said, and I quote, 'nothing important.'\"",
+            "\"Go and make the elevator work. I'd like to stop taking the stairs.\""
+          ]
+        }
+      },
+      {
+        "area": "common",
+        "x": 30,
+        "y": 6
+      },
+      {
+        "area": "common",
+        "x": 24,
+        "y": 5,
+        "hidden": true
+      }
     ],
     "part_label": "Salvage parts",
     "part_message": "A coil of cable and one very tired capacitor.",
@@ -45,8 +59,14 @@
     "board_line": "Pepper's job. Parts are scattered across three floors.",
     "station": "quinjet",
     "floor": "ops",
-    "requires": {"flags": ["elevator_repaired"]},
-    "trigger": {"character": "pepper_potts"},
+    "requires": {
+      "flags": [
+        "elevator_repaired"
+      ]
+    },
+    "trigger": {
+      "character": "pepper_potts"
+    },
     "intro_scene": {
       "character": "pepper_potts",
       "title": "Pepper Potts",
@@ -58,10 +78,31 @@
       ]
     },
     "parts": [
-      {"area": "ops", "x": 8, "y": 14},
-      {"area": "ops", "x": 33, "y": 8},
-      {"area": "common", "x": 12, "y": 18},
-      {"area": "training", "x": 33, "y": 16}
+      {
+        "area": "ops",
+        "x": 8,
+        "y": 14,
+        "heavy": true
+      },
+      {
+        "area": "training",
+        "x": 33,
+        "y": 16,
+        "heavy": true
+      },
+      {
+        "area": "common",
+        "x": 38,
+        "y": 17,
+        "hidden": true
+      },
+      {
+        "area": "ops",
+        "x": 17,
+        "y": 8,
+        "hidden": true,
+        "heavy": true
+      }
     ],
     "part_label": "Recover the part",
     "part_message": "Another piece of the nacelle, exactly where nobody would put it on purpose.",
@@ -69,7 +110,9 @@
     "credits": 120,
     "xp": 36,
     "flag": "quinjet_repaired",
-    "flags": {"board_unlocked": true},
+    "flags": {
+      "board_unlocked": true
+    },
     "done_message": "The Quinjet spins up, holds, and settles. You can leave the block again.",
     "done_scene": {
       "character": "pepper_potts",
@@ -89,11 +132,30 @@
     "board_line": "Nobody gets stronger until the mats are down and the rack is bolted straight.",
     "station": "training",
     "floor": "training",
-    "requires": {"flags": ["board_unlocked"]},
+    "requires": {
+      "flags": [
+        "board_unlocked"
+      ]
+    },
     "parts": [
-      {"area": "training", "x": 8, "y": 5},
-      {"area": "training", "x": 27, "y": 12},
-      {"area": "midtown", "x": 25, "y": 5}
+      {
+        "area": "ops",
+        "x": 1,
+        "y": 10,
+        "hidden": true
+      },
+      {
+        "area": "training",
+        "x": 14,
+        "y": 12,
+        "hidden": true,
+        "heavy": true
+      },
+      {
+        "area": "midtown",
+        "x": 25,
+        "y": 5
+      }
     ],
     "part_label": "Haul equipment",
     "part_message": "Mat sections, bolts, and a frame that has seen better decades.",
@@ -110,11 +172,35 @@
     "board_line": "Somewhere to patch up that isn't a cot and a bad attitude.",
     "station": "medbay",
     "floor": "med_bay",
-    "requires": {"flags": ["board_unlocked"]},
+    "requires": {
+      "flags": [
+        "board_unlocked"
+      ]
+    },
     "parts": [
-      {"area": "med_bay", "x": 9, "y": 6},
-      {"area": "med_bay", "x": 30, "y": 13},
-      {"area": "docks", "x": 30, "y": 4}
+      {
+        "area": "common",
+        "x": 21,
+        "y": 5,
+        "hidden": true
+      },
+      {
+        "area": "ops",
+        "x": 20,
+        "y": 16
+      },
+      {
+        "area": "med_bay",
+        "x": 11,
+        "y": 7,
+        "hidden": true
+      },
+      {
+        "area": "docks",
+        "x": 3,
+        "y": 3,
+        "hidden": true
+      }
     ],
     "part_label": "Salvage the ward",
     "part_message": "Sterile packs, a diagnostic head, and a chair that mostly reclines.",
@@ -132,13 +218,56 @@
     "station": "techlab",
     "floor": "tech_lab",
     "requires": {
-      "flags": ["board_unlocked"],
-      "quests": ["ch1_siege"]
+      "flags": [
+        "board_unlocked"
+      ],
+      "quests": [
+        "ch1_siege"
+      ]
     },
     "parts": [
-      {"area": "tech_lab", "x": 8, "y": 12},
-      {"area": "tech_lab", "x": 31, "y": 6},
-      {"area": "hydra_district", "x": 12, "y": 8}
+      {
+        "area": "tech_lab",
+        "x": 31,
+        "y": 6
+      },
+      {
+        "area": "tech_lab",
+        "x": 10,
+        "y": 8,
+        "hidden": true
+      },
+      {
+        "area": "common",
+        "x": 1,
+        "y": 8,
+        "hidden": true
+      },
+      {
+        "battle": {
+          "chance": 0.33,
+          "message": "A Stark toolhead in a HYDRA supply crate"
+        }
+      },
+      {
+        "battle": {
+          "chance": 0.33,
+          "message": "Fabricator feedstock, looted back off HYDRA"
+        }
+      },
+      {
+        "from": "jarvis",
+        "after_found": 5,
+        "scene": {
+          "character": "jarvis",
+          "title": "J.A.R.V.I.S.",
+          "lines": [
+            "\"You have five of the six. I have been holding the sixth since Tuesday.\"",
+            "\"Before you ask: I did not mention it because you would have gone looking for the easy one first, and then the other five would still be missing.\"",
+            "\"The calibration cell is in the wall safe. It is yours. Do go and light the bench.\""
+          ]
+        }
+      }
     ],
     "part_label": "Restock the bench",
     "part_message": "Fabricator feedstock and a toolhead that hasn't been dropped.",
@@ -156,12 +285,41 @@
     "station": "pymlab",
     "floor": "pym_lab",
     "requires": {
-      "flags": ["board_unlocked", "pym_lab_unlocked"]
+      "flags": [
+        "board_unlocked",
+        "pym_lab_unlocked"
+      ]
     },
     "parts": [
-      {"area": "pym_lab", "x": 10, "y": 8},
-      {"area": "pym_lab", "x": 29, "y": 14},
-      {"area": "tech_lab", "x": 20, "y": 16}
+      {
+        "area": "docks",
+        "x": 8,
+        "y": 11,
+        "hidden": true
+      },
+      {
+        "from": "pepper_potts",
+        "scene": {
+          "character": "pepper_potts",
+          "title": "Pepper Potts",
+          "lines": [
+            "\"Hank's regulator. It has been in my desk since the day the lab was sealed, with a note that says 'do not lose this' in handwriting I don't recognise.\"",
+            "\"Scott says it goes in the bench. Scott also says the bench used to shrink his lunch, so - be careful.\""
+          ]
+        }
+      },
+      {
+        "area": "tech_lab",
+        "x": 25,
+        "y": 8,
+        "hidden": true
+      },
+      {
+        "battle": {
+          "with": "ant_man",
+          "message": "Scott spots a Pym coupling in the debris"
+        }
+      }
     ],
     "part_label": "Clear the bench",
     "part_message": "Shrunken crates the size of sugar cubes, and one that isn't.",

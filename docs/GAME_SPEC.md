@@ -1172,6 +1172,42 @@ job was one menu away and none of it had to be worked out.
 from Jarvis, collect the relay from Coulson, and end Day 1 with the
 elevator working and nothing else.*
 
+**M35 — The parts are actually hidden** *(added post-POC)*. M34 moved the
+repairs into conversation but left every piece marked on the map with a
+diamond: walk to the marker, press Enter. The number of parts was
+irrelevant because none of them had to be found.
+
+A part is now one of four things (`repairs.part_kind`):
+
+| kind | how you get it |
+|---|---|
+| `plain` | lying in the open — a marker shows it |
+| `hidden` | inside the furniture / crate / ore seam at that tile. **No marker.** Searching the thing in the ordinary way turns it up |
+| `npc` | in someone's pocket, handed over when you speak to them (`after_found` can hold it back until the rest are in) |
+| `battle` | out of a won fight — a `chance` roll, or certain the first time a named hero is in the party |
+
+- **Every spot is fixed.** No RNG decides where anything is, so learning
+  the tower is worth something and a second playthrough is the same hunt.
+- **Searching furniture costs `FURNITURE_SEARCH_MINUTES` (5) and no
+  energy** — the hunt is attention, not attrition. Couches, tables,
+  plants, bunks and mats become searchable *only* while a job with hidden
+  pieces is in hand, and a searched spot dims for the day. **Mats are one
+  field**: the training floor is ~140 mat tiles and searching them
+  individually would be a punishment.
+- **Only a `heavy` part costs energy** (`REPAIR_PART_ENERGY`), and only a
+  heavy one gets the leader's line — a capacitor goes in a pocket, a
+  nacelle strut does not. Elevator 0 heavy, Quinjet 3 of 4, Training
+  Floor 1 of 3, the rest 0.
+- Shipped hunts: elevator 3 (1 plain, 1 couch, Coulson), Quinjet 4 (2
+  plain, 2 hidden, 3 heavy), Training Floor 3 (ops planter, under the
+  mats, Midtown), Med Bay 4 (couch, ops, under a cot, a dock box), Tech
+  Lab 6 (3 in the labs, 2 battle drops at 33%, Jarvis holds the sixth
+  until five are in), Pym Lab 4 (an ore seam, Pepper, a Tech Lab table, a
+  win with Ant-Man).
+*AC: hear Jarvis name three parts, find one marker and turn over couches
+until the second turns up; carry a nacelle strut and hear about it; win
+fights until a Stark toolhead falls out of one.*
+
 **Ch. 3–4** *(decided, not yet built)*.
 - **Gate**: every Ch. 1–2 mission complete AND the tower repaired.
 - Hulk and Thor are Ch. 1–2 recruits (they already are in code — Hulk at

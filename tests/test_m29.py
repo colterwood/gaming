@@ -100,21 +100,40 @@ def test_parts_only_appear_once_the_job_is_taken(fresh):
     state = app.game_state
     assert scene._repair_targets(state) == []
     repairs.accept(app.content, state, job(app.content, "repair_elevator"))
-    # Two are lying on this floor; the third is in Coulson's pocket.
-    assert len(scene._repair_targets(state)) == 2
+    # M35: exactly one piece lies in the open. One is in Coulson's pocket
+    # and one is down the back of a couch — neither gets a marker.
+    assert len(scene._repair_targets(state)) == 1
 
 
-def test_salvaging_a_part_costs_energy_and_time(fresh):
+def test_a_light_part_costs_time_but_no_energy(fresh):
     scene, app = fresh
     state = app.game_state
-    repairs.accept(app.content, state, job(app.content, "repair_elevator"))
-    before_en = state["energy"]
-    before_clock = state["time_minutes"]
-    result = repairs.work_part(state, job(app.content, "repair_elevator"), 0)
-    assert result["ok"]
-    assert state["energy"] == before_en - config.REPAIR_PART_ENERGY
+    elevator = job(app.content, "repair_elevator")
+    repairs.accept(app.content, state, elevator)
+    index = repairs.parts_on(state, elevator, "common")[0][0]
+    before_en, before_clock = state["energy"], state["time_minutes"]
+
+    result = repairs.work_part(state, elevator, index)
+
+    assert result["ok"] and not result["heavy"]
+    assert state["energy"] == before_en                     # pocketed
     assert state["time_minutes"] == before_clock + config.REPAIR_PART_MINUTES
-    assert repairs.parts_left(state, job(app.content, "repair_elevator")) == 2
+    assert repairs.parts_left(state, elevator) == 2
+
+
+def test_a_heavy_part_costs_energy_too(fresh):
+    _, app = fresh
+    state = app.game_state
+    state["story_flags"]["elevator_repaired"] = True
+    quinjet = job(app.content, "repair_quinjet")
+    repairs.accept(app.content, state, quinjet)
+    heavy = next(i for i, p in enumerate(quinjet["parts"]) if p.get("heavy"))
+    before_en = state["energy"]
+
+    result = repairs.work_part(state, quinjet, heavy)
+
+    assert result["ok"] and result["heavy"]
+    assert state["energy"] == before_en - config.REPAIR_PART_ENERGY
 
 
 def test_the_same_part_cannot_be_salvaged_twice(fresh):
@@ -122,8 +141,9 @@ def test_the_same_part_cannot_be_salvaged_twice(fresh):
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
     repairs.accept(app.content, state, elevator)
-    repairs.work_part(state, elevator, 0)
-    again = repairs.work_part(state, elevator, 0)
+    index = repairs.parts_on(state, elevator, "common")[0][0]
+    repairs.work_part(state, elevator, index)
+    again = repairs.work_part(state, elevator, index)
     assert not again["ok"]
     assert repairs.parts_left(state, elevator) == 2
 
@@ -133,7 +153,8 @@ def test_the_repair_is_refused_until_every_part_is_in_hand(fresh):
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
     repairs.accept(app.content, state, elevator)
-    repairs.work_part(state, elevator, 0)
+    repairs.work_part(state, elevator,
+                      repairs.parts_on(state, elevator, "common")[0][0])
     result = repairs.repair(app.content, state, elevator)
     assert not result["ok"]
     assert "short" in result["message"]
@@ -326,8 +347,8 @@ def test_every_part_lies_on_a_tile_you_can_stand_next_to(content):
 
     for job in content["repairs"]:
         for part in job["parts"]:
-            if part.get("from"):
-                continue                    # handed over, not lying about
+            if part.get("from") or part.get("battle"):
+                continue                    # not lying about anywhere
             area, x, y = part["area"], part["x"], part["y"]
             if area not in FLOORS:
                 continue                    # zone maps are checked by M34
