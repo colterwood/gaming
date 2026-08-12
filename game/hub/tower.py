@@ -1126,20 +1126,31 @@ class HubScene:
                 items.append((f"COLLECT: {item['name']} +{job['level'] - 1}",
                               False,
                               (lambda a, j=job: self._collect_upgrade(a, j))))
-        for item in sorted((i for i in self.content["items"].values()
-                            if gear.is_gear(i)), key=lambda i: i["id"]):
-            if gear.job_for(state, item["id"]):
-                continue
+        owned = [i for i in sorted(self.content["items"].values(),
+                                   key=lambda i: i["id"])
+                 if gear.is_gear(i) and gear.owns(state, i["id"])
+                 and not gear.job_for(state, i["id"])]
+        for item in owned:
             ok, reason, target = gear.can_upgrade(state, item)
             if target is None:
+                items.append((f"{gear.item_label(state, item)} - fully "
+                              f"upgraded", True, None))
                 continue
             credits, materials, days = gear.upgrade_recipe(target)
             cost = ", ".join(f"{n} {self.content['items'][m]['name']}"
                              for m, n in sorted(materials.items()))
+            wearer = gear.wearer_of(state, item["id"])[0]
+            # Say out loud whose back it comes off — it is gone for days.
+            off = (f", off {self.content['characters'][wearer]['name']}"
+                   if wearer and not state["inventory"].get(item["id"])
+                   else "")
             label = (f"{gear.item_label(state, item)} -> +{target - 1}: "
-                     f"{cost}, {credits} cr, {days}d")
+                     f"{cost}, {credits} cr, {days}d{off}")
             items.append((label if ok else f"{label}  [{reason}]", not ok,
                           (lambda a, it=item: self._start_upgrade(a, it))))
+        if not owned and not gear.queue(state):
+            items.append(("Nothing to work on - buy gear at the Tech Lab.",
+                          True, None))
         items.append(("Close", False, None))
         self._open_submenu(f"Pym Bench - {state['credits']} cr", items)
 

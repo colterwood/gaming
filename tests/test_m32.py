@@ -121,10 +121,10 @@ def _stock(state, **materials):
     state["inventory"].update(materials)
 
 
-def test_the_bench_takes_the_materials_and_the_money_up_front(lab):
+def test_the_bench_takes_the_materials_the_money_and_the_gear(lab):
     _, app = lab
     state = app.game_state
-    _stock(state, iso8=3)
+    _stock(state, iso8=3, combat_gauntlets=1)
     gauntlets = app.content["items"]["combat_gauntlets"]
 
     result = gear.start_upgrade(state, gauntlets, app.content["items"])
@@ -132,14 +132,26 @@ def test_the_bench_takes_the_materials_and_the_money_up_front(lab):
     assert result["ok"]
     assert state["credits"] == 5000 - config.GEAR_UPGRADE_CREDITS[2]
     assert state["inventory"].get("iso8", 0) == 0
+    assert state["inventory"].get("combat_gauntlets", 0) == 0   # handed over
     assert gear.job_for(state, "combat_gauntlets")["days_left"] == \
         config.GEAR_UPGRADE_DAYS[2]
+
+
+def test_you_cannot_upgrade_a_design_you_do_not_own(lab):
+    _, app = lab
+    state = app.game_state
+    _stock(state, iso8=3)
+    ok, reason, target = gear.can_upgrade(
+        state, app.content["items"]["combat_gauntlets"])
+    assert not ok
+    assert "own one first" in reason and target == 2
+    assert not gear.queue(state)
 
 
 def test_it_refuses_without_the_materials(lab):
     _, app = lab
     state = app.game_state
-    _stock(state, iso8=1)
+    _stock(state, iso8=1, kevlar_weave=1)
     ok, reason, target = gear.can_upgrade(state, app.content["items"]["kevlar_weave"])
     assert not ok
     assert "Short" in reason and target == 2
@@ -150,7 +162,7 @@ def test_it_refuses_without_the_credits(lab):
     _, app = lab
     state = app.game_state
     state["credits"] = 10
-    _stock(state, iso8=3)
+    _stock(state, iso8=3, kevlar_weave=1)
     ok, reason, _ = gear.can_upgrade(state, app.content["items"]["kevlar_weave"])
     assert not ok and "cr" in reason
 
@@ -158,7 +170,7 @@ def test_it_refuses_without_the_credits(lab):
 def test_nothing_changes_until_you_collect_it(lab):
     _, app = lab
     state = app.game_state
-    _stock(state, iso8=3)
+    _stock(state, iso8=3, kevlar_weave=1)
     weave = app.content["items"]["kevlar_weave"]
     gear.start_upgrade(state, weave, app.content["items"])
 
@@ -176,23 +188,25 @@ def test_nothing_changes_until_you_collect_it(lab):
 def test_collecting_early_is_refused(lab):
     _, app = lab
     state = app.game_state
-    _stock(state, iso8=3)
+    _stock(state, iso8=3, kevlar_weave=1)
     weave = app.content["items"]["kevlar_weave"]
     gear.start_upgrade(state, weave, app.content["items"])
     result = gear.collect(state, gear.queue(state)[0], app.content["items"])
     assert not result["ok"]
     assert gear.level(state, "kevlar_weave") == 1
+    assert state["inventory"].get("kevlar_weave", 0) == 0   # still on the bench
 
 
 def test_the_same_design_cannot_be_queued_twice(lab):
     _, app = lab
     state = app.game_state
-    _stock(state, iso8=6)
+    _stock(state, iso8=6, kevlar_weave=2)
     weave = app.content["items"]["kevlar_weave"]
     gear.start_upgrade(state, weave, app.content["items"])
     second = gear.start_upgrade(state, weave, app.content["items"])
     assert not second["ok"]
     assert len(gear.queue(state)) == 1
+    assert state["inventory"]["kevlar_weave"] == 1          # the spare stays
 
 
 def test_a_maxed_design_has_nothing_left_to_give(lab):
@@ -204,7 +218,27 @@ def test_a_maxed_design_has_nothing_left_to_give(lab):
     assert "as good as it gets" in reason
 
 
-def test_the_upgrade_reaches_gear_already_being_worn(lab):
+def test_upgrading_worn_gear_takes_it_off_the_hero(lab):
+    """You give the piece up and fight without it — that waiting IS the
+    cost of the upgrade."""
+    _, app = lab
+    state = app.game_state
+    state["inventory"]["kevlar_weave"] = 1
+    gear.equip(state, "iron_man", "kevlar_weave", app.content["items"])
+    _stock(state, iso8=3)
+
+    result = gear.start_upgrade(state, app.content["items"]["kevlar_weave"],
+                                app.content["items"])
+
+    assert result["stripped"] == "iron_man"
+    assert gear.equipped(state["roster"]["iron_man"]) == {}
+    assert state["inventory"].get("kevlar_weave", 0) == 0
+    # No armour bonus at all while it sits on the bench.
+    assert gear.total_effects(state, state["roster"]["iron_man"],
+                              app.content["items"]) == {}
+
+
+def test_collecting_puts_it_straight_back_on_the_hero_it_came_off(lab):
     _, app = lab
     state = app.game_state
     state["inventory"]["kevlar_weave"] = 1
@@ -214,11 +248,45 @@ def test_the_upgrade_reaches_gear_already_being_worn(lab):
                        app.content["items"])
     for _ in range(config.GEAR_UPGRADE_DAYS[2]):
         gear.process_day(state, app.content["items"])
-    gear.collect(state, gear.ready_jobs(state)[0], app.content["items"])
-    # The schematic improved, so the piece on Iron Man's back improved.
+
+    result = gear.collect(state, gear.ready_jobs(state)[0], app.content["items"])
+
+    assert result["refitted"] == "iron_man"
     effects = gear.total_effects(state, state["roster"]["iron_man"],
                                  app.content["items"])
     assert effects["durability"] == 3               # 2 x 1.5
+
+
+def test_a_slot_filled_while_it_was_away_gets_the_piece_back_in_the_bag(lab):
+    _, app = lab
+    state = app.game_state
+    state["inventory"]["kevlar_weave"] = 1
+    gear.equip(state, "iron_man", "kevlar_weave", app.content["items"])
+    _stock(state, iso8=3, stark_underlay=1)
+    gear.start_upgrade(state, app.content["items"]["kevlar_weave"],
+                       app.content["items"])
+    gear.equip(state, "iron_man", "stark_underlay", app.content["items"])
+    for _ in range(config.GEAR_UPGRADE_DAYS[2]):
+        gear.process_day(state, app.content["items"])
+
+    result = gear.collect(state, gear.ready_jobs(state)[0], app.content["items"])
+
+    assert result["refitted"] is None
+    assert gear.equipped(state["roster"]["iron_man"])["armor"] == "stark_underlay"
+    assert state["inventory"]["kevlar_weave"] == 1
+
+
+def test_a_spare_in_the_bag_is_handed_over_before_the_worn_one(lab):
+    _, app = lab
+    state = app.game_state
+    state["inventory"]["kevlar_weave"] = 2
+    gear.equip(state, "iron_man", "kevlar_weave", app.content["items"])
+    _stock(state, iso8=3)
+    result = gear.start_upgrade(state, app.content["items"]["kevlar_weave"],
+                                app.content["items"])
+    assert result["stripped"] is None
+    assert gear.equipped(state["roster"]["iron_man"])["armor"] == "kevlar_weave"
+    assert state["inventory"].get("kevlar_weave", 0) == 0
 
 
 # --- through the bench, and the night (3) --------------------------------
@@ -226,7 +294,7 @@ def test_the_upgrade_reaches_gear_already_being_worn(lab):
 def test_the_bench_menu_hands_it_over_and_takes_it_back(lab):
     scene, app = lab
     state = app.game_state
-    _stock(state, iso8=3)
+    _stock(state, iso8=3, combat_gauntlets=1)
     put_player_at(scene, 8, 5)                       # the Pym bench
     scene.handle_key(app, pygame.K_RETURN)
     choose(scene, app, "Combat Gauntlets ->")
@@ -254,6 +322,7 @@ def test_a_night_at_the_tower_advances_the_bench(content, monkeypatch, tmp_path)
     state = app.game_state
     state["credits"] = 5000
     state["inventory"]["iso8"] = 3
+    state["inventory"]["kevlar_weave"] = 1
     gear.start_upgrade(state, content["items"]["kevlar_weave"], content["items"])
 
     app.go_to_sleep()

@@ -170,14 +170,34 @@ def missing_materials(state, materials):
             for mid, need in materials.items() if bag.get(mid, 0) < need}
 
 
+def wearer_of(state, item_id):
+    """(hero_id, slot) for whoever has this fitted, or (None, None)."""
+    for hero_id, entry in sorted((state.get("roster") or {}).items()):
+        for slot, worn in equipped(entry).items():
+            if worn == item_id:
+                return hero_id, slot
+    return None, None
+
+
+def owns(state, item_id):
+    """A piece in the bag or on a hero's back — either can be handed over."""
+    if state.get("inventory", {}).get(item_id, 0) > 0:
+        return True
+    return wearer_of(state, item_id)[0] is not None
+
+
 def can_upgrade(state, item):
     """(ok, reason, target_level) for leaving this piece at the bench."""
     if job_for(state, item["id"]):
-        return False, "That design is already on the bench.", None
+        return False, "That one's already on the bench.", None
     target = level(state, item["id"]) + 1
     recipe = upgrade_recipe(target)
     if recipe is None:
         return False, "That design is as good as it gets.", None
+    if not owns(state, item["id"]):
+        # The bench upgrades a PIECE, not a blueprint — you have to put
+        # one on the counter.
+        return False, "You'd have to own one first.", target
     credits, materials, _days = recipe
     if state.get("credits", 0) < credits:
         return False, f"Needs {credits} cr.", target
@@ -189,7 +209,10 @@ def can_upgrade(state, item):
 
 
 def start_upgrade(state, item, items):
-    """Hand the piece over: materials and money are taken now."""
+    """Hand the piece over. The materials and the money go now — and so
+    does the equipment: it comes off the hero's back if that's where it is,
+    and the team fights without it until it's collected. That waiting is
+    the cost of the upgrade, not an accounting detail."""
     ok, reason, target = can_upgrade(state, item)
     if not ok:
         return {"ok": False, "message": reason}
@@ -197,11 +220,19 @@ def start_upgrade(state, item, items):
     state["credits"] -= credits
     for material_id, count in materials.items():
         inventory.remove(state, material_id, count)
+
+    stripped = None
+    if state.get("inventory", {}).get(item["id"], 0) > 0:
+        inventory.remove(state, item["id"], 1)      # a spare goes first
+    else:
+        hero_id, slot = wearer_of(state, item["id"])
+        del state["roster"][hero_id]["gear"][slot]
+        stripped = hero_id
     queue(state).append({"item": item["id"], "level": target,
-                         "days_left": days})
-    return {"ok": True, "days": days,
+                         "days_left": days, "worn_by": stripped})
+    return {"ok": True, "days": days, "stripped": stripped,
             "message": (f"{item['name']} left at the bench - {days} days, "
-                        f"{credits} cr.")}
+                        f"{credits} cr. You're without it until then.")}
 
 
 def process_day(state, items):
@@ -222,17 +253,27 @@ def ready_jobs(state):
 
 
 def collect(state, job, items):
-    """Pick it up. THIS is when the schematic's level actually moves."""
+    """Pick it up: the piece comes back and THIS is when the schematic's
+    level moves. If it was taken off a hero, it goes straight back on them
+    when that slot is still free — you handed it in, you get it back."""
     if job["days_left"] > 0:
         return {"ok": False,
                 "message": f"Not for another {job['days_left']} day(s)."}
     queue(state).remove(job)
     state.setdefault("gear_levels", {})[job["item"]] = job["level"]
     item = items[job["item"]]
-    return {"ok": True,
+    # force: the piece was already theirs — a full bag must not eat it.
+    inventory.add(state, item["id"], 1, force=True)
+    refitted = None
+    hero_id = job.get("worn_by")
+    entry = (state.get("roster") or {}).get(hero_id) if hero_id else None
+    if entry is not None and not equipped(entry).get(slot_of(item)):
+        equip(state, hero_id, item["id"], items)
+        refitted = hero_id
+    tail = " Back on straight away." if refitted else ""
+    return {"ok": True, "refitted": refitted,
             "message": (f"{item['name']} is now +{job['level'] - 1}: "
-                        f"{effect_label(state, item)}. Every one you build "
-                        f"comes off the line like this.")}
+                        f"{effect_label(state, item)}.{tail}")}
 
 
 def owned_for_slot(state, items, slot):

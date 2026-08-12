@@ -418,6 +418,10 @@ Layout zones (px, at 1280×720):
 
 Collections tab renders the roster as a 9-pocket binder page: filled pockets show
 mini card fronts; empty pockets show grey slots with silhouettes.
+**An empty pocket is anonymous** — a silhouette and a `?`, never a name.
+The page says that someone is missing, never who: finding out who fills a
+slot is the game, and once the Ch. 3–4 fork exists, naming the recruit you
+turned down would spoil the road not taken.
 
 The Social and Tasks tabs' lists (M14, added post-POC) grow with the roster
 and board tier, so their lower panel is scrollable: Up/Down scrolls the list
@@ -1096,23 +1100,33 @@ rank rise in a fight; fit Kevlar Weave to a rank-10 hero and go past 10.*
   common everywhere; vibranium and adamantium concentrate in the HYDRA
   District — **the best metal is in the worst neighbourhood**.
 - **The Pym Lab is Clint's forge.** You don't upgrade over the counter,
-  you LEAVE the piece: materials and credits are taken at drop-off, the
-  job counts down at the sleep boundary, and **nothing is applied until
-  the player collects it in person**. L2 costs 3 ISO-8 + 250 cr / 2 days;
-  L3 costs 2 vibranium + 1 adamantium + 600 cr / 3 days.
+  you LEAVE the piece: materials, credits **and the equipment itself** go
+  at drop-off — off the hero's back if that's where it is — the job counts
+  down at the sleep boundary, and **nothing is applied until the player
+  collects it in person**. L2 costs 3 ISO-8 + 250 cr / 2 days; L3 costs
+  2 vibranium + 1 adamantium + 600 cr / 3 days.
+- **Going without it is the cost.** The team fights those 2–3 days
+  unarmoured, which is what makes the timing a decision rather than a
+  formality. A spare in the bag is handed over before the worn one; on
+  collection the piece goes straight back onto the hero it came off,
+  unless that slot has been filled meanwhile.
 - **An upgrade belongs to the SCHEMATIC, not the object**
   (`state["gear_levels"][item_id]`): a level-3 Kevlar Weave means the lab
-  builds them that way now, so every copy — including the one already on
-  a hero's back — improves. This is what lets gear stack live in a flat
-  `{item_id: count}` bag with no per-instance identity.
+  builds them that way now, so a second copy comes off the line upgraded
+  too. This is what lets gear live in a flat `{item_id: count}` bag with
+  no per-instance identity — the alternative is instance ids threaded
+  through the bag, the shop, the slots and the save, which is a much
+  larger change for an edge case (owning two of one design) that the
+  economy makes rare.
 - Effects scale by `GEAR_UPGRADE_STEP` (0.5) per level: 1.0× / 1.5× / 2.0×,
   attribute bonuses rounded to whole ranks.
 - The loader cross-checks that every material a recipe wants is actually
   mineable somewhere — a bench that asks for something the world doesn't
   contain is a dead end.
 *AC: mine the HYDRA District until adamantium turns up (and spring a
-squad doing it); leave the gauntlets at the bench, sleep twice, and come
-back for a +1 pair; find the pair Iron Man is already wearing improved too.*
+squad doing it); hand in the armour Iron Man is wearing, watch it come
+off his card, fight a fight without it, then collect it two mornings
+later and find it back on him at +1.*
 
 **Ch. 3–4** *(decided, not yet built)*.
 - **Gate**: every Ch. 1–2 mission complete AND the tower repaired.
