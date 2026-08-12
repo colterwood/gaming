@@ -251,7 +251,26 @@ def test_every_hero_has_their_own_lines(content):
             assert char["id"] in lines, f"{char['id']} has no {pool} line"
 
 
-# --- talking is never refused (5) ----------------------------------------
+# --- old saves keep their board (5) --------------------------------------
+
+def test_a_save_that_already_fixed_the_jet_keeps_an_open_board(content):
+    # board_unlocked was hung on a job every live save had finished; without
+    # the backfill their board is locked behind a keypad nothing opens.
+    old = save.new_game_state()
+    old.pop("repairs")
+    old["day"] = 10
+    repairs.migrate(content, old)
+    assert old["story_flags"]["quinjet_repaired"] is True
+    assert old["story_flags"]["board_unlocked"] is True
+
+
+def test_a_new_game_does_not_get_the_board_for_free(content):
+    fresh_state = save.new_game_state()
+    repairs.migrate(content, fresh_state)
+    assert not fresh_state["story_flags"].get("board_unlocked")
+
+
+# --- talking is never refused (6) ----------------------------------------
 
 def test_talk_stays_available_after_the_days_points_are_spent(content):
     scene, app = HubScene(content), FakeApp(content)

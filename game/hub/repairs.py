@@ -262,14 +262,25 @@ def migrate(content, state):
     """A save from before M29 has been using the elevator, the jet and the
     mats for days — it must not wake up in a building site. Anything the
     old build shipped counts as repaired; the new rooms post as fresh
-    work. A game started under M29 has the key already and is left alone."""
-    if "repairs" in state:
-        return
-    state["repairs"] = {}
-    for job_id in LEGACY_JOBS:
-        job = job_by_id(content, job_id)
-        if job is None:
+    work. A game started under M29 has the key already and is left alone.
+
+    Then, for EVERY finished repair, set the flags it should have granted.
+    M34 hung `board_unlocked` on the Quinjet — a job every live save had
+    already done — and without this their assignment board would be locked
+    behind a keypad that nothing opens."""
+    if "repairs" not in state:
+        state["repairs"] = {}
+        for job_id in LEGACY_JOBS:
+            job = job_by_id(content, job_id)
+            if job is None:
+                continue
+            state["repairs"][job_id] = {
+                "status": "done", "found": list(range(len(job["parts"])))}
+            state.setdefault("story_flags", {})[job["flag"]] = True
+    flags = state.setdefault("story_flags", {})
+    for job in content["repairs"]:
+        if not (is_done(state, job) or flags.get(job["flag"])):
             continue
-        state["repairs"][job_id] = {
-            "status": "done", "found": list(range(len(job["parts"])))}
-        state.setdefault("story_flags", {})[job["flag"]] = True
+        flags[job["flag"]] = True
+        for flag, value in job.get("flags", {}).items():
+            flags.setdefault(flag, value)
