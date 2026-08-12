@@ -71,6 +71,22 @@ def search_loot(zone, rng):
     return {"credits": rng.randint(lo, hi), "item": item, "trap": False}
 
 
+def mine_node(zone, rng):
+    """Work one ore node (M32): returns {"item", "trap"}. The zone's
+    `mining` table is item id -> chance, rolled cumulatively, so what's
+    left over is a dry swing. Trap risk is the crate rule — the richest
+    seams are in the worst district on purpose."""
+    if rng.random() < zone["danger"] * config.SEARCH_TRAP_CHANCE:
+        return {"item": None, "trap": True}
+    roll = rng.random()
+    cumulative = 0.0
+    for item_id, chance in sorted(zone.get("mining", {}).items()):
+        cumulative += chance
+        if roll < cumulative:
+            return {"item": item_id, "trap": False}
+    return {"item": None, "trap": False}
+
+
 def trap_squad(danger, party_size, rng):
     """The squad sprung by a booby-trapped crate. You walked right into it,
     so there's no outnumber GUARANTEE the way an ambush has one — but M20

@@ -134,6 +134,107 @@ def unequip(state, hero_id, slot, items):
             "message": f"{items[item_id]['name']} stowed."}
 
 
+# --------------------------------------------- the Pym bench (M32)
+#
+# You don't upgrade gear over the counter — you LEAVE it. Drop the piece
+# with the materials and the money, and come back in a few days for it,
+# the way Stardew hands a pickaxe to Clint. The queue lives on the save as
+#
+#     state["upgrades"] = [{"item": id, "level": 2, "days_left": 2}, ...]
+#
+# and a job with days_left 0 is sitting on the bench waiting to be
+# collected. Nothing is applied until the player picks it up in person.
+
+def upgrade_recipe(target_level):
+    """(credits, {material: count}, days) for reaching a level, or None if
+    there is no such level."""
+    if target_level not in config.GEAR_UPGRADE_CREDITS:
+        return None
+    return (config.GEAR_UPGRADE_CREDITS[target_level],
+            dict(config.GEAR_UPGRADE_MATERIALS[target_level]),
+            config.GEAR_UPGRADE_DAYS[target_level])
+
+
+def queue(state):
+    return state.setdefault("upgrades", [])
+
+
+def job_for(state, item_id):
+    return next((j for j in queue(state) if j["item"] == item_id), None)
+
+
+def missing_materials(state, materials):
+    """What the bag is short of, as {id: how many more}."""
+    bag = state.get("inventory", {})
+    return {mid: need - bag.get(mid, 0)
+            for mid, need in materials.items() if bag.get(mid, 0) < need}
+
+
+def can_upgrade(state, item):
+    """(ok, reason, target_level) for leaving this piece at the bench."""
+    if job_for(state, item["id"]):
+        return False, "That design is already on the bench.", None
+    target = level(state, item["id"]) + 1
+    recipe = upgrade_recipe(target)
+    if recipe is None:
+        return False, "That design is as good as it gets.", None
+    credits, materials, _days = recipe
+    if state.get("credits", 0) < credits:
+        return False, f"Needs {credits} cr.", target
+    short = missing_materials(state, materials)
+    if short:
+        return False, "Short " + ", ".join(f"{n} {mid}" for mid, n
+                                           in sorted(short.items())), target
+    return True, "", target
+
+
+def start_upgrade(state, item, items):
+    """Hand the piece over: materials and money are taken now."""
+    ok, reason, target = can_upgrade(state, item)
+    if not ok:
+        return {"ok": False, "message": reason}
+    credits, materials, days = upgrade_recipe(target)
+    state["credits"] -= credits
+    for material_id, count in materials.items():
+        inventory.remove(state, material_id, count)
+    queue(state).append({"item": item["id"], "level": target,
+                         "days_left": days})
+    return {"ok": True, "days": days,
+            "message": (f"{item['name']} left at the bench - {days} days, "
+                        f"{credits} cr.")}
+
+
+def process_day(state, items):
+    """Run a night off every job on the bench. Returns log messages; a job
+    that comes due WAITS to be collected rather than applying itself."""
+    messages = []
+    for job in queue(state):
+        if job["days_left"] > 0:
+            job["days_left"] -= 1
+            if job["days_left"] == 0:
+                name = items[job["item"]]["name"]
+                messages.append(f"The Pym bench is done with your {name}.")
+    return messages
+
+
+def ready_jobs(state):
+    return [j for j in queue(state) if j["days_left"] <= 0]
+
+
+def collect(state, job, items):
+    """Pick it up. THIS is when the schematic's level actually moves."""
+    if job["days_left"] > 0:
+        return {"ok": False,
+                "message": f"Not for another {job['days_left']} day(s)."}
+    queue(state).remove(job)
+    state.setdefault("gear_levels", {})[job["item"]] = job["level"]
+    item = items[job["item"]]
+    return {"ok": True,
+            "message": (f"{item['name']} is now +{job['level'] - 1}: "
+                        f"{effect_label(state, item)}. Every one you build "
+                        f"comes off the line like this.")}
+
+
 def owned_for_slot(state, items, slot):
     """Carried gear that fits a slot, in a stable order."""
     return sorted((items[item_id] for item_id, count

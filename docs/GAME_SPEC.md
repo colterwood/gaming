@@ -178,7 +178,9 @@ One JSON per slot: current day/issue/time, energy, roster (per hero: trained
 ranks, attribute XP, chosen perks, equipped gear, ultimate charge), bond points +
 gift history (gift_days/last_gift) per character, inventory, credits, story
 flags, quest states, side-arc states (`unlocks`, M17) and the queue of story
-beats waiting to play (`pending_scenes`, M17).
+beats waiting to play (`pending_scenes`, M17), tower repair progress
+(`repairs`, M29), gear upgrade levels (`gear_levels`, M31) and whatever is
+sitting on the Pym bench (`upgrades`, M32).
 Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
 `SAVE_SLOTS` (3) independent games; the title menu picks which one is
 being played and `App.SAVE_SLOT` follows it (M28).
@@ -383,7 +385,10 @@ Avengers Tower rooms and activities:
 |---|---|
 | Common Floor | Talk to present heroes, give gifts, assignment board (2 rotating tasks per day per unlocked board tier; dispatch jobs — see §9 M10/M11) |
 | Training Floor | Attribute training (pick hero + attribute); upgrades to tier 2 via story flag after Ch. 1 boss |
-| Ops Floor | Story missions are OFFERED here (M13): accept one to start its deadline and make its target/scout points appear in the field; view quest log |
+| Ops Floor | Story missions are OFFERED here (M13): accept one to start its deadline and make its target/scout points appear in the field; view quest log. The Quinjet sits in its bay here (M29) |
+| Med Bay | Treatment chair: hours for energy (M30). Opened by a repair |
+| Tech Lab | Fabricate and fit equipment (M31). Opened by a repair |
+| Pym Lab | Leave gear to be upgraded with materials (M32). Behind Lang's door code, then a repair |
 
 Sleep sequence: fade out → advance calendar → reset energy/talk flags →
 autosave → fade in. (Gift limits are the M12 rolling window — nothing weekly
@@ -1012,8 +1017,7 @@ Game on an occupied slot and get asked before anything is lost; corrupt a
 slot and still reach the other two; read the slot number in the card
 footer.*
 
-**M29 — Tower rebuild** *(DESIGNED, NOT YET BUILT — decisions recorded so
-they don't rot before the build)*.
+**M29 — Tower rebuild** *(added post-POC)*.
 - **The game opens with a broken tower.** Repairs are posted on the
   assignment board; accepting one is what makes the work appear. Order:
   **elevator** (opens the Ops Floor) → **Quinjet** (Pepper reports it
@@ -1041,9 +1045,74 @@ they don't rot before the build)*.
 - **Old saves keep the rooms they already had.** Loading a pre-M29 save
   counts the elevator, Quinjet and Training Floor as repaired (the M20
   rule); only the new rooms post as fresh work.
-- **Open**: what the Med Bay and the Tech Lab *do* once repaired. The Pym
-  Lab room lands with Ant-Man, but crafting waits until the item catalogue
-  is worth crafting from — it's a system, not a room.
+*AC: start a new game and find the elevator dead, the board offering to
+fix it, and three salvage markers on the common floor; fit the parts and
+ride up into Pepper telling you the jet is down; walk to Ops with the jet
+grounded and be offered no mission at all; load a save from M28 and find
+the tower already standing.*
+
+**M30 — The Med Bay** *(added post-POC)*.
+- **Energy can be bought back with hours.** The daily 100 was a hard cap
+  with exactly one answer — sleep. Sit in the treatment chair and the
+  world clock RUNS in front of you: `MEDBAY_ENERGY_PER_TICK` (10) per
+  `MEDBAY_TICK_MINUTES` (10), so a full refill costs 100 of the day's
+  1,200 usable minutes. No credits, no energy — the hours are the price.
+- The hub's `resting` mode is the one menu the clock deliberately keeps
+  running behind (M25 froze every other). It stops itself when the team is
+  full, the player can get up at any time and keeps what they bought, and
+  passing 2 AM in the chair passes the team out where they sit.
+- Treats every ACTIVE party member, like a ration (M18): team energy is
+  the minimum across the party, so treating the leader alone moved nothing.
+- **Consequence to watch in play**: with the chair available, energy stops
+  being the binding constraint and the clock becomes it. Both numbers are
+  one-line tunables; a per-day limit is the obvious brake if the trade
+  turns out too cheap.
+*AC: walk in at 40 EN, watch the clock and the bar climb together, and get
+up at 70; sit down at full strength and be turned away.*
+
+**M31 — Tech Lab: gear** *(added post-POC)*.
+- **The gear slots finally hold something.** Every roster entry has
+  carried an empty `gear: {}` since M0 while §5.3's equipment schema went
+  unused and credits had nowhere to go once the board ran dry (M26).
+- Six pieces across three slots (`weapon`/`armor`/`accessory`), fabricated
+  at the Tech Bench for 350–520 cr and fitted per hero at the same bench.
+- An effect is **either a flat attribute RANK bonus** — which is how gear
+  takes a hero past the trained ceiling of 10, because the ceiling is on
+  what a body can train to, not on what it can be handed — **or one of the
+  perk effect keys**, summed with whatever the perks already give. One
+  pipeline, no second mechanism (`entities.Combatant.gear_ranks`).
+- **Worn or carried, never both**: equipping takes the piece out of the
+  bag, swapping puts the old one back, and unequipping is forced past a
+  full bag so equipment can never be stranded.
+- The card's Attributes tab shows what a hero wears and what it's worth.
+*AC: buy Combat Gauntlets, fit them to Iron Man, and watch his Strength
+rank rise in a fight; fit Kevlar Weave to a rank-10 hero and go past 10.*
+
+**M32 — Materials & the Pym bench** *(added post-POC)*.
+- **Ore seams** (`o` tiles, `mining` table in zones.json) are the zones'
+  second renewable next to crates: one swing per node per day for
+  `MINE_ENERGY` (8) / `MINE_MINUTES` (30), rolled cumulatively against the
+  zone's table, with the crate rule's danger-scaled trap risk. ISO-8 is
+  common everywhere; vibranium and adamantium concentrate in the HYDRA
+  District — **the best metal is in the worst neighbourhood**.
+- **The Pym Lab is Clint's forge.** You don't upgrade over the counter,
+  you LEAVE the piece: materials and credits are taken at drop-off, the
+  job counts down at the sleep boundary, and **nothing is applied until
+  the player collects it in person**. L2 costs 3 ISO-8 + 250 cr / 2 days;
+  L3 costs 2 vibranium + 1 adamantium + 600 cr / 3 days.
+- **An upgrade belongs to the SCHEMATIC, not the object**
+  (`state["gear_levels"][item_id]`): a level-3 Kevlar Weave means the lab
+  builds them that way now, so every copy — including the one already on
+  a hero's back — improves. This is what lets gear stack live in a flat
+  `{item_id: count}` bag with no per-instance identity.
+- Effects scale by `GEAR_UPGRADE_STEP` (0.5) per level: 1.0× / 1.5× / 2.0×,
+  attribute bonuses rounded to whole ranks.
+- The loader cross-checks that every material a recipe wants is actually
+  mineable somewhere — a bench that asks for something the world doesn't
+  contain is a dead end.
+*AC: mine the HYDRA District until adamantium turns up (and spring a
+squad doing it); leave the gauntlets at the bench, sleep twice, and come
+back for a +1 pair; find the pair Iron Man is already wearing improved too.*
 
 **Ch. 3–4** *(decided, not yet built)*.
 - **Gate**: every Ch. 1–2 mission complete AND the tower repaired.

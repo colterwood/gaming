@@ -112,8 +112,11 @@ class App:
     def go_to_sleep(self, passed_out=False):
         from game.core import energy
         from game.hub import activities, dispatch, passive, story, unlocks
+        from game.progression import gear as gear_mod
         messages = passive.process_day(self.content, self.game_state)
         messages += dispatch.process_day(self.content, self.game_state)
+        messages += gear_mod.process_day(self.game_state,
+                                         self.content["items"])
         result = activities.go_to_sleep(self.game_state, passed_out=passed_out)
         # M16: rack sessions are measured in WAKING hours and may span days.
         # Settle them after the calendar advances, so the night banks the

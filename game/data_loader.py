@@ -653,6 +653,23 @@ def load_zones(data_dir=None):
                 if not isinstance(chance, (int, float)) or isinstance(chance, bool) \
                         or not 0.0 <= chance <= 1.0:
                     raise DataError(f"{zw}: loot.{key} must be 0..1")
+        mining = zone.get("mining")                     # ore seams (M32)
+        if mining is not None:
+            if not isinstance(mining, dict) or not mining:
+                raise DataError(f"{zw}: mining must be a non-empty object of "
+                                f"material -> chance")
+            total = 0.0
+            for material_id, chance in mining.items():
+                if not isinstance(chance, (int, float)) \
+                        or isinstance(chance, bool) or not 0.0 < chance <= 1.0:
+                    raise DataError(f"{zw}: mining['{material_id}'] must be "
+                                    f"a chance in 0..1")
+                total += chance
+            if total > 1.0:
+                # The table is rolled cumulatively; over 1.0 and the last
+                # entries could never come up.
+                raise DataError(f"{zw}: mining chances total {total:.2f} — "
+                                f"they must not exceed 1.0")
         if zone["id"] in seen:
             raise DataError(f"{zw}: duplicate id")
         seen.add(zone["id"])
@@ -757,6 +774,21 @@ def load_all(data_dir=None):
             if item_id not in items:
                 raise DataError(
                     f"zones.json '{zone['id']}': loot item '{item_id}' not found in items.json")
+        for item_id in zone.get("mining", {}):
+            if item_id not in items:
+                raise DataError(f"zones.json '{zone['id']}': mining material "
+                                f"'{item_id}' not found in items.json")
+            if items[item_id]["kind"] != "material":
+                raise DataError(f"zones.json '{zone['id']}': '{item_id}' is a "
+                                f"'{items[item_id]['kind']}', not a material")
+    # Every material an upgrade recipe asks for has to be mineable, or the
+    # Pym bench would want something the world doesn't contain.
+    mineable = {m for zone in zones.values() for m in zone.get("mining", {})}
+    for level_materials in config.GEAR_UPGRADE_MATERIALS.values():
+        for material_id in level_materials:
+            if material_id not in mineable:
+                raise DataError(f"config.GEAR_UPGRADE_MATERIALS wants "
+                                f"'{material_id}', which no zone yields")
     for task in assignments:
         area, sx, sy = task["spot"]
         if area in TOWER_FLOORS:

@@ -30,7 +30,7 @@ TILE_NAMES = {"#": "wall", "w": "window", "E": "elevator", ".": "floor",
               ",": "carpet", "m": "mat", "S": "counter", "b": "board",
               "O": "console", "Z": "bed", "c": "couch", "t": "table",
               "p": "plant", "r": "rack", "=": "road", "_": "sidewalk",
-              "x": "crate", "H": "helipad",
+              "x": "crate", "H": "helipad", "o": "ore",
               # M29 rooms
               "Q": "hangar", "+": "treatment", "T": "workbench",
               "P": "pym bench"}
@@ -505,6 +505,20 @@ class HubScene:
                                   HUD_H + ty * TILE + TILE // 2))
         return found
 
+    def _ore_here(self, state):
+        """Unworked ore nodes in the current zone (M32). Same daily respawn
+        as a crate — one swing per node per day."""
+        if self.area == "tower" or not self._zone().get("mining"):
+            return []
+        found = []
+        for ty, row in enumerate(self._map()):
+            for tx, ch in enumerate(row):
+                if ch == "o" and not activities.spot_searched(
+                        state, self.area, tx, ty):
+                    found.append((tx, ty, tx * TILE + TILE // 2,
+                                  HUD_H + ty * TILE + TILE // 2))
+        return found
+
     def _nearest_interaction(self, state):
         best = None
         best_d = 26 ** 2
@@ -521,6 +535,10 @@ class HubScene:
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
                 best, best_d = ("crate", (tx, ty), "Search"), d
+        for tx, ty, x, y in self._ore_here(state):
+            d = (x - self.px) ** 2 + (y - self.py) ** 2
+            if d < best_d:
+                best, best_d = ("ore", (tx, ty), "Mine"), d
         for quest, i, x, y in self._scout_targets(state):
             d = (x - self.px) ** 2 + (y - self.py) ** 2
             if d < best_d:
@@ -692,6 +710,8 @@ class HubScene:
             self._engage_target(app)
         elif kind == "crate":
             self._search_crate(app, *ident)
+        elif kind == "ore":
+            self._mine_node(app, *ident)
         elif kind == "scout":
             self._do_scout_point(app, ident)
         elif kind == "grove":
@@ -856,6 +876,8 @@ class HubScene:
             self._start_rest(app)
         elif kind == "techlab":
             self._open_tech_lab(app)
+        elif kind == "pymlab":
+            self._open_pym_lab(app)
         else:
             self.log(f"{STATION_LABELS[kind]}: nothing installed here yet.")
             self.reset_modes()
@@ -1058,6 +1080,78 @@ class HubScene:
         if left_behind:
             self.log(f"No room for the {left_behind} - {inventory.label(state)}.")
         self._after_action(app)
+
+    def _mine_node(self, app, tx, ty):
+        """Work an ore seam (M32). Costs real energy — this is the one field
+        job that pays in materials rather than credits."""
+        state = app.game_state
+        zone = self._zone()
+        if not energy.can_afford(state, config.MINE_ENERGY):
+            self.log("Too exhausted to swing at rock.")
+            return
+        energy.spend(state, config.MINE_ENERGY)
+        activities.mark_spot_searched(state, self.area, tx, ty)
+        clock.advance(state, config.MINE_MINUTES)
+        result = field.mine_node(zone, self.rng)
+        if result["trap"]:
+            squad = field.trap_squad(zone["danger"],
+                                     len(self._party(state)), self.rng)
+            self.log(f"The seam was watched! {len(squad)} HYDRA close in!")
+            app.start_battle(enemy_ids=squad, ambush=True)
+            return
+        if not result["item"]:
+            self.log("The seam gives up nothing but dust.")
+        else:
+            item = self.content["items"][result["item"]]
+            if inventory.add(state, item["id"], 1)["ok"]:
+                self.log(f"Prised out {item['name']}.")
+            else:
+                self.log(f"No room for the {item['name']} - "
+                         f"{inventory.label(state)}.")
+        self._after_action(app)
+
+    # ---------------------------------------------------- pym lab (M32)
+
+    def _open_pym_lab(self, app):
+        """Clint's forge, in a lab coat: leave a piece with the materials
+        and the money, come back in a few days for it."""
+        state = app.game_state
+        items = []
+        for job in gear.queue(state):
+            item = self.content["items"][job["item"]]
+            if job["days_left"] > 0:
+                items.append((f"{item['name']} +{job['level'] - 1} - "
+                              f"{job['days_left']} day(s) to go", True, None))
+            else:
+                items.append((f"COLLECT: {item['name']} +{job['level'] - 1}",
+                              False,
+                              (lambda a, j=job: self._collect_upgrade(a, j))))
+        for item in sorted((i for i in self.content["items"].values()
+                            if gear.is_gear(i)), key=lambda i: i["id"]):
+            if gear.job_for(state, item["id"]):
+                continue
+            ok, reason, target = gear.can_upgrade(state, item)
+            if target is None:
+                continue
+            credits, materials, days = gear.upgrade_recipe(target)
+            cost = ", ".join(f"{n} {self.content['items'][m]['name']}"
+                             for m, n in sorted(materials.items()))
+            label = (f"{gear.item_label(state, item)} -> +{target - 1}: "
+                     f"{cost}, {credits} cr, {days}d")
+            items.append((label if ok else f"{label}  [{reason}]", not ok,
+                          (lambda a, it=item: self._start_upgrade(a, it))))
+        items.append(("Close", False, None))
+        self._open_submenu(f"Pym Bench - {state['credits']} cr", items)
+
+    def _start_upgrade(self, app, item):
+        self.log(gear.start_upgrade(app.game_state, item,
+                                    self.content["items"])["message"])
+        self._open_pym_lab(app)
+
+    def _collect_upgrade(self, app, job):
+        self.log(gear.collect(app.game_state, job,
+                              self.content["items"])["message"])
+        self._open_pym_lab(app)
 
     # -------------------------------------------------------- rations (M10)
 
@@ -1781,7 +1875,7 @@ class HubScene:
             for tx in range(MAP_W):
                 surface.blit(sprites.tile(self._tile_name(row[tx])),
                              (tx * TILE, HUD_H + ty * TILE))
-                if in_zone and ((row[tx] == "x"
+                if in_zone and ((row[tx] in ("x", "o")
                                  and activities.spot_searched(state, self.area,
                                                               tx, ty))
                                 or (tx, ty) in spent):

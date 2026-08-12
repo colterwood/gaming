@@ -29,6 +29,7 @@ def new_game_state():
         "unlocks": {},         # conditional side arcs in progress (M17)
         "repairs": {},         # tower repair jobs accepted/done (M29)
         "gear_levels": {},     # item id -> upgrade level of the schematic (M31)
+        "upgrades": [],        # gear left at the Pym bench (M32)
         "pending_scenes": [],  # story beats waiting for the hub to play them
         "dispatches": [],      # board jobs under way (M10)
         "completed_tasks": [], # one-shot board jobs already done (M15)

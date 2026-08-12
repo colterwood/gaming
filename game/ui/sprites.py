@@ -652,6 +652,15 @@ def _make_tile(name):
         pygame.draw.rect(surf, c("wood_dark"), r(1, 2, 14, 13), 1)
         pygame.draw.line(surf, c("wood_dark"), (1, 8), (14, 8))
         pygame.draw.line(surf, c("wood_dark"), (8, 2), (8, 14))
+    elif name == "ore":             # M32: a seam worth swinging at
+        surf.fill(c("grey_dark"))
+        pygame.draw.polygon(surf, c("steel_dark"),
+                            [(2, 14), (4, 6), (9, 3), (14, 8), (13, 14)])
+        pygame.draw.polygon(surf, c("steel"),
+                            [(5, 12), (6, 8), (9, 6), (11, 10), (10, 13)])
+        surf.set_at((8, 8), c("sky"))
+        surf.set_at((9, 9), c("mint"))
+        surf.set_at((7, 10), c("purple"))
     elif name == "helipad":
         surf.fill(c("shadow"))
         pygame.draw.circle(surf, c("gold"), (8, 8), 7, 1)

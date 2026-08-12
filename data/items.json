@@ -40,6 +40,13 @@
   {"id": "stormbreaker", "name": "Stormbreaker", "kind": "artifact",
    "price": 0, "sources": ["midtown"]},
 
+  {"id": "iso8", "name": "ISO-8 Crystal", "kind": "material",
+   "price": 90, "sources": ["mining"]},
+  {"id": "vibranium", "name": "Vibranium Shard", "kind": "material",
+   "price": 260, "sources": ["mining"]},
+  {"id": "adamantium", "name": "Adamantium Ingot", "kind": "material",
+   "price": 340, "sources": ["mining"]},
+
   {"id": "combat_gauntlets", "name": "Combat Gauntlets", "kind": "weapon",
    "slot": "weapon", "price": 400, "sources": ["tech_lab"],
    "effects": {"strength": 2}},

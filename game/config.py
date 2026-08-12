@@ -200,6 +200,21 @@ MEDBAY_REST_SECONDS_PER_TICK = 0.30
 GEAR_UPGRADE_STEP = 0.5
 GEAR_LEVEL_MAX = 3
 
+# --- Materials & the Pym Lab (M32) ---
+# Ore nodes are the zones' second renewable: one swing per node per day,
+# priced like a heavy crate search, with the same danger-scaled trap risk
+# — the best metal is in the worst neighbourhood.
+MINE_ENERGY = 8
+MINE_MINUTES = 30
+# Leaving gear at the Pym bench: what a level costs and how many nights it
+# is gone for. Keyed by the level being upgraded TO.
+GEAR_UPGRADE_CREDITS = {2: 250, 3: 600}
+GEAR_UPGRADE_DAYS = {2: 2, 3: 3}
+GEAR_UPGRADE_MATERIALS = {
+    2: {"iso8": 3},
+    3: {"vibranium": 2, "adamantium": 1},
+}
+
 # --- Battle time & defeat (M12) ---
 # Engaging a mission costs MISSION_ENERGY/MISSION_MINUTES up front (§6.1).
 # An ambush/trap fight you WIN eats BATTLE_MINUTES; a DEFEAT (any battle)
