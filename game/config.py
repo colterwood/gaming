@@ -183,6 +183,16 @@ REPAIR_PART_MINUTES = 20
 REPAIR_ENERGY = 15
 REPAIR_MINUTES = 60
 
+# --- Med Bay (M30) ---
+# Sit in the chair and the clock runs while you mend: 10% of the daily
+# maximum per 10 in-game minutes, so a full team refill costs 100 of the
+# day's 1,200 usable minutes. The price is hours, never credits or energy.
+# REST_SECONDS_PER_TICK is how fast that plays out in real time — the sit
+# is watched, not skipped, which is the whole point of the room.
+MEDBAY_ENERGY_PER_TICK = 10
+MEDBAY_TICK_MINUTES = 10
+MEDBAY_REST_SECONDS_PER_TICK = 0.30
+
 # --- Battle time & defeat (M12) ---
 # Engaging a mission costs MISSION_ENERGY/MISSION_MINUTES up front (§6.1).
 # An ambush/trap fight you WIN eats BATTLE_MINUTES; a DEFEAT (any battle)

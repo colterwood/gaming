@@ -265,7 +265,7 @@ class HubScene:
         self.tick_accum = 0.0
         self.ambush_accum = 0.0
         self.rng = random.Random()
-        # modes: normal | submenu | train_attr | perk_choice | scene
+        # modes: normal | submenu | train_attr | perk_choice | scene | resting
         self.mode = "normal"
         self.submenu = None
         self.train_hero_id = None
@@ -273,6 +273,8 @@ class HubScene:
         self.scene = None
         self.scene_line = 0
         self.submenu_index = 0
+        self.rest_accum = 0.0       # med bay treatment in progress (M30)
+        self.rest_from = 0
 
     # ------------------------------------------------------------------ util
 
@@ -304,6 +306,7 @@ class HubScene:
         self.perk_ctx = None
         self.scene = None
         self.scene_line = 0
+        self.rest_accum = 0.0
 
     def return_to_tower(self):
         self.reset_modes()
@@ -568,6 +571,10 @@ class HubScene:
             if self.tick_accum >= config.TICK_REAL_SECONDS:
                 self.tick_accum -= config.TICK_REAL_SECONDS
                 clock.advance(state, config.TICK_GAME_MINUTES)
+        elif self.mode == "resting":
+            # M30: the Med Bay is the one menu the clock DOES run behind,
+            # because the passing hours are what you're paying.
+            self._rest_update(dt, app)
         for msg in activities.finish_due_training(
                 state, self.content, rejoin=(self.area == "tower")):
             self.log(msg)                           # sessions ending (M12);
@@ -614,6 +621,10 @@ class HubScene:
     # ----------------------------------------------------------------- input
 
     def handle_key(self, app, key):
+        if self.mode == "resting":
+            if key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                self._stop_rest(app.game_state, "You get up.")
+            return
         if self.mode == "scene":
             if key == pygame.K_RETURN:
                 self.scene_line += 1
@@ -840,9 +851,46 @@ class HubScene:
             return
         if kind == "quinjet":
             self._open_helipad(app)
+        elif kind == "medbay":
+            self._start_rest(app)
         else:
             self.log(f"{STATION_LABELS[kind]}: nothing installed here yet.")
             self.reset_modes()
+
+    # ---------------------------------------------------- med bay (M30)
+
+    def _start_rest(self, app):
+        """Sit down and let the clock run. Nothing is skipped — the hours
+        tick past in front of you and you get up when you've had enough."""
+        ok, reason = activities.can_rest(app.game_state)
+        if not ok:
+            self.log(reason)
+            self.reset_modes()
+            return
+        self.reset_modes()
+        self.mode = "resting"
+        self.rest_accum = 0.0
+        self.rest_from = energy.team_energy(app.game_state)
+        self.log("The chair reclines. Somebody finds you a blanket.")
+
+    def _rest_update(self, dt, app):
+        state = app.game_state
+        self.rest_accum += dt
+        while self.rest_accum >= config.MEDBAY_REST_SECONDS_PER_TICK:
+            self.rest_accum -= config.MEDBAY_REST_SECONDS_PER_TICK
+            result = activities.rest_tick(state)
+            if result["full"] or result["hit_day_end"]:
+                self._stop_rest(state,
+                                "Patched up." if result["full"]
+                                else "The night runs out on you.")
+                return
+
+    def _stop_rest(self, state, why):
+        gained = energy.team_energy(state) - getattr(self, "rest_from", 0)
+        self.mode = "normal"
+        self.rest_accum = 0.0
+        self.log(f"{why} +{max(0, gained)} EN "
+                 f"({clock.format_time(state['time_minutes'])}).")
 
     def _open_repair_menu(self, app, job):
         """Stand at the broken thing: what's left to find, and the repair
@@ -1603,8 +1651,26 @@ class HubScene:
                 f"{hero['name']} - {ctx['attribute'].title()} rank {ctx['tier']} perk!",
                 [f"{p['name']} - {p['blurb']}" for p in ctx["options"]],
                 self.submenu_index)
+        elif self.mode == "resting":
+            self._draw_rest(surface, state)
         elif self.mode == "scene" and self.scene:
             self._draw_scene(surface)
+
+    def _draw_rest(self, surface, state):
+        """The treatment overlay (M30): the clock and the bar are the whole
+        show — you watch the hours go in and the energy come back."""
+        box = pygame.Rect(config.WIDTH // 2 - 110, 96, 220, 92)
+        pixelkit.panel(surface, box, fill="ink", border="mint")
+        pixelkit.text(surface, "TREATMENT STATION", 15, "mint", bold=True,
+                      center=(box.centerx, box.y + 16), shadow="ink")
+        pixelkit.text(surface, clock.format_time(state["time_minutes"]), 20,
+                      "gold", center=(box.centerx, box.y + 40))
+        team = energy.team_energy(state)
+        widgets.bar(surface, pygame.Rect(box.x + 24, box.y + 54, 172, 12),
+                    team / config.DAILY_ENERGY, "green",
+                    label=f"{team} / {config.DAILY_ENERGY}")
+        pixelkit.text(surface, "Enter: get up", 12, "steel_light",
+                      center=(box.centerx, box.bottom - 12))
 
     def _draw_log(self, surface):
         """The message window, with counts of what sits off it either way

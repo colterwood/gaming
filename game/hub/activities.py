@@ -219,6 +219,35 @@ def assignment_tasks_today(state, assignments, tier=1):
     return today
 
 
+def can_rest(state):
+    """(ok, reason) for sitting down in the Med Bay (M30)."""
+    members = energy.party(state)
+    if not members:
+        return False, "Nobody here to treat."
+    if all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
+           for h in members):
+        return False, "The team is already at full strength."
+    return True, ""
+
+
+def rest_tick(state):
+    """One tick of treatment: MEDBAY_TICK_MINUTES off the clock for
+    MEDBAY_ENERGY_PER_TICK energy to every active party member (capped at
+    the daily maximum, like a ration).
+
+    The Med Bay is the one place the day's energy cap can be bought back,
+    and it is bought with the only other thing there is — hours. Benched
+    heroes aren't treated; they wake up full anyway."""
+    hit_end = clock.advance(state, config.MEDBAY_TICK_MINUTES)
+    for hero_id in energy.party(state):
+        energy.set_hero_energy(
+            state, hero_id,
+            energy.hero_energy(state, hero_id) + config.MEDBAY_ENERGY_PER_TICK)
+    team = energy.sync(state)
+    return {"hit_day_end": hit_end, "team_energy": team,
+            "full": team >= config.DAILY_ENERGY}
+
+
 def eat_food(state, content, item_id):
     """Break out a ration (M10; M18: the TEAM shares it). Every active
     party member gets the item's EN, capped at the daily max — team energy
