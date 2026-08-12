@@ -138,18 +138,30 @@ class App:
         from game.core import energy
         from game.hub import party as party_mod
         from game.progression import attributes as attrs
+        from game.progression import gear as gear_mod
         from game.social import bonds
         from game.ui.battle_scene import BattleScene
         self.battle_quest = quest
         self.battle_ambush = ambush
         trained = perk_fx = synergy_crit = energy_frac = ult_charge = None
+        gear_ranks = None
         hero_ids = ("iron_man", "captain_america")
         if self.game_state:
             roster = self.game_state["roster"]
             hero_ids = tuple(party_mod.get_party(self.game_state)) or tuple(sorted(roster))
             trained = {hid: roster[hid].get("trained_ranks", {}) for hid in hero_ids}
+            # M31: worn gear splits into flat rank bonuses and perk-shaped
+            # combat effects, which stack onto whatever the perks give.
+            gear_ranks, gear_fx = {}, {}
+            for hid in hero_ids:
+                ranks, combat = gear_mod.split_effects(gear_mod.total_effects(
+                    self.game_state, roster[hid], self.content["items"]))
+                gear_ranks[hid], gear_fx[hid] = ranks, combat
             perk_fx = {hid: attrs.perk_effects(roster[hid], self.content["perks"])
                        for hid in hero_ids}
+            for hid in hero_ids:
+                for key, value in gear_fx[hid].items():
+                    perk_fx[hid][key] = perk_fx[hid].get(key, 0) + value
             energy_frac = {hid: energy.hero_energy(self.game_state, hid) / config.DAILY_ENERGY
                            for hid in hero_ids}
             synergy_crit = {}
@@ -165,7 +177,7 @@ class App:
         self.battle = BattleScene(
             self.content, hero_ids=hero_ids, enemy_ids=enemy_ids, trained=trained,
             perk_fx=perk_fx, synergy_crit=synergy_crit, energy_frac=energy_frac,
-            ult_charge=ult_charge,
+            ult_charge=ult_charge, gear_ranks=gear_ranks,
             inventory=self.game_state["inventory"] if self.game_state else None)
         self.machine.transition(GameState.BATTLE)
 

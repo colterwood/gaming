@@ -169,8 +169,24 @@ def _validate_item(item, where):
     _require(item, "price", int, where)
     _require(item, "sources", list, where)
     if kind in ("weapon", "armor", "accessory"):
-        _require(item, "slot", str, where)
-        _require(item, "effects", dict, where)
+        slot = _require(item, "slot", str, where)
+        if slot != kind:
+            # One slot per kind keeps the Tech Lab's three rows honest.
+            raise DataError(f"{where}: a '{kind}' item must sit in the "
+                            f"'{kind}' slot, not '{slot}'")
+        effects = _require(item, "effects", dict, where)
+        if not effects:
+            raise DataError(f"{where}: equipment with no effects is scenery")
+        for key, value in effects.items():
+            # M31: an effect is either a flat attribute RANK bonus or one of
+            # the perk effect keys, so gear and perks stack in one pipeline.
+            if key not in config.ATTRIBUTES and key not in PERK_EFFECT_KEYS:
+                raise DataError(f"{where}: unknown gear effect '{key}'")
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise DataError(f"{where}: effect '{key}' must be a number")
+            if key in config.ATTRIBUTES and not isinstance(value, int):
+                raise DataError(f"{where}: attribute effect '{key}' must be "
+                                f"a whole number of ranks")
     if "energy" in item:            # edible ration (M10)
         value = item["energy"]
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:

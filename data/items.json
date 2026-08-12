@@ -38,5 +38,24 @@
   {"id": "power_smoothie", "name": "Jarvis's Power Smoothie", "kind": "consumable",
    "price": 110, "sources": ["tower_cafe"], "energy": 40},
   {"id": "stormbreaker", "name": "Stormbreaker", "kind": "artifact",
-   "price": 0, "sources": ["midtown"]}
+   "price": 0, "sources": ["midtown"]},
+
+  {"id": "combat_gauntlets", "name": "Combat Gauntlets", "kind": "weapon",
+   "slot": "weapon", "price": 400, "sources": ["tech_lab"],
+   "effects": {"strength": 2}},
+  {"id": "targeting_optics", "name": "Targeting Optics", "kind": "weapon",
+   "slot": "weapon", "price": 450, "sources": ["tech_lab"],
+   "effects": {"crit_bonus": 8}},
+  {"id": "kevlar_weave", "name": "Kevlar Weave", "kind": "armor",
+   "slot": "armor", "price": 380, "sources": ["tech_lab"],
+   "effects": {"durability": 2}},
+  {"id": "stark_underlay", "name": "Stark Underlay", "kind": "armor",
+   "slot": "armor", "price": 520, "sources": ["tech_lab"],
+   "effects": {"max_hp_pct": 10, "stamina": 1}},
+  {"id": "field_stim_rig", "name": "Field Stim Rig", "kind": "accessory",
+   "slot": "accessory", "price": 350, "sources": ["tech_lab"],
+   "effects": {"speed": 2}},
+  {"id": "arc_cell", "name": "Arc Cell", "kind": "accessory",
+   "slot": "accessory", "price": 480, "sources": ["tech_lab"],
+   "effects": {"battle_energy_flat": 10, "intelligence": 1}}
 ]

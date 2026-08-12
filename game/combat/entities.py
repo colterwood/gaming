@@ -8,7 +8,7 @@ from game.combat import formulas
 class Combatant:
     def __init__(self, data, trained_ranks=None, is_hero=False, instance_id=None,
                  name=None, perk_effects=None, synergy_crit=0, energy_frac=1.0,
-                 ult_charge=0):
+                 ult_charge=0, gear_ranks=None):
         self.energy_frac = energy_frac      # daily energy %, M9 initiative penalty
         self.id = instance_id or data["id"]
         self.name = name or data["name"]
@@ -16,6 +16,10 @@ class Combatant:
         self.is_hero = is_hero
         self.trained_ranks = dict(trained_ranks or {})
         self.perk_effects = dict(perk_effects or {})
+        # M31: worn equipment adds flat RANKS, which is how gear takes a
+        # hero past the trained ceiling of 10 — the ceiling is on what a
+        # body can train to, not on what it can be handed.
+        self.gear_ranks = dict(gear_ranks or {})
         # Heroes carry innate boosts (M15); enemies have a flat power_grid.
         self.boosts = data.get("boosts") or {}
         hp_mult = 1 + self.perk_effects.get("max_hp_pct", 0) / 100
@@ -37,7 +41,8 @@ class Combatant:
         if self.boosts:
             trained = min(config.TRAINED_MAX,
                           self.trained_ranks.get(attribute, 0))
-            rank = config.RANK_START + trained
+            rank = (config.RANK_START + trained
+                    + self.gear_ranks.get(attribute, 0))
             return formulas.effective_rank(rank, self.boosts.get(attribute, 0))
         return formulas.effective_rank(self.data["power_grid"][attribute], 0)
 

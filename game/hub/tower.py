@@ -16,6 +16,7 @@ from game.core import clock, energy, inventory
 from game.core.state_machine import GameState
 from game.hub import (activities, dispatch, field, party as party_mod, passive,
                       repairs, story, unlocks)
+from game.progression import gear
 from game.social import bonds, dialogue, events
 from game.ui import audio, pixelkit, sprites, widgets
 
@@ -853,9 +854,95 @@ class HubScene:
             self._open_helipad(app)
         elif kind == "medbay":
             self._start_rest(app)
+        elif kind == "techlab":
+            self._open_tech_lab(app)
         else:
             self.log(f"{STATION_LABELS[kind]}: nothing installed here yet.")
             self.reset_modes()
+
+    # --------------------------------------------------- tech lab (M31)
+
+    def _open_tech_lab(self, app):
+        """Buy equipment, and fit it to whoever is standing here."""
+        state = app.game_state
+        items = []
+        for hero_id in sorted(state.get("roster", {})):
+            worn = gear.equipped(state["roster"][hero_id])
+            summary = ", ".join(
+                gear.item_label(state, self.content["items"][i])
+                for i in worn.values()) or "nothing fitted"
+            items.append((f"{self.content['characters'][hero_id]['name']} - "
+                          f"{summary}", False,
+                          (lambda a, h=hero_id: self._open_outfit(a, h))))
+        items.append(("Order equipment...", False, self._open_gear_shop))
+        items.append(("Close", False, None))
+        self._open_submenu(f"Tech Bench - {state['credits']} cr", items)
+
+    def _open_gear_shop(self, app):
+        state = app.game_state
+        stock = sorted((i for i in self.content["items"].values()
+                        if gear.is_gear(i) and "tech_lab" in i["sources"]),
+                       key=lambda i: (i["slot"], i["id"]))
+        items = []
+        for item in stock:
+            items.append((f"{gear.item_label(state, item)} - {item['price']} cr",
+                          item["price"] > state["credits"],
+                          (lambda a, it=item: self._buy_gear(a, it))))
+            items.append((f"   {gear.SLOT_LABELS[item['slot']]}: "
+                          f"{gear.effect_label(state, item)}", True, None))
+        items.append(("Back", False, self._open_tech_lab))
+        self._open_submenu(f"Fabricator - {state['credits']} cr, "
+                           f"{inventory.label(state)}", items)
+
+    def _buy_gear(self, app, item):
+        state = app.game_state
+        index = self.submenu["index"] if self.submenu else 0
+        self.log(activities.buy_item(state, item, 1.0)["message"])
+        self._open_gear_shop(app)
+        self.submenu["index"] = min(index, len(self.submenu["items"]) - 1)
+
+    def _open_outfit(self, app, hero_id):
+        state = app.game_state
+        entry = state["roster"][hero_id]
+        items = []
+        for slot in gear.SLOTS:
+            worn = gear.equipped(entry).get(slot)
+            label = (gear.item_label(state, self.content["items"][worn])
+                     if worn else "empty")
+            items.append((f"{gear.SLOT_LABELS[slot]}: {label}", False,
+                          (lambda a, s=slot: self._open_slot(a, hero_id, s))))
+        items.append(("Back", False, self._open_tech_lab))
+        name = self.content["characters"][hero_id]["name"]
+        self._open_submenu(f"Outfit {name}", items)
+
+    def _open_slot(self, app, hero_id, slot):
+        state = app.game_state
+        entry = state["roster"][hero_id]
+        items = []
+        if gear.equipped(entry).get(slot):
+            items.append(("Take it off", False,
+                          (lambda a: self._unequip(a, hero_id, slot))))
+        for item in gear.owned_for_slot(state, self.content["items"], slot):
+            items.append((f"{gear.item_label(state, item)} - "
+                          f"{gear.effect_label(state, item)}", False,
+                          (lambda a, it=item: self._equip(a, hero_id, it["id"]))))
+        if len(items) == (1 if gear.equipped(entry).get(slot) else 0):
+            items.append((f"No spare {gear.SLOT_LABELS[slot].lower()} in the "
+                          f"bag.", True, None))
+        items.append(("Back", False, (lambda a: self._open_outfit(a, hero_id))))
+        self._open_submenu(f"{gear.SLOT_LABELS[slot]}", items)
+
+    def _equip(self, app, hero_id, item_id):
+        result = gear.equip(app.game_state, hero_id, item_id,
+                            self.content["items"])
+        self.log(result["message"])
+        self._open_outfit(app, hero_id)
+
+    def _unequip(self, app, hero_id, slot):
+        result = gear.unequip(app.game_state, hero_id, slot,
+                              self.content["items"])
+        self.log(result["message"])
+        self._open_outfit(app, hero_id)
 
     # ---------------------------------------------------- med bay (M30)
 

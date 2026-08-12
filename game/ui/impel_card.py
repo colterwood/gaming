@@ -14,6 +14,7 @@ from game.core import inventory
 from game.core.state_machine import GameState
 from game.hub import activities, dispatch
 from game.progression import attributes as attrs
+from game.progression import gear
 from game.social import bonds
 from game.ui import binder, pixelkit, sprites
 
@@ -328,6 +329,17 @@ class ImpelCardScene:
             else:
                 pixelkit.text(surface, "(none yet - train to rank 3)", 12, GREY,
                               topleft=(panel.x + pad + 6, panel.y + 21))
+            # M31: what they're wearing, and what it's worth.
+            worn = gear.equipped(entry)
+            if worn:
+                kit = "  ".join(
+                    f"{gear.item_label(state, self.content['items'][i])} "
+                    f"({gear.effect_label(state, self.content['items'][i])})"
+                    for i in worn.values())
+            else:
+                kit = "(nothing fitted - see the Tech Lab)"
+            pixelkit.text(surface, f"Gear:  {kit}", 11, INK,
+                          topleft=(panel.x + pad, panel.bottom - 27))
             # M20: XP toward the NEXT rank, as progress/needed rather than a
             # bare running total. "MAX" once an attribute is at RANK_MAX.
             banked = entry.get("attribute_xp", {})

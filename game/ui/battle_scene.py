@@ -18,7 +18,7 @@ class BattleScene:
                  enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
                  inventory=None, trained=None, rng=None,
                  perk_fx=None, synergy_crit=None, energy_frac=None,
-                 ult_charge=None):
+                 ult_charge=None, gear_ranks=None):
         self.content = content
         heroes = [Combatant(content["characters"][h],
                             trained_ranks=(trained or {}).get(h),
@@ -26,6 +26,7 @@ class BattleScene:
                             synergy_crit=(synergy_crit or {}).get(h, 0),
                             energy_frac=(energy_frac or {}).get(h, 1.0),
                             ult_charge=(ult_charge or {}).get(h, 0),
+                            gear_ranks=(gear_ranks or {}).get(h),
                             is_hero=True) for h in hero_ids]
         enemies = make_enemy_group([content["enemies"][e] for e in enemy_ids])
         self.engine = BattleEngine(
