@@ -36,8 +36,14 @@ def job(content, job_id):
 
 
 def work_every_part(state, content, job_id):
-    for index in range(len(job(content, job_id)["parts"])):
-        repairs.work_part(state, job(content, job_id), index)
+    """Gather everything a job needs, however it has to be got: off the
+    floor, or out of the pocket of whoever is carrying it."""
+    spec = job(content, job_id)
+    for index, part in enumerate(spec["parts"]):
+        if part.get("from"):
+            repairs.take_npc_part(state, spec, index)
+        else:
+            repairs.work_part(state, spec, index)
 
 
 # --- the tower starts broken (1) -----------------------------------------
@@ -49,10 +55,13 @@ def test_a_new_game_has_a_wrecked_tower(content):
     assert not repairs.all_done(content, state)
 
 
-def test_only_the_elevator_repair_is_posted_on_day_one(content):
+def test_the_board_posts_nothing_on_day_one(content):
+    # M34: the elevator is Jarvis's news, not a listing, and every other
+    # repair waits behind the board Pepper has locked.
     state = save.new_game_state()
-    assert [j["id"] for j in repairs.posted(content, state)] == \
-        ["repair_elevator"]
+    assert repairs.posted(content, state) == []
+    assert repairs.triggered_by(content, state, "jarvis")["id"] == \
+        "repair_elevator"
 
 
 def test_the_dead_elevator_offers_the_work_instead_of_floors(fresh):
@@ -74,27 +83,31 @@ def test_no_floor_above_the_common_one_is_reachable(fresh):
 
 # --- accept at the board, work it in person (2) --------------------------
 
-def test_the_board_posts_the_repair_and_accepting_puts_it_in_hand(fresh):
-    scene, app = fresh
-    state = app.game_state
-    put_player_at(scene, 34, 12)                    # the assignment board
-    scene.handle_key(app, pygame.K_RETURN)
-    choose(scene, app, "REPAIR - Fix the Service Elevator")
-    assert repairs.is_active(state, job(app.content, "repair_elevator"))
+def test_taking_a_second_repair_is_refused_while_one_is_in_hand(content):
+    state = save.new_game_state()
+    state["story_flags"]["board_unlocked"] = True
+    state["story_flags"]["quinjet_repaired"] = True
+    first, second = job(content, "repair_training"), job(content, "repair_med_bay")
+    assert repairs.accept(content, state, first)["ok"]
+    result = repairs.accept(content, state, second)
+    assert not result["ok"]
+    assert result["busy"]["id"] == "repair_training"
+    assert not repairs.is_active(state, second)
 
 
 def test_parts_only_appear_once_the_job_is_taken(fresh):
     scene, app = fresh
     state = app.game_state
     assert scene._repair_targets(state) == []
-    repairs.accept(state, job(app.content, "repair_elevator"))
-    assert len(scene._repair_targets(state)) == 3   # all three on this floor
+    repairs.accept(app.content, state, job(app.content, "repair_elevator"))
+    # Two are lying on this floor; the third is in Coulson's pocket.
+    assert len(scene._repair_targets(state)) == 2
 
 
 def test_salvaging_a_part_costs_energy_and_time(fresh):
     scene, app = fresh
     state = app.game_state
-    repairs.accept(state, job(app.content, "repair_elevator"))
+    repairs.accept(app.content, state, job(app.content, "repair_elevator"))
     before_en = state["energy"]
     before_clock = state["time_minutes"]
     result = repairs.work_part(state, job(app.content, "repair_elevator"), 0)
@@ -108,7 +121,7 @@ def test_the_same_part_cannot_be_salvaged_twice(fresh):
     _, app = fresh
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
-    repairs.accept(state, elevator)
+    repairs.accept(app.content, state, elevator)
     repairs.work_part(state, elevator, 0)
     again = repairs.work_part(state, elevator, 0)
     assert not again["ok"]
@@ -119,7 +132,7 @@ def test_the_repair_is_refused_until_every_part_is_in_hand(fresh):
     _, app = fresh
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
-    repairs.accept(state, elevator)
+    repairs.accept(app.content, state, elevator)
     repairs.work_part(state, elevator, 0)
     result = repairs.repair(app.content, state, elevator)
     assert not result["ok"]
@@ -131,7 +144,7 @@ def test_fixing_the_elevator_opens_the_tower_and_pays(fresh):
     _, app = fresh
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
-    repairs.accept(state, elevator)
+    repairs.accept(app.content, state, elevator)
     work_every_part(state, app.content, "repair_elevator")
     credits_before = state["credits"]
     result = repairs.repair(app.content, state, elevator)
@@ -140,37 +153,42 @@ def test_fixing_the_elevator_opens_the_tower_and_pays(fresh):
     assert state["story_flags"]["elevator_repaired"] is True
     assert state["credits"] == credits_before + elevator["credits"]
     assert repairs.is_done(state, elevator)
-    # ...and Pepper is waiting on the Ops floor with the next problem.
-    assert result["scene"]["character"] == "pepper_potts"
+    # M34: no speech on completion. Pepper has her say when the player
+    # walks onto the Ops floor and talks to her, not before.
+    assert result.get("scene") is None
 
 
-def test_a_finished_repair_never_posts_again(fresh):
+def test_a_finished_repair_never_comes_back(fresh):
     _, app = fresh
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
-    repairs.accept(state, elevator)
+    repairs.accept(app.content, state, elevator)
     work_every_part(state, app.content, "repair_elevator")
     repairs.repair(app.content, state, elevator)
-    posted = [j["id"] for j in repairs.posted(app.content, state)]
-    assert "repair_elevator" not in posted
-    assert "repair_quinjet" in posted       # ...but the next one does
+    assert repairs.is_done(state, elevator)
+    assert "repair_elevator" not in [j["id"] for j in
+                                     repairs.posted(app.content, state)]
+    assert repairs.triggered_by(app.content, state, "jarvis") is None
 
 
 # --- the chain, in the order the player meets it (3) ---------------------
 
-def test_repairs_unlock_in_order(fresh):
+def test_the_chain_runs_lift_then_jet_then_the_board(fresh):
     _, app = fresh
     state = app.game_state
     seen = []
-    for _ in range(3):
-        posted = repairs.posted(app.content, state)
-        assert posted, "the chain stalled"
-        head = posted[0]
+    # The first two are handed over in conversation...
+    for char_id in ("jarvis", "pepper_potts"):
+        head = repairs.triggered_by(app.content, state, char_id)
+        assert head is not None, f"{char_id} had nothing to say"
         seen.append(head["id"])
-        repairs.accept(state, head)
+        repairs.accept(app.content, state, head)
         work_every_part(state, app.content, head["id"])
         repairs.repair(app.content, state, head)
-    assert seen == ["repair_elevator", "repair_quinjet", "repair_training"]
+    assert seen == ["repair_elevator", "repair_quinjet"]
+    # ...and fixing the jet is what unlocks the board for the rest.
+    assert state["story_flags"]["board_unlocked"] is True
+    assert {j["id"] for j in repairs.posted(app.content, state)} ==         {"repair_training", "repair_med_bay"}
 
 
 def test_the_ops_console_offers_nothing_while_the_jet_is_grounded(fresh):
@@ -307,8 +325,13 @@ def test_every_part_lies_on_a_tile_you_can_stand_next_to(content):
     from game.hub.tower import WALKABLE
 
     for job in content["repairs"]:
-        for floor, x, y in job["parts"]:
-            rows = FLOORS[floor]["map"]
+        for part in job["parts"]:
+            if part.get("from"):
+                continue                    # handed over, not lying about
+            area, x, y = part["area"], part["x"], part["y"]
+            if area not in FLOORS:
+                continue                    # zone maps are checked by M34
+            rows = FLOORS[area]["map"]
             neighbours = [rows[y][x]] + [
                 rows[y + dy][x + dx] for dx, dy in
                 ((1, 0), (-1, 0), (0, 1), (0, -1))

@@ -266,7 +266,8 @@ class HubScene:
         self.tick_accum = 0.0
         self.ambush_accum = 0.0
         self.rng = random.Random()
-        # modes: normal | submenu | train_attr | perk_choice | scene | resting
+        # modes: normal | submenu | train_attr | perk_choice | scene |
+        #        resting | keypad
         self.mode = "normal"
         self.submenu = None
         self.train_hero_id = None
@@ -276,6 +277,8 @@ class HubScene:
         self.submenu_index = 0
         self.rest_accum = 0.0       # med bay treatment in progress (M30)
         self.rest_from = 0
+        self.keypad = ""            # the locked assignment board (M34)
+        self.keypad_message = ""
 
     # ------------------------------------------------------------------ util
 
@@ -308,6 +311,7 @@ class HubScene:
         self.scene = None
         self.scene_line = 0
         self.rest_accum = 0.0
+        self.keypad = ""
 
     def return_to_tower(self):
         self.reset_modes()
@@ -436,15 +440,19 @@ class HubScene:
                 for i, (tx, ty) in enumerate(quest["scout_points"])
                 if i not in done]
 
+    def _here_key(self):
+        """The area key parts and work-sites are tagged with: a tower floor
+        name indoors, a zone id in the field."""
+        return self.floor if self.area == "tower" else self.area
+
     def _repair_targets(self, state):
-        """[(job, index, x, y)] for parts of accepted repairs lying on this
-        floor (M29). Nothing shows until the job is taken at the board —
-        the same rule missions play by."""
-        if self.area != "tower":
-            return []
+        """[(job, index, x, y)] for parts of the repair in hand lying where
+        the team is standing — a tower floor or (M34) a city zone. Nothing
+        shows until the job is taken, the same rule missions play by."""
         found = []
         for job in repairs.active(self.content, state):
-            for index, tx, ty in repairs.parts_on(state, job, self.floor):
+            for index, tx, ty in repairs.parts_on(state, job,
+                                                  self._here_key()):
                 found.append((job, index, tx * TILE + TILE // 2,
                               HUD_H + ty * TILE + TILE // 2))
         return found
@@ -640,6 +648,9 @@ class HubScene:
     # ----------------------------------------------------------------- input
 
     def handle_key(self, app, key):
+        if self.mode == "keypad":
+            self._keypad_key(app, key)
+            return
         if self.mode == "resting":
             if key in (pygame.K_RETURN, pygame.K_ESCAPE):
                 self._stop_rest(app.game_state, "You get up.")
@@ -860,7 +871,28 @@ class HubScene:
         result = repairs.work_part(state, job, index)
         self.log(result["message"])
         self.reset_modes()
+        # M34: hauling one of these costs energy, so the leader gets to say
+        # something about it — in their own voice, in a box you can't miss.
+        if result["ok"] and not result.get("hit_day_end"):
+            line = self._flavor_line(state, "part_lift")
+            if line:
+                self._show_line(self._leader(state), line)
         self._after_action(app)
+
+    def _leader(self, state):
+        party = self._party(state)
+        return party[0] if party else None
+
+    def _flavor_line(self, state, pool, **fields):
+        """One of the leader's lines for a repeated field action (M34),
+        rotated so the same hero isn't reading the same sentence all day."""
+        leader = self._leader(state)
+        if leader is None:
+            return None
+        pools = self.content["flavor"][pool]
+        lines = pools.get(leader, pools["default"])
+        index = (state["day"] + state["time_minutes"] // 10) % len(lines)
+        return lines[index].format(**fields)
 
     def _open_room_station(self, app, kind):
         """A station in one of the rebuilt rooms. Until its repair lands the
@@ -881,6 +913,56 @@ class HubScene:
         else:
             self.log(f"{STATION_LABELS[kind]}: nothing installed here yet.")
             self.reset_modes()
+
+    # ------------------------------------------------- locked board (M34)
+
+    def _open_keypad(self, app):
+        """Pepper's lock on the assignment board. There is no code — she
+        opens it herself once the Quinjet flies — but the keypad is real
+        enough to try, and trying is free."""
+        self.reset_modes()
+        self.mode = "keypad"
+        self.keypad = ""
+        self.keypad_message = "ENTER 4-DIGIT CODE"
+
+    def _keypad_key(self, app, key):
+        if key == pygame.K_ESCAPE:
+            self.reset_modes()
+            return
+        if key in (pygame.K_BACKSPACE, pygame.K_DELETE):
+            self.keypad = self.keypad[:-1]
+            return
+        if key == pygame.K_RETURN:
+            if len(self.keypad) < 4:
+                self.keypad_message = "ENTER 4-DIGIT CODE"
+                return
+            self.keypad = ""
+            self.keypad_message = "ACCESS DENIED"
+            return
+        name = pygame.key.name(key)
+        if len(self.keypad) < 4 and name.isdigit():
+            self.keypad += name
+            self.keypad_message = "ENTER 4-DIGIT CODE"
+
+    def _draw_keypad(self, surface, state):
+        box = pygame.Rect(config.WIDTH // 2 - 96, 92, 192, 128)
+        pixelkit.panel(surface, box, fill="ink", border="steel")
+        pixelkit.text(surface, "ASSIGNMENT BOARD", 13, "steel_light", bold=True,
+                      center=(box.centerx, box.y + 16))
+        pixelkit.text(surface, "LOCKED", 20, "red", bold=True,
+                      center=(box.centerx, box.y + 38), shadow="maroon")
+        slots = pygame.Rect(box.x + 40, box.y + 56, 112, 24)
+        pygame.draw.rect(surface, pixelkit.color("shadow"), slots)
+        pygame.draw.rect(surface, pixelkit.color("steel_dark"), slots, width=1)
+        for i in range(4):
+            char = "*" if i < len(self.keypad) else "-"
+            pixelkit.text(surface, char, 20, "mint",
+                          center=(slots.x + 16 + i * 27, slots.centery))
+        colour = "red" if self.keypad_message == "ACCESS DENIED" else "steel"
+        pixelkit.text(surface, self.keypad_message, 12, colour,
+                      center=(box.centerx, box.y + 92))
+        pixelkit.text(surface, "0-9: enter   Esc: give up", 11, "grey_dark",
+                      center=(box.centerx, box.bottom - 12))
 
     # --------------------------------------------------- tech lab (M31)
 
@@ -1104,7 +1186,10 @@ class HubScene:
         else:
             item = self.content["items"][result["item"]]
             if inventory.add(state, item["id"], 1)["ok"]:
-                self.log(f"Prised out {item['name']}.")
+                # M34: who swung, and how — in the log, in their voice.
+                self.log(self._flavor_line(state, "mining",
+                                           material=item["name"])
+                         or f"Prised out {item['name']}.")
             else:
                 self.log(f"No room for the {item['name']} - "
                          f"{inventory.label(state)}.")
@@ -1232,8 +1317,9 @@ class HubScene:
         if bonds.bondable(char):
             bond = bonds.ensure_bond(state, char_id)
             can_gift, _ = bonds.gift_allowed(state, char_id)
-            items.append(("Talk", bond["talked_today"],
-                          lambda a: self._talk(a, char_id)))
+            # M34: Talk is never greyed out. Once the day's points are
+            # spent it simply repeats what they have to say.
+            items.append(("Talk", False, lambda a: self._talk(a, char_id)))
             items.append(("Give Gift" + ("" if can_gift else "  [limit]"),
                           not can_gift, lambda a: self._open_gift_menu(a, char_id)))
         else:
@@ -1270,7 +1356,43 @@ class HubScene:
         self.scene_line = 0
         self.mode = "scene"
 
+    def _repair_conversation(self, app, char_id):
+        """M34: the tower's problems are told to you by the people who have
+        them. Jarvis raises the elevator, Pepper the Quinjet, and Coulson
+        turns out to have been carrying a contactor relay all morning.
+
+        Returns True if this conversation had something of its own to say,
+        in which case the daily talk line stands aside for it."""
+        state = app.game_state
+        # A part in somebody's pocket comes out first — you asked about the
+        # elevator, they remember they have the piece.
+        for job in repairs.active(self.content, state):
+            index, part = repairs.npc_part(state, job, char_id)
+            if index is None:
+                continue
+            result = repairs.take_npc_part(state, job, index)
+            if not result["ok"]:
+                continue
+            self.log(f"{job['part_label']}: {result['message']}")
+            self.reset_modes()
+            self._play_scene(part.get("scene") or {
+                "character": char_id, "title": self.content["characters"][
+                    char_id]["name"],
+                "lines": ["\"Here - I think this is yours.\""]})
+            return True
+        job = repairs.triggered_by(self.content, state, char_id)
+        if job is None:
+            return False
+        repairs.accept(self.content, state, job)
+        self.log(f"{job['name']}: {len(job['parts'])} pieces to find.")
+        self.reset_modes()
+        if job.get("intro_scene"):
+            self._play_scene(job["intro_scene"])
+        return True
+
     def _flavor(self, app, char_id):
+        if self._repair_conversation(app, char_id):
+            return
         char = self.content["characters"][char_id]
         line = dialogue.line_for(app.game_state, char, self.content["dialogue"])
         self.reset_modes()
@@ -1280,6 +1402,8 @@ class HubScene:
     def _talk(self, app, char_id):
         state = app.game_state
         char = self.content["characters"][char_id]
+        if self._repair_conversation(app, char_id):
+            return
         result = bonds.talk(state, char_id)
         if result["ok"]:
             clock.advance(state, config.TALK_GIFT_MINUTES)
@@ -1297,9 +1421,13 @@ class HubScene:
             if line:
                 self._show_line(char_id, line)
         else:
-            self.log(result["message"])
+            # M34: talking again is never refused. Today's bond points are
+            # spent, so this costs nothing and gives nothing — you just get
+            # to hear them again, which is what a person is for.
             self.reset_modes()
-            self._after_action(app)
+            line = dialogue.line_for(state, char, self.content["dialogue"])
+            if line:
+                self._show_line(char_id, line)
 
     def _open_gift_menu(self, app, char_id):
         # M13: consumables are giftable too (Hulk loves an Energy Bar)
@@ -1428,13 +1556,21 @@ class HubScene:
         days; they can't rejoin the party until they return or are recalled.
         M11: tiers unlock with team power; NPC requests pay bond."""
         state = app.game_state
+        if not state.get("story_flags", {}).get("board_unlocked"):
+            # M34: Pepper locked it while the tower was falling apart. The
+            # keypad is real, the code is not — she unlocks it herself once
+            # the Quinjet flies.
+            self._open_keypad(app)
+            return
         activities.check_board(state)       # M20: read in person, then the
         tier = dispatch.roster_tier(self.content, state)     # card knows it
         power = dispatch.team_power(self.content, state)
         items = []
         # M29: the tower's own repairs head the board. They are worked in
         # person rather than dispatched, so they never take a crew.
-        for job in repairs.posted(self.content, state):
+        repair_rows = repairs.posted(self.content, state)
+        busy = repairs.active_job(self.content, state)
+        for job in repair_rows:
             items.append((f"REPAIR - {job['name']}", False,
                           (lambda a, j=job: self._accept_repair(a, j))))
             items.append((f"   {job.get('board_line', job['desc'])}",
@@ -1450,7 +1586,11 @@ class HubScene:
                           True, None))
         posted = activities.assignment_tasks_today(
             state, self.content["assignments"], tier)
-        if not posted:      # M26: one-shot jobs run out
+        # M34: a repair takes up a slot on the board. Finish it and an
+        # ordinary job moves into the space.
+        if repair_rows:
+            posted = posted[len(repair_rows):]
+        if not posted and not repair_rows:      # M26: one-shot jobs run out
             items.append(("Nothing posted today.", True, None))
         for task in posted:
             under_way = dispatch.find(state, task["id"]) is not None
@@ -1477,8 +1617,9 @@ class HubScene:
         self._open_submenu("Assignment Board", items)
 
     def _accept_repair(self, app, job):
-        result = repairs.accept(app.game_state, job)
-        self.log(result["message"])
+        result = repairs.accept(self.content, app.game_state, job)
+        self.log(requirements.coulson_says(result["message"])
+                 if result.get("busy") else result["message"])
         if result["ok"]:
             where = FLOORS[job["floor"]]["name"]
             self.log(f"{len(job['parts'])} parts to find. It gets fitted on "
@@ -1864,6 +2005,8 @@ class HubScene:
                 self.submenu_index)
         elif self.mode == "resting":
             self._draw_rest(surface, state)
+        elif self.mode == "keypad":
+            self._draw_keypad(surface, state)
         elif self.mode == "scene" and self.scene:
             self._draw_scene(surface)
 
@@ -1901,9 +2044,17 @@ class HubScene:
     def _draw_map(self, surface, state):
         in_zone = self.area != "tower"
         spent = self._worked_grove_tiles(state) if in_zone else set()
+        # M34: the elevator LOOKS dead until it's fixed — buckled doors and
+        # an open panel. Fixing it is visible, not just announced.
+        broken_lift = (not in_zone
+                       and not state.get("story_flags", {}).get(
+                           "elevator_repaired"))
         for ty, row in enumerate(self._map()):
             for tx in range(MAP_W):
-                surface.blit(sprites.tile(self._tile_name(row[tx])),
+                name = self._tile_name(row[tx])
+                if broken_lift and name == "elevator":
+                    name = "elevator_broken"
+                surface.blit(sprites.tile(name),
                              (tx * TILE, HUD_H + ty * TILE))
                 if in_zone and ((row[tx] in ("x", "o")
                                  and activities.spot_searched(state, self.area,

@@ -6,28 +6,37 @@
     "board_line": "The tower runs on that elevator. Everything else waits on it.",
     "station": "elevator",
     "floor": "common",
+    "trigger": {"character": "jarvis"},
+    "intro_scene": {
+      "character": "jarvis",
+      "title": "J.A.R.V.I.S.",
+      "lines": [
+        "\"Good morning. Before you ask - no, the elevator is not working, and yes, I have tried asking it nicely.\"",
+        "\"The car is dead between the common floor and everything above it. Until it moves, this floor is the entire tower as far as you are concerned.\"",
+        "\"I can tell you what it needs. I cannot tell you where the pieces went - the building was turned over rather thoroughly and my inventory of it is, frankly, fiction.\"",
+        "\"Walk the floor. Look at what people have shoved into corners. And do ask Agent Coulson - he has been carrying something around all morning with the air of a man who intends to throw it out.\""
+      ]
+    },
     "parts": [
-      ["common", 6, 10],
-      ["common", 30, 6],
-      ["common", 20, 17]
+      {"area": "common", "x": 6, "y": 10},
+      {"area": "common", "x": 30, "y": 6},
+      {"from": "coulson",
+       "scene": {
+         "character": "coulson",
+         "title": "Agent Coulson",
+         "lines": [
+           "\"A contactor relay.\" Coulson turns it over once and hands it across. \"It was in the debris by the stairwell. I was going to bin it.\"",
+           "\"For the record, I did ask what it was for. J.A.R.V.I.S. said, and I quote, 'nothing important.'\"",
+           "\"Go and make the elevator work. I'd like to stop taking the stairs.\""
+         ]}}
     ],
     "part_label": "Salvage parts",
-    "part_message": "Contactor relay, a coil of cable, one very tired capacitor.",
+    "part_message": "A coil of cable and one very tired capacitor.",
     "repair_label": "Repair the elevator",
     "credits": 80,
     "xp": 30,
     "flag": "elevator_repaired",
-    "done_message": "The elevator grinds, thinks about it, and opens. The tower is yours again.",
-    "done_scene": {
-      "character": "pepper_potts",
-      "title": "Pepper Potts",
-      "lines": [
-        "The doors open on the Ops floor and Pepper is already talking, tablet in one hand, coffee she has not touched in the other.",
-        "\"Good. You can reach me again. Now the bad news - the Quinjet doesn't fly.\"",
-        "\"Whatever came through here took the port nacelle apart looking for something, and half of what they pulled out is scattered through this building.\"",
-        "\"Find the pieces. Until that jet is airworthy, nothing S.H.I.E.L.D. sends us is a mission - it's a phone call we can't answer.\""
-      ]
-    }
+    "done_message": "The elevator grinds, thinks about it, and opens. The tower is yours again."
   },
   {
     "id": "repair_quinjet",
@@ -36,21 +45,31 @@
     "board_line": "Pepper's job. Parts are scattered across three floors.",
     "station": "quinjet",
     "floor": "ops",
+    "requires": {"flags": ["elevator_repaired"]},
+    "trigger": {"character": "pepper_potts"},
+    "intro_scene": {
+      "character": "pepper_potts",
+      "title": "Pepper Potts",
+      "lines": [
+        "Pepper is already talking, tablet in one hand, coffee she has not touched in the other.",
+        "\"Good. You can reach me again. Now the bad news - the Quinjet doesn't fly.\"",
+        "\"Whatever came through here took the port nacelle apart looking for something, and half of what they pulled out is scattered through this building.\"",
+        "\"Find the pieces. All of them. Until that jet is airworthy, nothing S.H.I.E.L.D. sends us is a mission - it's a phone call we can't answer.\""
+      ]
+    },
     "parts": [
-      ["ops", 8, 14],
-      ["ops", 33, 8],
-      ["common", 12, 18],
-      ["training", 33, 16]
+      {"area": "ops", "x": 8, "y": 14},
+      {"area": "ops", "x": 33, "y": 8},
+      {"area": "common", "x": 12, "y": 18},
+      {"area": "training", "x": 33, "y": 16}
     ],
     "part_label": "Recover the part",
     "part_message": "Another piece of the nacelle, exactly where nobody would put it on purpose.",
     "repair_label": "Repair the Quinjet",
     "credits": 120,
     "xp": 36,
-    "requires": {
-      "flags": ["elevator_repaired"]
-    },
     "flag": "quinjet_repaired",
+    "flags": {"board_unlocked": true},
     "done_message": "The Quinjet spins up, holds, and settles. You can leave the block again.",
     "done_scene": {
       "character": "pepper_potts",
@@ -58,7 +77,8 @@
       "lines": [
         "The nacelle catches on the second try and stays caught. Pepper watches the readout for a long ten seconds before she lets herself breathe.",
         "\"Airworthy. Don't make me regret signing that.\"",
-        "\"Coulson's been sitting on a stack of things he couldn't hand you. Go see him - and take the stairs down for once, the elevator's had a week.\""
+        "\"One more thing - I locked the assignment board while the tower was falling apart, because the last thing we needed was people volunteering for errands in a building with no lift.\"",
+        "\"It's open now. There's a list of things down there that still don't work. Take them one at a time.\""
       ]
     }
   },
@@ -69,19 +89,17 @@
     "board_line": "Nobody gets stronger until the mats are down and the rack is bolted straight.",
     "station": "training",
     "floor": "training",
+    "requires": {"flags": ["board_unlocked"]},
     "parts": [
-      ["training", 8, 5],
-      ["training", 27, 12],
-      ["training", 15, 17]
+      {"area": "training", "x": 8, "y": 5},
+      {"area": "training", "x": 27, "y": 12},
+      {"area": "midtown", "x": 25, "y": 5}
     ],
     "part_label": "Haul equipment",
     "part_message": "Mat sections, bolts, and a frame that has seen better decades.",
     "repair_label": "Rebuild the rack and mats",
     "credits": 100,
     "xp": 30,
-    "requires": {
-      "flags": ["quinjet_repaired"]
-    },
     "flag": "training_repaired",
     "done_message": "Mats down, rack straight, bag hung. The training floor is open."
   },
@@ -92,20 +110,17 @@
     "board_line": "Somewhere to patch up that isn't a cot and a bad attitude.",
     "station": "medbay",
     "floor": "med_bay",
+    "requires": {"flags": ["board_unlocked"]},
     "parts": [
-      ["med_bay", 9, 6],
-      ["med_bay", 30, 13],
-      ["ops", 20, 16]
+      {"area": "med_bay", "x": 9, "y": 6},
+      {"area": "med_bay", "x": 30, "y": 13},
+      {"area": "docks", "x": 30, "y": 4}
     ],
     "part_label": "Salvage the ward",
     "part_message": "Sterile packs, a diagnostic head, and a chair that mostly reclines.",
     "repair_label": "Bring the treatment station online",
     "credits": 150,
     "xp": 48,
-    "requires": {
-      "flags": ["training_repaired"],
-      "quests": ["ch1_shattered_shield"]
-    },
     "flag": "med_bay_repaired",
     "done_message": "The Med Bay comes up green. Sit in the chair and it will do the rest."
   },
@@ -116,19 +131,20 @@
     "board_line": "Cold fabricators. Gear has to come from somewhere.",
     "station": "techlab",
     "floor": "tech_lab",
+    "requires": {
+      "flags": ["board_unlocked"],
+      "quests": ["ch1_siege"]
+    },
     "parts": [
-      ["tech_lab", 8, 12],
-      ["tech_lab", 31, 6],
-      ["common", 34, 17]
+      {"area": "tech_lab", "x": 8, "y": 12},
+      {"area": "tech_lab", "x": 31, "y": 6},
+      {"area": "hydra_district", "x": 12, "y": 8}
     ],
     "part_label": "Restock the bench",
     "part_message": "Fabricator feedstock and a toolhead that hasn't been dropped.",
     "repair_label": "Warm up the fabricators",
     "credits": 180,
     "xp": 48,
-    "requires": {
-      "quests": ["ch1_siege"]
-    },
     "flag": "tech_lab_repaired",
     "done_message": "The bench lights up. The Tech Lab can outfit the team."
   },
@@ -139,19 +155,19 @@
     "board_line": "Scott has the code. The lab behind it is another matter.",
     "station": "pymlab",
     "floor": "pym_lab",
+    "requires": {
+      "flags": ["board_unlocked", "pym_lab_unlocked"]
+    },
     "parts": [
-      ["pym_lab", 10, 8],
-      ["pym_lab", 29, 14],
-      ["tech_lab", 20, 16]
+      {"area": "pym_lab", "x": 10, "y": 8},
+      {"area": "pym_lab", "x": 29, "y": 14},
+      {"area": "tech_lab", "x": 20, "y": 16}
     ],
     "part_label": "Clear the bench",
     "part_message": "Shrunken crates the size of sugar cubes, and one that isn't.",
     "repair_label": "Power up the Pym bench",
     "credits": 200,
     "xp": 60,
-    "requires": {
-      "flags": ["pym_lab_unlocked"]
-    },
     "flag": "pym_lab_repaired",
     "done_message": "The Pym bench hums awake. Whatever Hank was doing down here, you can finish it."
   }

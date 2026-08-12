@@ -1,0 +1,57 @@
+{
+  "part_lift": {
+    "iron_man": [
+      "\"Okay, that's heavier than the schematic implied. Suit's taking most of it. Most.\"",
+      "\"Sure. I'll carry it. I invented it, I built it, and now I'm the forklift.\"",
+      "\"Repulsors are for flying, not deadlifting. Noted. Filed. Ignored.\""
+    ],
+    "captain_america": [
+      "\"I've got it.\" He has it. He does not appear to enjoy having it.",
+      "\"Heavier than the shield. Worse balance, too.\"",
+      "\"Lift with the legs. That goes for everyone.\""
+    ],
+    "ant_man": [
+      "\"I could shrink it, but then I'd lose it, and then I'd have to tell everyone I lost it.\"",
+      "\"This thing weighs more than my car. My car was not great, but still.\"",
+      "\"Okay - big guy carry, tiny guy problems. I'm doing the big guy carry.\""
+    ],
+    "thor": [
+      "\"A worthy burden!\" It is a bracket. He is delighted by it.",
+      "\"On Asgard this would be carried by four men. Midgard is fortunate to have me.\"",
+      "\"It is heavy. I am pleased. Heavy things are honest.\""
+    ],
+    "hulk": [
+      "\"Hulk carry. Hulk always carry.\"",
+      "Hulk picks it up one-handed and looks faintly insulted by how light it is.",
+      "\"Puny part.\""
+    ],
+    "default": [
+      "It comes free with a grunt and considerably more weight than expected."
+    ]
+  },
+  "mining": {
+    "iron_man": [
+      "Iron Man cuts the seam open with a low-power repulsor and lifts out {material}.",
+      "One precision burst, one clean split. Iron Man pockets {material}."
+    ],
+    "captain_america": [
+      "Cap cracks the rock open with the edge of the shield and collects {material}.",
+      "Two strikes, one seam, no wasted motion. Cap comes up with {material}."
+    ],
+    "ant_man": [
+      "Ant-Man goes small, walks the fault line, and grows out of it - the rock splits around {material}.",
+      "\"Found the crack.\" Ant-Man punches it from the inside. Out falls {material}."
+    ],
+    "thor": [
+      "Thor brings Stormbreaker down and the seam simply agrees to open. {material} is prised loose.",
+      "The strike echoes off the buildings. Thor lifts {material} out of the crater."
+    ],
+    "hulk": [
+      "Hulk hits the rock. The rock stops being a rock. {material} is in the rubble.",
+      "\"Rock breaks.\" Hulk holds up {material}, unimpressed."
+    ],
+    "default": [
+      "The seam gives way and yields {material}."
+    ]
+  }
+}

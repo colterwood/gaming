@@ -80,10 +80,28 @@ def gate_open(state, job):
 def posted(content, state):
     """Repairs the board is showing today: gate open, not finished, and
     not already accepted (an accepted one is work in the world, not a
-    listing)."""
+    listing).
+
+    A job with a `trigger` never appears here — somebody hands it to you in
+    conversation instead. M34: the opening is a person telling you what is
+    broken, not a noticeboard."""
     return [job for job in content["repairs"]
-            if gate_open(state, job) and not is_done(state, job)
+            if not job.get("trigger")
+            and gate_open(state, job) and not is_done(state, job)
             and not is_active(state, job)]
+
+
+def triggered_by(content, state, char_id):
+    """The repair this character is waiting to tell you about, if any: gate
+    open, not yet taken, not yet done, and nothing else in progress."""
+    if any(is_active(state, job) for job in content["repairs"]):
+        return None
+    for job in content["repairs"]:
+        if (job.get("trigger", {}).get("character") == char_id
+                and gate_open(state, job) and not is_done(state, job)
+                and not is_active(state, job)):
+            return job
+    return None
 
 
 def active(content, state):
@@ -101,24 +119,64 @@ def all_done(content, state):
     return not outstanding(content, state)
 
 
-def accept(state, job):
+def active_job(content, state):
+    """The one repair in hand, if any."""
+    return next((j for j in content["repairs"] if is_active(state, j)), None)
+
+
+def accept(content, state, job):
+    """Take a repair on. ONE AT A TIME (M34): a tower with four jobs open
+    at once is a checklist, and the player ends up ferrying parts for
+    things they have not been told about yet."""
     entry = state.setdefault("repairs", {}).get(job["id"])
     if entry and entry.get("status") in ("active", "done"):
         return {"ok": False, "message": "Already in hand."}
+    busy = active_job(content, state)
+    if busy is not None:
+        return {"ok": False, "busy": busy,
+                "message": (f"One thing at a time - finish {busy['name']} "
+                            f"first.")}
     state["repairs"][job["id"]] = {"status": "active", "found": []}
     return {"ok": True, "message": f"Repair accepted: {job['name']}."}
 
 
 # ------------------------------------------------------------ the work
 
-def parts_on(state, job, floor):
-    """[(index, x, y)] for this job's unfound parts on one tower floor."""
+def parts_on(state, job, area):
+    """[(index, x, y)] for this job's unfound parts lying in one place — a
+    tower floor or a zone (M34: some pieces are out in the city, which is
+    what the Quinjet is for)."""
     if not is_active(state, job):
         return []
     done = found(state, job)
-    return [(i, part[1], part[2])
+    return [(i, part["x"], part["y"])
             for i, part in enumerate(job["parts"])
-            if part[0] == floor and i not in done]
+            if part.get("area") == area and i not in done]
+
+
+def npc_part(state, job, char_id):
+    """(index, part) for a piece this character is holding and hasn't
+    handed over yet, or (None, None)."""
+    if not is_active(state, job):
+        return None, None
+    done = found(state, job)
+    for index, part in enumerate(job["parts"]):
+        if part.get("from") == char_id and index not in done:
+            return index, part
+    return None, None
+
+
+def take_npc_part(state, job, index):
+    """Accept a part out of somebody's pocket. No energy, no clock — they
+    are handing it to you, not making you lift it out of a wall."""
+    entry = entry_of(state, job)
+    if entry is None or entry["status"] != "active" or index in entry["found"]:
+        return {"ok": False, "message": "Nothing to hand over."}
+    entry["found"].append(index)
+    left = parts_left(state, job)
+    tail = (f"{left} piece(s) still missing." if left
+            else "That's all of it - go and fit it.")
+    return {"ok": True, "left": left, "message": tail}
 
 
 def parts_left(state, job):
@@ -137,6 +195,9 @@ def work_part(state, job, index):
     entry = state["repairs"][job["id"]]
     if index in entry["found"] or not 0 <= index < len(job["parts"]):
         return {"ok": False, "message": "Nothing here."}
+    if job["parts"][index].get("from"):
+        # In somebody's pocket, not lying on the floor — you have to ask.
+        return {"ok": False, "message": "Somebody's holding that one."}
     if not energy.can_afford(state, config.REPAIR_PART_ENERGY):
         return {"ok": False, "message": "Too exhausted — sleep to recover."}
     energy.spend(state, config.REPAIR_PART_ENERGY)
@@ -173,6 +234,8 @@ def repair(content, state, job):
     state["repairs"][job["id"]] = {"status": "done",
                                    "found": list(range(len(job["parts"])))}
     state.setdefault("story_flags", {})[job["flag"]] = True
+    for flag, value in job.get("flags", {}).items():
+        state["story_flags"][flag] = value      # e.g. the board coming back
     state["credits"] = state.get("credits", 0) + job.get("credits", 0)
     messages = [job["done_message"]]
     if job.get("credits"):

@@ -1132,6 +1132,46 @@ squad doing it); hand in the armour Iron Man is wearing, watch it come
 off his card, fight a fight without it, then collect it two mornings
 later and find it back on him at +1.*
 
+**M34 — The opening is people, not a noticeboard** *(added post-POC)*.
+Play feedback on M29: Day 1 finished the elevator, the Quinjet, the
+training floor, half the Med Bay, a story mission and a dispatch. Every
+job was one menu away and none of it had to be worked out.
+
+- **A repair may carry a `trigger`** (a character id). Those never appear
+  on the board — the person with the problem tells you about it the first
+  time you speak to them, and telling you is what starts the job.
+  **Jarvis** raises the elevator; **Pepper**, who is on the Ops floor and
+  therefore unreachable until it runs, raises the Quinjet.
+- **A part may sit in somebody's pocket** (`{"from": "coulson"}`) instead
+  of lying on the floor. Coulson gives his ordinary line until Jarvis has
+  explained what the elevator needs; after that he remembers the contactor
+  relay he was about to throw out. Such a part costs no energy and no time
+  — it is handed over — and it cannot be picked up off the floor.
+- **One repair at a time.** `repairs.accept` refuses while another is in
+  hand ("One thing at a time - finish X first"), so the tower is a queue
+  of problems rather than a checklist of them.
+- **The board is locked until Pepper unlocks it.** She disabled it while
+  the tower was falling apart; the station shows a 4-digit keypad that no
+  code opens (`ACCESS DENIED`). Repairing the Quinjet sets `board_unlocked`
+  through the job's `flags`, and her completion scene is where she says so.
+  Training Floor and Med Bay then post together.
+- **A posted repair occupies a board slot**, displacing an ordinary daily
+  assignment until it is done.
+- **Some parts are out in the city** — the Med Bay needs one from the
+  docks, the Training Floor one from Midtown — so the Quinjet has to fly
+  before the tower can finish being rebuilt.
+- **The elevator LOOKS dead** until it is fixed (buckled doors, open
+  panel), and **hauling a part** pops a dialogue box in the party leader's
+  voice, because it costs energy and should feel like it. **Mining** logs
+  the same way ("Cap cracks the rock open with the edge of the shield and
+  collects ISO-8 Crystal"). Lines live in `data/flavor.json`, per hero,
+  with a `default` pool so a new recruit is never silent.
+- **Talk is never greyed out.** Once the day's bond points are spent it
+  simply repeats what they have to say, for free.
+*AC: start a new game, get told nothing by the board's keypad, hear it
+from Jarvis, collect the relay from Coulson, and end Day 1 with the
+elevator working and nothing else.*
+
 **Ch. 3–4** *(decided, not yet built)*.
 - **Gate**: every Ch. 1–2 mission complete AND the tower repaired.
 - Hulk and Thor are Ch. 1–2 recruits (they already are in code — Hulk at

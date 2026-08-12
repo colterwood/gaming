@@ -592,6 +592,16 @@ def _make_tile(name):
         pygame.draw.rect(surf, c("steel"), r(2, 1, 12, 14))
         pygame.draw.line(surf, c("ink"), (8, 1), (8, 14))
         pygame.draw.rect(surf, c("gold"), r(3, 0, 10, 2))
+    elif name == "elevator_broken":     # M34: dead car, panel hanging open
+        surf.fill(c("shadow"))
+        pygame.draw.rect(surf, c("steel_dark"), r(2, 1, 12, 14))
+        pygame.draw.line(surf, c("ink"), (8, 1), (8, 14))
+        pygame.draw.rect(surf, c("grey_dark"), r(3, 0, 10, 2))
+        pygame.draw.line(surf, c("ink"), (3, 4), (12, 7))       # buckled door
+        pygame.draw.line(surf, c("ink"), (4, 11), (11, 9))
+        pygame.draw.rect(surf, c("ink"), r(9, 10, 5, 5))        # open panel
+        surf.set_at((10, 12), c("red"))
+        surf.set_at((12, 11), c("orange"))
     elif name == "counter":
         surf.fill(c("wood_dark"))
         pygame.draw.rect(surf, c("wood"), r(0, 0, 16, 6))

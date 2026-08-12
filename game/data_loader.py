@@ -584,16 +584,30 @@ def load_repairs(data_dir=None):
             raise DataError(f"{jw}: parts must be non-empty — a repair with "
                             f"nothing to find is just a button")
         for part in parts:
-            if (not isinstance(part, list) or len(part) != 3
-                    or not isinstance(part[0], str)
-                    or not all(isinstance(v, int) and not isinstance(v, bool)
-                               for v in part[1:])):
-                raise DataError(f"{jw}: each part must be [floor, x, y]")
-            if part[0] not in TOWER_FLOORS:
-                raise DataError(f"{jw}: part floor '{part[0]}' is not a tower floor")
-            if not (0 <= part[1] < config.MAP_TILES_W
-                    and 0 <= part[2] < config.MAP_TILES_H):
-                raise DataError(f"{jw}: part [{part[1]}, {part[2]}] is off the map")
+            # A part is either lying somewhere ({area, x, y}) or in an NPC's
+            # pocket ({from: char_id}) — see game/hub/repairs.py.
+            if not isinstance(part, dict):
+                raise DataError(f"{jw}: each part must be an object")
+            if "from" in part:
+                _require(part, "from", str, f"{jw} part")
+                _validate_scene(part.get("scene"), f"{jw} part scene")
+                continue
+            area = _require(part, "area", str, f"{jw} part")
+            for key in ("x", "y"):
+                value = _require(part, key, int, f"{jw} part")
+                if value < 0:
+                    raise DataError(f"{jw}: part {key} must be >= 0")
+            if not (0 <= part["x"] < config.MAP_TILES_W
+                    and 0 <= part["y"] < config.MAP_TILES_H):
+                raise DataError(f"{jw}: part [{part['x']}, {part['y']}] is "
+                                f"off the map")
+        trigger = job.get("trigger")            # M34: handed out in person
+        if trigger is not None:
+            _require(trigger, "character", str, f"{jw} trigger")
+            _validate_scene(job.get("intro_scene"), f"{jw} intro_scene")
+        flags = job.get("flags", {})            # extra flags set on completion
+        if not isinstance(flags, dict):
+            raise DataError(f"{jw}: flags must be an object")
         for key in ("credits", "xp"):
             if _require(job, key, int, jw) < 0:
                 raise DataError(f"{jw}: {key} must be >= 0")
@@ -613,6 +627,33 @@ def load_repairs(data_dir=None):
             raise DataError(f"{jw}: duplicate id")
         seen.add(job["id"])
     return jobs
+
+
+FLAVOR_POOLS = {"part_lift": (), "mining": ("material",)}
+
+
+def load_flavor(data_dir=None):
+    """In-character one-liners for repeated field actions (M34): hauling a
+    repair part, cracking an ore seam. {pool: {char_id: [lines]}}, with a
+    "default" entry per pool for anyone without their own voice."""
+    path = os.path.join(data_dir or DATA_DIR, "flavor.json")
+    flavor = _load_json(path)
+    if not isinstance(flavor, dict):
+        raise DataError("flavor.json: top-level JSON must be an object")
+    for pool, placeholders in FLAVOR_POOLS.items():
+        lines_by_char = _require(flavor, pool, dict, "flavor.json")
+        if "default" not in lines_by_char:
+            raise DataError(f"flavor.json '{pool}': needs a 'default' pool — "
+                            f"a new hero must never fall through to silence")
+        for char_id, lines in lines_by_char.items():
+            fw = f"flavor.json {pool}.{char_id}"
+            if not isinstance(lines, list) or not lines or not all(
+                    isinstance(l, str) and l for l in lines):
+                raise DataError(f"{fw}: must be a non-empty list of strings")
+            for line in lines:
+                _validate_template(line, fw,
+                                   **{p: "something" for p in placeholders})
+    return flavor
 
 
 def load_zones(data_dir=None):
@@ -829,6 +870,26 @@ def load_all(data_dir=None):
     story_ids = {q["id"] for q in story}
     for job in repairs:
         jw = f"repairs.json '{job['id']}'"
+        for part in job["parts"]:
+            holder = part.get("from")
+            if holder:
+                if holder not in characters:
+                    raise DataError(f"{jw}: part holder '{holder}' not found")
+                continue
+            area = part["area"]
+            if area in TOWER_FLOORS:
+                continue                        # bounds already checked
+            if area not in zones:
+                raise DataError(f"{jw}: part area '{area}' is neither a tower "
+                                f"floor nor a zone")
+            zone_map = zones[area]["map"]
+            if not (0 <= part["y"] < len(zone_map)
+                    and 0 <= part["x"] < len(zone_map[part["y"]])):
+                raise DataError(f"{jw}: part [{part['x']}, {part['y']}] is "
+                                f"outside the '{area}' map")
+        holder = (job.get("trigger") or {}).get("character")
+        if holder and holder not in characters:
+            raise DataError(f"{jw}: trigger character '{holder}' not found")
         for quest_id in job.get("requires", {}).get("quests", []):
             # A repair gated on a quest that doesn't exist would never post,
             # and the tower could never finish being rebuilt.
@@ -864,4 +925,5 @@ def load_all(data_dir=None):
             "calendar": load_calendar(data_dir), "assignments": assignments,
             "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story,
             "zones": zones, "passive": load_passive(data_dir), "dialogue": dialogue,
-            "unlocks": unlocks, "repairs": repairs}
+            "unlocks": unlocks, "repairs": repairs,
+            "flavor": load_flavor(data_dir)}

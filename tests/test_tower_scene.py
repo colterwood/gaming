@@ -29,6 +29,8 @@ def repair_tower(content, state):
         state.setdefault("repairs", {})[job["id"]] = {
             "status": "done", "found": list(range(len(job["parts"])))}
         state.setdefault("story_flags", {})[job["flag"]] = True
+        for flag, value in job.get("flags", {}).items():
+            state["story_flags"][flag] = value      # incl. board_unlocked
     return state
 
 
