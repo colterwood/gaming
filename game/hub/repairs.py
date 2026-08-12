@@ -305,16 +305,17 @@ def work_part(state, job, index):
 
 def repair(content, state, job):
     """Fit the parts and bring the thing back to life. Sets the job's
-    story flag, which is what actually opens the room."""
+    story flag, which is what actually opens the room.
+
+    Fitting costs an HOUR and no energy (M35): a job's energy price is the
+    heavy pieces it made you carry and nothing else, so a repair with none
+    — the elevator, the three rooms — costs the team nothing at all."""
     if not is_active(state, job):
         return {"ok": False, "message": "Take the job at the board first."}
     if not can_repair(state, job):
         left = parts_left(state, job)
         return {"ok": False,
                 "message": f"Still {left} piece(s) short."}
-    if not energy.can_afford(state, config.REPAIR_ENERGY):
-        return {"ok": False, "message": "Too exhausted — sleep to recover."}
-    energy.spend(state, config.REPAIR_ENERGY)
     hit_end = clock.advance(state, config.REPAIR_MINUTES)
     state["repairs"][job["id"]] = {"status": "done",
                                    "found": list(range(len(job["parts"])))}

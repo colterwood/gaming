@@ -178,13 +178,14 @@ UNLOCK_SEARCH_MINUTES = 20
 # Salvaging a part is scout-point work that happens indoors; fitting it is
 # a craft action. Repairs are the player's own energy and clock, which is
 # why they sit outside the M25 board XP budget (that prices a hero's days).
+# A HEAVY part is the ONLY thing in the whole repair system that costs
+# energy (M35). Searching costs minutes, fitting the parts costs an hour,
+# and neither costs the team anything — so a job's energy price is exactly
+# 5 x however many heavy pieces it has: elevator 0, Quinjet 15, training
+# floor 5, and the three rooms 0.
 REPAIR_PART_ENERGY = 5
 REPAIR_PART_MINUTES = 20
-REPAIR_ENERGY = 15
 REPAIR_MINUTES = 60
-# M35: turning over a couch costs MINUTES and nothing else — the hunt is
-# meant to eat the day, not the team. Only wrestling the found part out
-# costs energy (REPAIR_PART_ENERGY above).
 FURNITURE_SEARCH_MINUTES = 5
 
 # --- Med Bay (M30) ---

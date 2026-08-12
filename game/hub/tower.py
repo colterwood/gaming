@@ -1167,8 +1167,7 @@ class HubScene:
             items.append((f"  Parts: {total - left}/{total}", True, None))
             if repairs.can_repair(state, job):
                 items.append((f"{job['repair_label']}  "
-                              f"({config.REPAIR_ENERGY} EN, "
-                              f"{clock.format_duration(config.REPAIR_MINUTES)})",
+                              f"({clock.format_duration(config.REPAIR_MINUTES)})",
                               False, (lambda a, j=job: self._do_repair(a, j))))
             else:
                 items.append(("  Still missing pieces - they're around the "

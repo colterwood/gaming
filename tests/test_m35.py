@@ -83,6 +83,43 @@ def test_each_repair_has_the_hunt_it_was_designed_with(content, job_id,
     assert actual == expected
 
 
+ENERGY_PRICE = {                    # 5 EN per heavy piece, and nothing else
+    "repair_elevator": 0,
+    "repair_quinjet": 15,
+    "repair_training": 5,
+    "repair_med_bay": 0,
+    "repair_tech_lab": 0,
+    "repair_pym_lab": 0,
+}
+
+
+@pytest.mark.parametrize("job_id,price", sorted(ENERGY_PRICE.items()))
+def test_a_repair_costs_exactly_its_heavy_parts(content, job_id, price):
+    """Nothing else in the system touches energy: searching is free,
+    handing over is free, and FITTING the parts is free. Carrying is the
+    only thing that tires anybody out."""
+    state = FakeApp(content).game_state          # a real party to tire out
+    state["repairs"] = {}
+    state["story_flags"] = {"board_unlocked": True, "elevator_repaired": True,
+                            "pym_lab_unlocked": True}
+    state["quests"]["ch1_siege"] = {"name": "Siege", "status": "done"}
+    spec = job(content, job_id)
+    state["repairs"][job_id] = {"status": "active", "found": []}
+    before = state["energy"]
+
+    for index, part in enumerate(spec["parts"]):
+        kind = repairs.part_kind(part)
+        if kind == "npc":
+            repairs.take_npc_part(state, spec, index)
+        elif kind == "battle":
+            state["repairs"][job_id]["found"].append(index)
+        else:
+            repairs.work_part(state, spec, index)
+    repairs.repair(content, state, spec)
+
+    assert before - state["energy"] == price
+
+
 def test_the_spots_never_move(content):
     """No RNG anywhere in where a piece is: the same game twice is the same
     hunt, which is what makes learning the tower worth anything."""
