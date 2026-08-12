@@ -238,6 +238,26 @@ def test_breaking_lang_out_is_what_hands_over_the_code(content):
     assert quest["flags"]["pym_lab_unlocked"] is True
 
 
+def test_a_save_that_already_freed_lang_still_gets_the_code(content):
+    # The flag was added to a quest every live save had finished. Without
+    # the backfill the Pym Lab would be sealed behind a code that could
+    # never arrive.
+    old = save.new_game_state()
+    old["quests"]["ch1_break_out_lang"] = {"name": "Break Out Scott Lang",
+                                           "status": "done"}
+    added = story.backfill_flags(old, content["story"])
+    assert "pym_lab_unlocked" in added
+    assert old["story_flags"]["pym_lab_unlocked"] is True
+
+
+def test_the_backfill_leaves_unfinished_quests_alone(content):
+    old = save.new_game_state()
+    old["quests"]["ch1_break_out_lang"] = {"name": "Break Out Scott Lang",
+                                           "status": "active"}
+    assert story.backfill_flags(old, content["story"]) == []
+    assert not old["story_flags"]
+
+
 # --- old saves keep the rooms they had (4) -------------------------------
 
 def test_a_pre_m29_save_wakes_up_in_a_working_tower(content):

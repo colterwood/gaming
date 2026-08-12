@@ -109,6 +109,26 @@ def story_complete(state, story_data):
     return current_quest(state, story_data) is None
 
 
+def backfill_flags(state, story_data):
+    """A quest completed before its flag existed still earned it.
+
+    M29 hung `pym_lab_unlocked` on the Ch. 1 Ant-Man rescue — a quest
+    every live save had already finished, which would have sealed the Pym
+    Lab behind a door code that could never arrive. Run at load for every
+    done quest, so adding a flag to old content is never a dead end.
+    Returns the flags it had to set."""
+    added = []
+    for quest in story_data:
+        entry = state.get("quests", {}).get(quest["id"]) or {}
+        if entry.get("status") != "done":
+            continue
+        for flag, value in quest.get("flags", {}).items():
+            if not state.get("story_flags", {}).get(flag):
+                state.setdefault("story_flags", {})[flag] = value
+                added.append(flag)
+    return added
+
+
 # ----------------------------------------------------- scout quests (M13)
 
 def scouted(state, quest):

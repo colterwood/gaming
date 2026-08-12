@@ -87,6 +87,7 @@ class App:
         dispatch.backfill_spots(self.content, self.game_state)  # pre-M13 jobs
         activities.migrate_training_locks(self.game_state)      # pre-M16 locks
         repairs.migrate(self.content, self.game_state)          # pre-M29 tower
+        story.backfill_flags(self.game_state, self.content["story"])
         for hero_id, entry in self.game_state["roster"].items():
             attrs.sanitize_perk_choices(entry, self.content["perks"])
             entry.setdefault("energy", self.game_state.get("energy", config.DAILY_ENERGY))
