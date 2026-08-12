@@ -27,6 +27,7 @@ def new_game_state():
         "story_flags": {},
         "quests": {},
         "unlocks": {},         # conditional side arcs in progress (M17)
+        "repairs": {},         # tower repair jobs accepted/done (M29)
         "pending_scenes": [],  # story beats waiting for the hub to play them
         "dispatches": [],      # board jobs under way (M10)
         "completed_tasks": [], # one-shot board jobs already done (M15)
@@ -59,3 +60,40 @@ def load_game(slot, save_dir=None):
 
 def slot_exists(slot, save_dir=None):
     return os.path.exists(_slot_path(slot, save_dir))
+
+
+# ------------------------------------------------------- slot menu (M28)
+
+def slot_summary(slot, save_dir=None):
+    """What's in a slot, for the title screen's load menu — or None if it
+    is empty. A slot that won't parse also reads as None: a corrupt file
+    must never stop the player reaching their other saves."""
+    path = _slot_path(slot, save_dir)
+    try:
+        with open(path, encoding="utf-8") as f:
+            state = json.load(f)
+    except (OSError, ValueError):
+        return None
+    return {
+        "slot": slot,
+        "issue": state.get("issue", 1),
+        "day": state.get("day", 1),
+        "credits": state.get("credits", 0),
+        "heroes": len(state.get("roster", {})),
+        "saved_at": os.path.getmtime(path),
+    }
+
+
+def list_slots(save_dir=None):
+    """Every slot the game offers, in slot order: a summary dict or None."""
+    return [slot_summary(s, save_dir)
+            for s in range(1, config.SAVE_SLOTS + 1)]
+
+
+def latest_slot(save_dir=None):
+    """The most recently written slot — what Continue picks up. None if
+    nothing has been saved yet."""
+    saved = [s for s in list_slots(save_dir) if s]
+    if not saved:
+        return None
+    return max(saved, key=lambda s: s["saved_at"])["slot"]

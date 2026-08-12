@@ -51,6 +51,9 @@
       "hydra_enforcer"
     ],
     "recruit": "ant_man",
+    "flags": {
+      "pym_lab_unlocked": true
+    },
     "desc": "HYDRA got to Lang first. Get him out - the Pym suit comes with him.",
     "location": "midtown",
     "deadline_days": 3

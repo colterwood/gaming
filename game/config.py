@@ -174,6 +174,15 @@ SCOUT_MINUTES = 20
 UNLOCK_SEARCH_ENERGY = 5
 UNLOCK_SEARCH_MINUTES = 20
 
+# --- Tower repairs (M29) ---
+# Salvaging a part is scout-point work that happens indoors; fitting it is
+# a craft action. Repairs are the player's own energy and clock, which is
+# why they sit outside the M25 board XP budget (that prices a hero's days).
+REPAIR_PART_ENERGY = 5
+REPAIR_PART_MINUTES = 20
+REPAIR_ENERGY = 15
+REPAIR_MINUTES = 60
+
 # --- Battle time & defeat (M12) ---
 # Engaging a mission costs MISSION_ENERGY/MISSION_MINUTES up front (§6.1).
 # An ambush/trap fight you WIN eats BATTLE_MINUTES; a DEFEAT (any battle)

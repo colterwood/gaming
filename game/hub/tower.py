@@ -15,7 +15,7 @@ from game.core import calendar as cal
 from game.core import clock, energy, inventory
 from game.core.state_machine import GameState
 from game.hub import (activities, dispatch, field, party as party_mod, passive,
-                      story, unlocks)
+                      repairs, story, unlocks)
 from game.social import bonds, dialogue, events
 from game.ui import audio, pixelkit, sprites, widgets
 
@@ -29,14 +29,21 @@ TILE_NAMES = {"#": "wall", "w": "window", "E": "elevator", ".": "floor",
               ",": "carpet", "m": "mat", "S": "counter", "b": "board",
               "O": "console", "Z": "bed", "c": "couch", "t": "table",
               "p": "plant", "r": "rack", "=": "road", "_": "sidewalk",
-              "x": "crate", "H": "helipad"}
+              "x": "crate", "H": "helipad",
+              # M29 rooms
+              "Q": "hangar", "+": "treatment", "T": "workbench",
+              "P": "pym bench"}
 ZONE_TILE_OVERRIDES = {"p": "tree", ".": "sidewalk"}
 STATION_KINDS = {"E": "elevator", "S": "shop", "b": "board", "O": "ops",
-                 "Z": "bed", "r": "training", "H": "helipad"}
+                 "Z": "bed", "r": "training", "H": "helipad",
+                 "Q": "quinjet", "+": "medbay", "T": "techlab",
+                 "P": "pymlab"}
 STATION_LABELS = {"elevator": "Elevator", "shop": "Tower Shop",
                   "board": "Assignment Board", "ops": "Ops Console",
                   "bed": "Sleep", "training": "Training Rack",
-                  "helipad": "Quinjet"}
+                  "helipad": "Quinjet", "quinjet": "Quinjet",
+                  "medbay": "Treatment Station", "techlab": "Tech Bench",
+                  "pymlab": "Pym Bench"}
 ZONE_STATION_KINDS = {"helipad", "shop"}    # what works in the field (M10)
 
 FLOORS = {
@@ -108,6 +115,58 @@ FLOORS = {
             "#......................................#",
             "#p....................................p#",
             "#......................................#",
+            "#............................QQQQ......#",
+            "#............................QQQQ......#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "########################################",
+        ],
+        "spawn": (17, 2),
+    },
+    "med_bay": {
+        "name": "Med Bay",
+        "map": [
+            "########################################",
+            "#ww##ww##ww##ww#EE#ww##ww##ww##ww##ww##",
+            "#......................................#",
+            "#....++++..........................++..#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#....cc....cc....cc....................#",
+            "#......................................#",
+            "#p....................................p#",
+            "#......................................#",
+            "#...........tt.........................#",
+            "#...........tt.........................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "########################################",
+        ],
+        "spawn": (17, 2),
+    },
+    "tech_lab": {
+        "name": "Tech Lab",
+        "map": [
+            "########################################",
+            "#ww##ww##ww##ww#EE#ww##ww##ww##ww##ww##",
+            "#......................................#",
+            "#......................................#",
+            "#....TTTT..........................TT..#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#.........tt.............tt............#",
+            "#.........tt.............tt............#",
+            "#p....................................p#",
+            "#......................................#",
             "#......................................#",
             "#......................................#",
             "#......................................#",
@@ -119,6 +178,45 @@ FLOORS = {
         ],
         "spawn": (17, 2),
     },
+    "pym_lab": {
+        "name": "Pym Lab",
+        "map": [
+            "########################################",
+            "#ww##ww##ww##ww#EE#ww##ww##ww##ww##ww##",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......PPPP............................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#..............tt......tt..............#",
+            "#p.............tt......tt.............p#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "#......................................#",
+            "########################################",
+        ],
+        "spawn": (17, 2),
+    },
+}
+
+# The order the elevator lists them, and what each floor waits on (M29).
+# The three original rooms come back with the elevator; the new ones are
+# behind their own repair, and the Pym Lab behind Scott Lang's door code.
+FLOOR_ORDER = ("common", "ops", "training", "med_bay", "tech_lab", "pym_lab")
+FLOOR_REQUIRES = {
+    "ops": ("elevator_repaired", "The elevator doesn't go up yet."),
+    "training": ("elevator_repaired", "The elevator doesn't go up yet."),
+    "med_bay": ("elevator_repaired", "The elevator doesn't go up yet."),
+    "tech_lab": ("elevator_repaired", "The elevator doesn't go up yet."),
+    "pym_lab": ("pym_lab_unlocked", "Sealed. The door wants a code you "
+                                    "don't have."),
 }
 
 
@@ -334,6 +432,28 @@ class HubScene:
                 for i, (tx, ty) in enumerate(quest["scout_points"])
                 if i not in done]
 
+    def _repair_targets(self, state):
+        """[(job, index, x, y)] for parts of accepted repairs lying on this
+        floor (M29). Nothing shows until the job is taken at the board —
+        the same rule missions play by."""
+        if self.area != "tower":
+            return []
+        found = []
+        for job in repairs.active(self.content, state):
+            for index, tx, ty in repairs.parts_on(state, job, self.floor):
+                found.append((job, index, tx * TILE + TILE // 2,
+                              HUD_H + ty * TILE + TILE // 2))
+        return found
+
+    def _station_repair_job(self, state, kind):
+        """The repair this station is still waiting on, if it's broken. A
+        thing is broken whether or not the board has got around to posting
+        the job — the menu says which."""
+        for job in self.content["repairs"]:
+            if job["station"] == kind and not repairs.flag_set(state, job):
+                return job
+        return None
+
     def _grove_targets(self, state):
         """[(arc, index, label, [(x, y), ...])] for the tree stands a live
         side arc still wants worked in this zone (M17). Distance is measured
@@ -407,6 +527,10 @@ class HubScene:
                 d = (x - self.px) ** 2 + (y - self.py) ** 2
                 if d < best_d:
                     best, best_d = ("grove", (arc["id"], i), label), d
+        for job, i, x, y in self._repair_targets(state):
+            d = (x - self.px) ** 2 + (y - self.py) ** 2
+            if d < best_d:
+                best, best_d = ("part", (job["id"], i), job["part_label"]), d
         target = self._mission_target(state)
         if target:
             quest, x, y = target
@@ -560,6 +684,10 @@ class HubScene:
             self._do_scout_point(app, ident)
         elif kind == "grove":
             self._search_grove(app, *ident)
+        elif kind == "part":
+            self._salvage_part(app, *ident)
+        elif ident in ("quinjet", "medbay", "techlab", "pymlab"):
+            self._open_room_station(app, ident)
         elif ident == "bed":
             app.go_to_sleep(passed_out=False)
         elif ident == "elevator":
@@ -575,20 +703,64 @@ class HubScene:
         elif ident == "ops":
             self._open_ops(app)
 
+    def floor_locked(self, state, floor):
+        """(locked, why) for a tower floor — M29 gates every floor above the
+        common one behind the elevator repair, and the Pym Lab behind the
+        code Scott Lang hands over."""
+        flag, why = FLOOR_REQUIRES.get(floor, (None, ""))
+        if flag and not state.get("story_flags", {}).get(flag):
+            return True, why
+        return False, ""
+
     def _open_elevator(self, app):
-        items = [(FLOORS[f]["name"], self.floor == f and self.area == "tower",
-                  (lambda a, fl=f: self._switch_floor(fl)))
-                 for f in ("common", "training", "ops")]
-        for zone in sorted(self.content["zones"].values(), key=lambda z: z["danger"]):
-            danger = "!" * zone["danger"]
-            items.append((f"Quinjet: {zone['name']}  [{danger}]", False,
-                          (lambda a, zid=zone["id"]: self._travel(a, zid))))
+        state = app.game_state
+        if not state.get("story_flags", {}).get("elevator_repaired"):
+            # The car is dead: the elevator IS the repair station until it
+            # runs again, so interacting with it offers the work, not floors.
+            job = self._station_repair_job(state, "elevator")
+            if job:
+                self._open_repair_menu(app, job)
+                return
+            self.log("The car is dead. The panel hangs open, wires and all.")
+            self.reset_modes()
+            return
+        items = []
+        for floor in FLOOR_ORDER:
+            locked, why = self.floor_locked(state, floor)
+            here = self.floor == floor and self.area == "tower"
+            label = FLOORS[floor]["name"]
+            if locked:
+                label += f"  [{why}]"
+            elif not self._floor_working(state, floor):
+                label += "  [needs repair]"
+            items.append((label, locked or here,
+                          (lambda a, fl=floor: self._switch_floor(fl))))
+        if state.get("story_flags", {}).get("quinjet_repaired"):
+            for zone in sorted(self.content["zones"].values(),
+                               key=lambda z: z["danger"]):
+                danger = "!" * zone["danger"]
+                items.append((f"Quinjet: {zone['name']}  [{danger}]", False,
+                              (lambda a, zid=zone["id"]: self._travel(a, zid))))
+        else:
+            items.append(("Quinjet: grounded", True, None))
         self._open_submenu("Elevator", items)
 
+    def _floor_working(self, state, floor):
+        """Whether a floor's own station is repaired — a room can be
+        reachable and still be a building site."""
+        for job in self.content["repairs"]:
+            if job["floor"] == floor and not repairs.flag_set(state, job):
+                return False
+        return True
+
     def _open_helipad(self, app):
-        """M11: the Quinjet flies anywhere from a zone helipad, not just home."""
-        items = [("Avengers Tower", False,
-                  (lambda a: self._travel(a, "tower")))]
+        """M11: the Quinjet flies anywhere from a zone helipad, not just home.
+        M29: the jet also sits in its bay on the Ops floor, where "fly home"
+        is not a useful offer."""
+        items = []
+        if self.area != "tower":
+            items.append(("Avengers Tower", False,
+                          (lambda a: self._travel(a, "tower"))))
         for zone in sorted(self.content["zones"].values(), key=lambda z: z["danger"]):
             if zone["id"] == self.area:
                 continue
@@ -644,6 +816,67 @@ class HubScene:
         result = story.do_scout(state, quest, index, self.content["story"])
         self.log(result["message"])
         self.reset_modes()
+        self._after_action(app)
+
+    # ------------------------------------------------- tower repairs (M29)
+
+    def _salvage_part(self, app, job_id, index):
+        state = app.game_state
+        job = repairs.job_by_id(self.content, job_id)
+        if job is None:
+            return
+        result = repairs.work_part(state, job, index)
+        self.log(result["message"])
+        self.reset_modes()
+        self._after_action(app)
+
+    def _open_room_station(self, app, kind):
+        """A station in one of the rebuilt rooms. Until its repair lands the
+        thing itself is the work site; afterwards it does its job."""
+        state = app.game_state
+        job = self._station_repair_job(state, kind)
+        if job and not repairs.flag_set(state, job):
+            self._open_repair_menu(app, job)
+            return
+        if kind == "quinjet":
+            self._open_helipad(app)
+        else:
+            self.log(f"{STATION_LABELS[kind]}: nothing installed here yet.")
+            self.reset_modes()
+
+    def _open_repair_menu(self, app, job):
+        """Stand at the broken thing: what's left to find, and the repair
+        itself once every part is in hand."""
+        state = app.game_state
+        items = [(job["name"], True, None)]
+        if not repairs.is_active(state, job):
+            items.append(("  Not on your list - take it at the board."
+                          if repairs.gate_open(state, job)
+                          else "  Nobody's cleared this work yet.",
+                          True, None))
+        else:
+            left = repairs.parts_left(state, job)
+            total = len(job["parts"])
+            items.append((f"  Parts: {total - left}/{total}", True, None))
+            if repairs.can_repair(state, job):
+                items.append((f"{job['repair_label']}  "
+                              f"({config.REPAIR_ENERGY} EN, "
+                              f"{clock.format_duration(config.REPAIR_MINUTES)})",
+                              False, (lambda a, j=job: self._do_repair(a, j))))
+            else:
+                items.append(("  Still missing pieces - they're around the "
+                              "tower.", True, None))
+        items.append(("Close", False, None))
+        self._open_submenu("Repair", items)
+
+    def _do_repair(self, app, job):
+        state = app.game_state
+        result = repairs.repair(self.content, state, job)
+        self.reset_modes()
+        for message in result.get("messages", [result["message"]]):
+            self.log(message)
+        if result["ok"] and result.get("scene"):
+            unlocks.queue_scene(state, result["scene"])
         self._after_action(app)
 
     def _search_grove(self, app, arc_id, index):
@@ -959,6 +1192,22 @@ class HubScene:
         tier = dispatch.roster_tier(self.content, state)     # card knows it
         power = dispatch.team_power(self.content, state)
         items = []
+        # M29: the tower's own repairs head the board. They are worked in
+        # person rather than dispatched, so they never take a crew.
+        for job in repairs.posted(self.content, state):
+            items.append((f"REPAIR - {job['name']}", False,
+                          (lambda a, j=job: self._accept_repair(a, j))))
+            items.append((f"   {job.get('board_line', job['desc'])}",
+                          True, None))
+            items.append((f"   {job['credits']} cr, {job['xp']} XP, "
+                          f"{len(job['parts'])} parts to find", True, None))
+        for job in repairs.active(self.content, state):
+            left = repairs.parts_left(state, job)
+            where = FLOORS[job["floor"]]["name"]
+            progress = (f"parts {len(job['parts']) - left}/{len(job['parts'])}"
+                        if left else "ready to fit")
+            items.append((f"In hand: {job['name']} - {where}, {progress}",
+                          True, None))
         posted = activities.assignment_tasks_today(
             state, self.content["assignments"], tier)
         if not posted:      # M26: one-shot jobs run out
@@ -986,6 +1235,15 @@ class HubScene:
         items.append((self._tier_status(state, tier, power), True, None))
         items.append(("Close", False, None))
         self._open_submenu("Assignment Board", items)
+
+    def _accept_repair(self, app, job):
+        result = repairs.accept(app.game_state, job)
+        self.log(result["message"])
+        if result["ok"]:
+            where = FLOORS[job["floor"]]["name"]
+            self.log(f"{len(job['parts'])} parts to find. It gets fitted on "
+                     f"the {where}.")
+        self.reset_modes()
 
     @staticmethod
     def _tier_phrase(tiers):
@@ -1097,6 +1355,19 @@ class HubScene:
         done = sum(1 for v in state.get("quests", {}).values()
                    if v["status"] == "done")
         items = []
+        if not state.get("story_flags", {}).get("quinjet_repaired"):
+            # M29: never offer a job the team physically cannot reach — an
+            # accepted mission starts its deadline, so this would hand the
+            # player a guaranteed failure.
+            items.append(("The Quinjet is grounded.", True, None))
+            items.append(("  Until it flies, nothing S.H.I.E.L.D. sends is",
+                          True, None))
+            items.append(("  a mission - it's a call you can't answer.",
+                          True, None))
+            items.extend(self._ops_unlock_rows(state))
+            items.append(("Close", False, None))
+            self._open_submenu("Ops Console", items)
+            return
         if quest is None:
             items.append(("Chapters 1-2 complete!", True, None))
         else:
@@ -1177,6 +1448,10 @@ class HubScene:
         """M12: only ACTIVE party members can start a session, and starting
         one pulls the hero off the team until the clock runs out."""
         state = app.game_state
+        job = self._station_repair_job(state, "training")
+        if job and not repairs.flag_set(state, job):
+            self._open_repair_menu(app, job)     # torn mats, cracked frame
+            return
         if self._open_pending_perk(state, None):
             return
         party = self._party(state)
@@ -1382,6 +1657,10 @@ class HubScene:
         for _, _, x, y in self._scout_targets(state):   # objective markers
             points = [(x, y - 6), (x + 5, y), (x, y + 6), (x - 5, y)]
             pygame.draw.polygon(surface, pixelkit.color("gold"), points)
+            pygame.draw.polygon(surface, pixelkit.color("ink"), points, width=1)
+        for _, _, x, y in self._repair_targets(state):  # salvage (M29)
+            points = [(x, y - 6), (x + 5, y), (x, y + 6), (x - 5, y)]
+            pygame.draw.polygon(surface, pixelkit.color("orange"), points)
             pygame.draw.polygon(surface, pixelkit.color("ink"), points, width=1)
         for arc, index, _, tiles in self._grove_targets(state):
             # Only the FOUND stand gets a marker — the hunt itself is on foot.

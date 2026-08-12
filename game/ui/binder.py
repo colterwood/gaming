@@ -36,7 +36,12 @@ def draw_page(surface, rect, content, state):
             _draw_mini_front(surface, pocket, content["characters"][hero_id],
                              roster[hero_id])
         else:
-            _draw_empty_pocket(surface, pocket)
+            # M29: a pocket you haven't filled says WHOSE it is. The page is
+            # a checklist — "Hawkeye, and you don't have him" has to read at
+            # a glance, especially once a Ch. 3-4 fork means one of them is
+            # never coming.
+            _draw_empty_pocket(surface, pocket,
+                               content["characters"][hero_id] if hero_id else None)
 
 
 def _draw_mini_front(surface, pocket, character, entry):
@@ -57,12 +62,16 @@ def _draw_mini_front(surface, pocket, character, entry):
                       topleft=(pocket.x + 5, pocket.bottom - 12))
 
 
-def _draw_empty_pocket(surface, pocket):
+def _draw_empty_pocket(surface, pocket, character=None):
     pygame.draw.rect(surface, pixelkit.color("steel_dark"), pocket)
     pygame.draw.rect(surface, pixelkit.color("grey_dark"), pocket, width=1)
     cx, cy = pocket.centerx, pocket.centery
     pygame.draw.circle(surface, pixelkit.color("shadow"), (cx, cy - 8), 9)
     pygame.draw.ellipse(surface, pixelkit.color("shadow"),
                         pygame.Rect(cx - 15, cy + 2, 30, 18))
-    pixelkit.text(surface, "?", 14, "grey", bold=True,
-                  center=(cx, pocket.bottom - 10))
+    if character:
+        pixelkit.text(surface, character["name"].upper(), 11, "grey",
+                      center=(cx, pocket.bottom - 10))
+    else:
+        pixelkit.text(surface, "?", 14, "grey", bold=True,
+                      center=(cx, pocket.bottom - 10))

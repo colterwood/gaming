@@ -167,6 +167,8 @@ def complete_battle_quest(state, quest, content):
         state.setdefault("story_flags", {})[flag] = value
         if flag == "training_upgraded":
             messages.append("Training Floor upgraded! (+80 XP sessions)")
+        if flag == "pym_lab_unlocked":
+            messages.append("Scott hands over the Pym Lab access code.")
         if flag == "ch2_complete":
             messages.append("Chapters 1-2 complete. Kang is watching...")
     return messages

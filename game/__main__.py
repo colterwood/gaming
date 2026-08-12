@@ -3,6 +3,11 @@
 Env vars for headless verification:
   GAME_SMOKE=1        scripted key sequence walks every state, then quits
   GAME_SMOKE_SHOT=dir save a screenshot per visited state into dir
+
+A smoke run drives the title menu, so it walks New Game -> empty slot 1.
+Point GAME_SAVE_DIR at a scratch directory before running one (config
+requires that of every headless driver anyway): against the real saves
+directory slot 1 is occupied and the walk stops on the overwrite prompt.
 """
 
 import os
@@ -13,13 +18,15 @@ from game import config, data_loader
 from game.core import save
 from game.core.state_machine import GameState, StateMachine
 
-# Scripted walk through every state: boot->title->path->hub->pause->hub->
-# sleep->hub->battle, then quit. Override with GAME_SMOKE_KEYS=comma,list.
-SMOKE_KEYS = ["return", "return", "return", "p", "escape", "s", "return", "b"]
+# Scripted walk through every state: boot->title->new game->slot->path->
+# hub->pause->hub->sleep->hub->battle, then quit.
+# Override with GAME_SMOKE_KEYS=comma,list.
+SMOKE_KEYS = ["return", "return", "return", "return", "p", "escape", "s",
+              "return", "b"]
 
 
 class App:
-    SAVE_SLOT = 1
+    SAVE_SLOT = 1       # the slot being played; new_game/load_game set it
 
     def __init__(self):
         self.machine = StateMachine()
@@ -29,7 +36,9 @@ class App:
         self.battle = None
         self.hub = None
         self.pause = None
+        self.title = None
         self.game_state = None
+        self.pending_slot = None    # slot New Game will start in (M28)
 
     def pause_scene(self):
         if self.pause is None:
@@ -37,10 +46,18 @@ class App:
             self.pause = ImpelCardScene(self.content)
         return self.pause
 
-    def new_game(self):
+    def title_menu(self):
+        if self.title is None:
+            from game.ui.screens import TitleMenu
+            self.title = TitleMenu()
+        return self.title
+
+    def new_game(self, slot=None):
         from game.core import energy
         from game.hub import story
         from game.hub.tower import HubScene
+        if slot is not None:
+            self.SAVE_SLOT = slot
         self.game_state = save.new_game_state()
         self.game_state["path"] = "avengers"
         for char in self.content["characters"].values():
@@ -55,18 +72,21 @@ class App:
         story.init(self.game_state, self.content["story"])
         self.hub = HubScene(self.content)
 
-    def load_game(self):
+    def load_game(self, slot=None):
         from game.core import energy
         from game.hub import story
         from game.hub.tower import HubScene
         from game.progression import attributes as attrs
-        if not save.slot_exists(self.SAVE_SLOT):
+        slot = self.SAVE_SLOT if slot is None else slot
+        if not save.slot_exists(slot):
             return False
-        self.game_state = save.load_game(self.SAVE_SLOT)
+        self.SAVE_SLOT = slot
+        self.game_state = save.load_game(slot)
         story.init(self.game_state, self.content["story"])
-        from game.hub import activities, dispatch
+        from game.hub import activities, dispatch, repairs
         dispatch.backfill_spots(self.content, self.game_state)  # pre-M13 jobs
         activities.migrate_training_locks(self.game_state)      # pre-M16 locks
+        repairs.migrate(self.content, self.game_state)          # pre-M29 tower
         for hero_id, entry in self.game_state["roster"].items():
             attrs.sanitize_perk_choices(entry, self.content["perks"])
             entry.setdefault("energy", self.game_state.get("energy", config.DAILY_ENERGY))

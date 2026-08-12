@@ -95,6 +95,7 @@ secret-wars-poc/
 
 ```
 BOOT → TITLE → PATH_SELECT → HUB ⇄ BATTLE
+       TITLE → HUB               (M28: loading a save skips the path)
                               HUB ⇄ PAUSE (Impel card UI)
                               HUB → SLEEP → (next day) → HUB
 ```
@@ -179,6 +180,8 @@ gift history (gift_days/last_gift) per character, inventory, credits, story
 flags, quest states, side-arc states (`unlocks`, M17) and the queue of story
 beats waiting to play (`pending_scenes`, M17).
 Write to `saves/slot_N.json`, keep one `.bak` of the previous save.
+`SAVE_SLOTS` (3) independent games; the title menu picks which one is
+being played and `App.SAVE_SLOT` follows it (M28).
 
 ---
 
@@ -983,6 +986,80 @@ no tildes; see the footer name the next tier's threshold.*
 *AC: send a hero to sweep the hangar, finish it, and never see it posted
 again; recall a different job and find it still on the board; clear tier 1
 and read "Tier 1 jobs complete" in the footer.*
+
+**M28 — Save slots & the title menu** *(added post-POC)*.
+- **Three independent games.** `SAVE_SLOTS` (3) has been in config since M0
+  and nothing ever used it — `App.SAVE_SLOT` was a class constant of 1, so
+  there was exactly one game and testing anything from a fresh start meant
+  losing it. `new_game(slot=)` / `load_game(slot=)` set the slot and
+  everything that writes (autosave, lights-out) follows it, including the
+  Impel card footer.
+- **The title screen is a menu**: **Continue** (the most recently written
+  slot, named in the row), **New Game**, **Load Game** — the last two
+  dropping into a picker that says what each slot holds, e.g.
+  "Slot 1 - Issue 1, Day 10 (4 heroes, 3347 cr)".
+- `save.slot_summary` / `list_slots` / `latest_slot` read those headline
+  numbers off the files. A slot that won't parse reads as empty instead of
+  taking the whole menu down with it.
+- **No slot is overwritten without being asked.** New Game onto an occupied
+  slot goes to a confirmation whose cursor starts on "No, go back", and
+  nothing is written until that game's first lights-out (M18), so backing
+  out at PATH_SELECT costs the game living there nothing.
+- Loading transitions **TITLE → HUB** directly (§4): the path was chosen the
+  day that game started, so PATH_SELECT has nothing left to ask.
+*AC: start a game in slot 2, sleep, and find slot 1 untouched; pick New
+Game on an occupied slot and get asked before anything is lost; corrupt a
+slot and still reach the other two; read the slot number in the card
+footer.*
+
+**M29 — Tower rebuild** *(DESIGNED, NOT YET BUILT — decisions recorded so
+they don't rot before the build)*.
+- **The game opens with a broken tower.** Repairs are posted on the
+  assignment board; accepting one is what makes the work appear. Order:
+  **elevator** (opens the Ops Floor) → **Quinjet** (Pepper reports it
+  inoperable at Ops; its parts are found around the tower) → **Training
+  Floor** (mats and equipment) → the rest of Ch. 1–2. Later postings open
+  the **Med Bay**, the **Tech Lab**, and the **Pym Lab** floor — the last
+  reachable only after Scott Lang is rescued, because he has the access
+  code.
+- **Repairs are worked in person, not dispatched.** A board job today sends
+  a hero away for 1–2 days (M10), which is the wrong shape for the opening
+  — the player would accept "fix the elevator" and then have nothing to do
+  while it happened. A repair is accepted at the board and then *worked*:
+  search points around the tower for parts, then the repair action, on the
+  scout-point / search-grove pattern (energy + minutes per point).
+- Flags: `elevator_repaired`, `quinjet_repaired`, `training_repaired`,
+  `med_bay_repaired`, `tech_lab_repaired`, `pym_lab_repaired`, plus
+  `pym_lab_unlocked` for the floor itself. Job ids are `repair_*`.
+  `training_repaired` is NOT `training_upgraded` — the latter is still the
+  Ch. 1 boss's ×2 facility multiplier.
+- **Repairs are on the critical path**, so they may never carry a `posting`
+  chance or a bond gate (M16/M15): a dice roll that stalls the campaign is
+  a softlock. They also sit outside the M25 per-day board XP budget, which
+  prices a hero's *days* — a repair spends the player's own energy and
+  clock instead. Credits plus a one-off XP chunk.
+- **Old saves keep the rooms they already had.** Loading a pre-M29 save
+  counts the elevator, Quinjet and Training Floor as repaired (the M20
+  rule); only the new rooms post as fresh work.
+- **Open**: what the Med Bay and the Tech Lab *do* once repaired. The Pym
+  Lab room lands with Ant-Man, but crafting waits until the item catalogue
+  is worth crafting from — it's a system, not a room.
+
+**Ch. 3–4** *(decided, not yet built)*.
+- **Gate**: every Ch. 1–2 mission complete AND the tower repaired.
+- Hulk and Thor are Ch. 1–2 recruits (they already are in code — Hulk at
+  Bond 4, Thor off Stormbreaker), so Ch. 3–4's recruit weight is Shang-Chi
+  plus exactly one of Widow/Hawkeye.
+- **Dojo** unlocks at Shang-Chi **rank 3 across all six attributes** — the
+  Stormbreaker gate's shape, not a bond level. It trains at **×1.2 XP for
+  ÷1.2 energy; the lockout is unchanged.**
+- **The Tony/Cap fork is commit-and-miss**: one recruit, and the other is
+  only recoverable much later on the Illuminati path.
+- **Black Widow** (Tony's path): she is already inside A.I.M. and doesn't
+  want extracting. Dead drops across the zones, worked like scout points;
+  she makes contact on her terms.
+- **Hawkeye** (Cap's path): reach the target in a zone without triggering a
+  single ambush — the ambush system as a skill check rather than a tax.
 
 ---
 

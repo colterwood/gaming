@@ -21,11 +21,23 @@ class FakeMachine:
         self.state = to
 
 
+def repair_tower(content, state):
+    """Put the tower back together (M29). Almost every test plays a game
+    that is past the opening — the broken tower itself is exercised in
+    tests/test_m29.py — so the shared fixture starts rebuilt."""
+    for job in content["repairs"]:
+        state.setdefault("repairs", {})[job["id"]] = {
+            "status": "done", "found": list(range(len(job["parts"])))}
+        state.setdefault("story_flags", {})[job["flag"]] = True
+    return state
+
+
 class FakeApp:
     def __init__(self, content):
         self.content = content
         self.game_state = save.new_game_state()
         self.game_state["path"] = "avengers"
+        repair_tower(content, self.game_state)
         for c in content["characters"].values():
             if c["recruit"]["method"] == "starter":
                 self.game_state["roster"][c["id"]] = {

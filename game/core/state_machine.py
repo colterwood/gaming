@@ -14,9 +14,11 @@ class GameState(Enum):
 
 
 # BOOT → TITLE → PATH_SELECT → HUB ⇄ BATTLE, HUB ⇄ PAUSE, HUB → SLEEP → HUB
+# M28: loading a save goes TITLE → HUB directly — the path was chosen the
+# day that game was started, so PATH_SELECT has nothing left to ask.
 TRANSITIONS = {
     GameState.BOOT: {GameState.TITLE},
-    GameState.TITLE: {GameState.PATH_SELECT},
+    GameState.TITLE: {GameState.PATH_SELECT, GameState.HUB},
     GameState.PATH_SELECT: {GameState.HUB},
     GameState.HUB: {GameState.BATTLE, GameState.PAUSE, GameState.SLEEP},
     GameState.BATTLE: {GameState.HUB},

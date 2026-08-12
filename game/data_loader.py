@@ -534,6 +534,71 @@ def load_unlocks(data_dir=None):
     return arcs
 
 
+# Every floor of the tower (M29 added the last three). Kept here so both
+# assignment work-sites and repair parts are bounds-checked at load.
+TOWER_FLOORS = ("common", "training", "ops", "med_bay", "tech_lab", "pym_lab")
+# Station kinds a repair can be finished at — the same names tower.py maps
+# its tiles to (tests/test_m29.py pins the two lists together).
+REPAIR_STATIONS = ("elevator", "quinjet", "training", "medbay", "techlab",
+                   "pymlab")
+
+
+def load_repairs(data_dir=None):
+    """Tower repair jobs (M29) — see game/hub/repairs.py."""
+    path = os.path.join(data_dir or DATA_DIR, "quests", "repairs.json")
+    jobs = _load_json(path)
+    if not isinstance(jobs, list):
+        raise DataError("repairs.json: top-level JSON must be a list")
+    seen = set()
+    for job in jobs:
+        if not isinstance(job, dict):
+            raise DataError("repairs.json: each job must be an object")
+        jw = f"repairs.json job '{job.get('id', '?')}'"
+        for key in ("id", "name", "desc", "flag", "done_message",
+                    "part_label", "repair_label"):
+            _require(job, key, str, jw)
+        station = _require(job, "station", str, jw)
+        if station not in REPAIR_STATIONS:
+            raise DataError(f"{jw}: station must be one of {REPAIR_STATIONS}")
+        floor = _require(job, "floor", str, jw)
+        if floor not in TOWER_FLOORS:
+            raise DataError(f"{jw}: floor '{floor}' is not a tower floor")
+        parts = _require(job, "parts", list, jw)
+        if not parts:
+            raise DataError(f"{jw}: parts must be non-empty — a repair with "
+                            f"nothing to find is just a button")
+        for part in parts:
+            if (not isinstance(part, list) or len(part) != 3
+                    or not isinstance(part[0], str)
+                    or not all(isinstance(v, int) and not isinstance(v, bool)
+                               for v in part[1:])):
+                raise DataError(f"{jw}: each part must be [floor, x, y]")
+            if part[0] not in TOWER_FLOORS:
+                raise DataError(f"{jw}: part floor '{part[0]}' is not a tower floor")
+            if not (0 <= part[1] < config.MAP_TILES_W
+                    and 0 <= part[2] < config.MAP_TILES_H):
+                raise DataError(f"{jw}: part [{part[1]}, {part[2]}] is off the map")
+        for key in ("credits", "xp"):
+            if _require(job, key, int, jw) < 0:
+                raise DataError(f"{jw}: {key} must be >= 0")
+        requires = job.get("requires", {})
+        if not isinstance(requires, dict):
+            raise DataError(f"{jw}: requires must be an object")
+        unknown = set(requires) - {"flags", "quests"}
+        if unknown:
+            raise DataError(f"{jw}: unknown requires keys {sorted(unknown)}")
+        for key in ("flags", "quests"):
+            values = requires.get(key, [])
+            if not isinstance(values, list) or not all(
+                    isinstance(v, str) for v in values):
+                raise DataError(f"{jw}: requires.{key} must be a list of strings")
+        _validate_scene(job.get("done_scene"), f"{jw} done_scene")
+        if job["id"] in seen:
+            raise DataError(f"{jw}: duplicate id")
+        seen.add(job["id"])
+    return jobs
+
+
 def load_zones(data_dir=None):
     path = os.path.join(data_dir or DATA_DIR, "zones.json")
     zones = _load_json(path)
@@ -676,7 +741,6 @@ def load_all(data_dir=None):
             if item_id not in items:
                 raise DataError(
                     f"zones.json '{zone['id']}': loot item '{item_id}' not found in items.json")
-    TOWER_FLOORS = ("common", "training", "ops")        # spec §7 rooms
     for task in assignments:
         area, sx, sy = task["spot"]
         if area in TOWER_FLOORS:
@@ -713,6 +777,19 @@ def load_all(data_dir=None):
                 if not (0 <= y < len(zone_map) and 0 <= x < len(zone_map[y])):
                     raise DataError(f"story.json '{quest['id']}': scout point "
                                     f"[{x}, {y}] is outside the zone map")
+    repairs = load_repairs(data_dir)
+    story_ids = {q["id"] for q in story}
+    for job in repairs:
+        jw = f"repairs.json '{job['id']}'"
+        for quest_id in job.get("requires", {}).get("quests", []):
+            # A repair gated on a quest that doesn't exist would never post,
+            # and the tower could never finish being rebuilt.
+            if quest_id not in story_ids:
+                raise DataError(f"{jw}: requires.quests '{quest_id}' is not a "
+                                f"story quest")
+        scene_char = (job.get("done_scene") or {}).get("character")
+        if scene_char and scene_char not in characters:
+            raise DataError(f"{jw}: done_scene character '{scene_char}' not found")
     unlocks = load_unlocks(data_dir)
     for arc in unlocks:
         aw = f"unlocks.json '{arc['id']}'"
@@ -739,4 +816,4 @@ def load_all(data_dir=None):
             "calendar": load_calendar(data_dir), "assignments": assignments,
             "bond_scenes": bond_scenes, "perks": load_perks(data_dir), "story": story,
             "zones": zones, "passive": load_passive(data_dir), "dialogue": dialogue,
-            "unlocks": unlocks}
+            "unlocks": unlocks, "repairs": repairs}
