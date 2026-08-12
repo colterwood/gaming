@@ -67,23 +67,19 @@ def test_a_fully_mastered_hero_loses_nothing_it_could_have_used(content):
 
 # --- the boost buys the same thing it buys on the rack ---
 
-def test_talent_makes_field_xp_go_further(content):
-    # Iron Man is Strength boost 6 (rank costs x0.9), Cap is boost 2 (x1.3).
-    # The XP awarded is identical; what differs is what a rank costs, which
-    # is exactly how the training rack already works.
+def test_field_xp_goes_exactly_as_far_for_everyone(content):
+    # M33: talent no longer discounts the ladder, so the same 600 XP buys
+    # Iron Man (Strength boost 6) and Cap (boost 2) the same rank. What the
+    # boost is worth shows up in the combat value, not in the climb.
     iron, cap = entry(), entry()
     iron_boosts = content["characters"]["iron_man"]["boosts"]
     cap_boosts = content["characters"]["captain_america"]["boosts"]
     attrs.award_battle_xp(iron_boosts, iron, 600)
     attrs.award_battle_xp(cap_boosts, cap, 600)
 
-    assert iron["attribute_xp"].get("strength", 0) or iron["trained_ranks"]
-    iron_rank = attrs.rank(iron, "strength")
-    cap_rank = attrs.rank(cap, "strength")
-    assert iron_rank > cap_rank, "talent should climb faster on the same XP"
-    # and the reason is the cost, not the award
-    assert (attrs.xp_for_rank(1, iron_boosts["strength"])
-            < attrs.xp_for_rank(1, cap_boosts["strength"]))
+    assert attrs.rank(iron, "strength") == attrs.rank(cap, "strength")
+    assert (attrs.effective_rank(iron_boosts, iron, "strength")
+            > attrs.effective_rank(cap_boosts, cap, "strength"))
 
 
 def test_the_award_itself_is_boost_blind(content):
@@ -142,8 +138,7 @@ def test_loading_a_save_spends_any_leftover_bank(content, monkeypatch, tmp_path)
     ranks = sum(iron["trained_ranks"].values())
     assert banked_now or ranks                      # ...into real progress
     spent_on_ranks = sum(
-        attrs.xp_for_rank(config.RANK_START + i,
-                          content["characters"]["iron_man"]["boosts"][a])
+        attrs.xp_for_rank(config.RANK_START + i)
         for a in ATTRS
         for i in range(iron["trained_ranks"].get(a, 0)))
     assert banked_now + spent_on_ranks == 600       # every point accounted for

@@ -46,8 +46,7 @@ def train_cap_to(state, content, rank):
     for attribute in config.ATTRIBUTES:
         while attrs.rank(entry, attribute) < rank:
             attrs.add_training_xp(boosts, entry, attribute,
-                                  attrs.xp_for_rank(attrs.rank(entry, attribute),
-                                                    boosts[attribute]))
+                                  attrs.xp_for_rank(attrs.rank(entry, attribute)))
 
 
 def required_rank(arc):

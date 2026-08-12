@@ -54,7 +54,7 @@ def _atrophy(entry, boosts, exclude=None):
             rank = ranks.get(attribute, 0)
             if rank > 0:
                 ranks[attribute] = rank - 1
-                bank += attrs.xp_for_rank(rank, attrs.boost(boosts, attribute))
+                bank += attrs.xp_for_rank(rank)
                 decayed = True
             else:
                 bank = 0

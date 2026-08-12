@@ -11,19 +11,17 @@ from game.combat import formulas
 from game.core import calendar as cal
 
 
-def boost_weight(boost):
-    """Cost multiplier for training an attribute you have `boost` talent in
-    (M16b). Talent makes the climb cheaper; no talent makes it a slog."""
-    return max(0.1, config.BOOST_XP_WEIGHT_BASE
-               - config.BOOST_XP_WEIGHT_STEP * boost)
+def xp_for_rank(n):
+    """XP to climb FROM level n to n+1 (§6.3): the published ladder, and
+    the SAME for everybody.
 
-
-def xp_for_rank(n, boost=0):
-    """XP to climb FROM level n to n+1 (§6.3, 1.5x growth since M16),
-    scaled by the hero's innate talent for that attribute (M16b).
-    `n` is the level being trained, 1..TRAINED_MAX."""
-    base = config.XP_TO_NEXT_RANK[max(1, min(config.TRAINED_MAX, n))]
-    return int(round(base * boost_weight(boost)))
+    M16b used to discount the cost by innate talent, which paid a hero
+    twice for the same boost — once in combat and again on the clock. M33
+    took that back: what a boost gives you is the combat bonus in that
+    category, and that is all it gives you. `n` is the level being
+    trained, 1..TRAINED_MAX.
+    """
+    return config.XP_TO_NEXT_RANK[max(1, min(config.TRAINED_MAX, n))]
 
 
 def rank(roster_entry, attribute):
@@ -75,10 +73,9 @@ def add_training_xp(boosts, roster_entry, attribute, xp):
     ranks = roster_entry.setdefault("trained_ranks", {})
     xp_bank[attribute] = xp_bank.get(attribute, 0) + xp
     gained = []
-    talent = boost(boosts, attribute)
     while ranks.get(attribute, 0) < config.TRAINED_MAX:
         next_rank = ranks.get(attribute, 0) + 1
-        cost = xp_for_rank(next_rank, talent)
+        cost = xp_for_rank(next_rank)
         if xp_bank[attribute] < cost:
             break
         xp_bank[attribute] -= cost
@@ -96,10 +93,9 @@ def award_battle_xp(boosts, roster_entry, xp):
     """Earned-in-the-field XP (M21): applied to the hero's attributes on the
     spot, split evenly across the six.
 
-    It runs through add_training_xp, so the innate boost buys exactly what
-    it buys on the rack — the XP number is the same for everyone, but a
-    high-boost attribute needs fewer of them per rank (xp_for_rank is
-    boost-weighted). Maxed attributes drop out of the split rather than
+    It runs through add_training_xp, so field XP and rack XP buy exactly
+    the same thing — and since M33 that is the same for every hero,
+    talented or not. Maxed attributes drop out of the split rather than
     swallowing their share, so nothing earned is lost.
     """
     xp = max(0, int(xp))

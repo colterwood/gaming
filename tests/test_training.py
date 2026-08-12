@@ -42,23 +42,18 @@ def game_state(content):
 # --- XP thresholds (§6.3): rank N costs 100 × N ---
 
 def test_xp_for_rank_thresholds():
-    # M16: the cost to climb grows 1.5x per level, and M16b scales it by the
-    # hero's innate talent for that attribute.
-    assert [attrs.xp_for_rank(n, 5) for n in range(1, 10)] == [
-        100, 150, 225, 340, 510, 760, 1140, 1710, 2560]     # boost 5 = neutral
-    assert attrs.boost_weight(5) == pytest.approx(1.0)
-    assert attrs.boost_weight(7) < 1.0 < attrs.boost_weight(0)
-    # talent is a real discount, no talent is a real tax
-    assert attrs.xp_for_rank(9, 7) == round(2560 * 0.8)
-    assert attrs.xp_for_rank(9, 0) == round(2560 * 1.5)
+    # M33: the cost to climb DOUBLES per level (M16's 1.5x let ambush XP
+    # alone carry a team to rank 5 before Chapter 3), and it is the same
+    # for every hero — talent is a combat bonus, not a training discount.
+    assert [attrs.xp_for_rank(n) for n in range(1, 10)] == [
+        100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
 
 
 def test_rank_up_consumes_exact_xp(content):
     cap = content["characters"]["captain_america"]     # strength boost 2
     e = entry()
-    # M16b: Cap has little Strength talent, so his first rank costs 1.3x
-    cost = attrs.xp_for_rank(1, cap["boosts"]["strength"])
-    assert cost == 130
+    cost = attrs.xp_for_rank(1)
+    assert cost == 100
     result = attrs.add_training_xp(cap["boosts"], e, "strength", cost - 1)
     assert result["ranks_gained"] == [] and result["xp_banked"] == cost - 1
     result = attrs.add_training_xp(cap["boosts"], e, "strength", 1)
@@ -73,8 +68,8 @@ def test_multi_rank_overflow(content):
     cap = content["characters"]["captain_america"]
     boosts = cap["boosts"]
     e = entry()
-    two = (attrs.xp_for_rank(1, boosts["strength"])
-           + attrs.xp_for_rank(2, boosts["strength"]))
+    two = (attrs.xp_for_rank(1)
+           + attrs.xp_for_rank(2))
     result = attrs.add_training_xp(boosts, e, "strength", two + 50)
     assert result["ranks_gained"] == [1, 2]
     assert result["xp_banked"] == 50

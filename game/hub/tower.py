@@ -1749,12 +1749,30 @@ class HubScene:
                     return True
         return False
 
+    def _train_rows(self, state):
+        """What the rack offers this hero: the six, plus Enlightenment once
+        every one of them is at rank 10 (M33)."""
+        from game.progression import mastery
+        rows = list(config.ATTRIBUTES)
+        if mastery.available(state["roster"][self.train_hero_id]):
+            rows.append(mastery.ATTRIBUTE)
+        return rows
+
     def _train_attr_labels(self, state):
         from game.progression import attributes as attrs
+        from game.progression import mastery
         hero = self.content["characters"][self.train_hero_id]
         entry = state["roster"][self.train_hero_id]
         labels = []
-        for attribute in config.ATTRIBUTES:
+        for attribute in self._train_rows(state):
+            if attribute == mastery.ATTRIBUTE:
+                done, needed = mastery.progress(entry)
+                en_cost, minutes = activities.training_cost(config.RANK_MAX)
+                gain = attrs.session_xp(state, self.content["calendar"],
+                                        config.RANK_MAX)
+                labels.append(f"ENLIGHTENMENT  {done}/{needed}xp  (+{gain}xp, "
+                              f"{en_cost}EN, {clock.format_duration(minutes)})")
+                continue
             # M15: rank is the trainable level (1..RANK_MAX); the innate
             # boost lifts the COMBAT value above it, so show both.
             rank = attrs.rank(entry, attribute)
@@ -1764,7 +1782,7 @@ class HubScene:
                 labels.append(f"{head}  [MAX]")
             else:
                 banked = entry.get("attribute_xp", {}).get(attribute, 0)
-                cost = attrs.xp_for_rank(rank, hero["boosts"].get(attribute, 0))
+                cost = attrs.xp_for_rank(rank)
                 gain = attrs.session_xp(state, self.content["calendar"], rank)
                 en_cost, minutes = activities.training_cost(rank)
                 labels.append(f"{head}  {banked}/{cost}xp  (+{gain}xp, "
@@ -1776,12 +1794,13 @@ class HubScene:
         if key == pygame.K_ESCAPE:
             self.reset_modes()
             return
+        rows = self._train_rows(state)
         if key == pygame.K_UP:
-            self.submenu_index = (self.submenu_index - 1) % len(config.ATTRIBUTES)
+            self.submenu_index = (self.submenu_index - 1) % len(rows)
         elif key == pygame.K_DOWN:
-            self.submenu_index = (self.submenu_index + 1) % len(config.ATTRIBUTES)
+            self.submenu_index = (self.submenu_index + 1) % len(rows)
         elif key == pygame.K_RETURN:
-            attribute = config.ATTRIBUTES[self.submenu_index % len(config.ATTRIBUTES)]
+            attribute = rows[self.submenu_index % len(rows)]
             result = activities.start_training(state, self.content,
                                                self.train_hero_id, attribute)
             self.log(result["message"])

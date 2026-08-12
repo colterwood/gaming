@@ -136,14 +136,14 @@ def test_atrophy_after_grace_days(content):
     # cost is boost-weighted for this hero (M16b)
     from game.progression import attributes as attrs
     boosts = content["characters"]["iron_man"]["boosts"]
-    agility_rank_1 = attrs.xp_for_rank(1, boosts["agility"])
+    agility_rank_1 = attrs.xp_for_rank(1)
     assert im["trained_ranks"]["agility"] == 1
     assert im["attribute_xp"]["agility"] == 120 - agility_rank_1
     passive.process_day(content, state)                # day 4
     passive.process_day(content, state)                # day 5: strength bank dry
     assert im["attribute_xp"]["strength"] == 0
     # speed rank 1 eventually breaks down into a refunded, draining bank
-    refund = attrs.xp_for_rank(1, boosts["speed"])
+    refund = attrs.xp_for_rank(1)
     for _ in range(refund // config.ATROPHY_XP_PER_DAY + 2):
         passive.process_day(content, state)
     assert im["trained_ranks"]["speed"] == 0

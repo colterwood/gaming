@@ -190,8 +190,11 @@ REPAIR_MINUTES = 60
 # REST_SECONDS_PER_TICK is how fast that plays out in real time — the sit
 # is watched, not skipped, which is the whole point of the room.
 MEDBAY_ENERGY_PER_TICK = 10
-MEDBAY_TICK_MINUTES = 10
-MEDBAY_REST_SECONDS_PER_TICK = 0.30
+MEDBAY_TICK_MINUTES = TICK_GAME_MINUTES
+# M33: the world clock has ONE speed. Resting used to fast-forward, which
+# made an hour in the chair cheaper than an hour anywhere else — the whole
+# point of the room is that the hours are really passing.
+MEDBAY_REST_SECONDS_PER_TICK = TICK_REAL_SECONDS
 
 # --- Gear (M31) ---
 # Upgrade levels belong to the SCHEMATIC, not the object: a level-3 Kevlar
@@ -251,17 +254,17 @@ DISPATCH_POWER_BONUS = 0.01         # pay multiplier step per point of avg power
 DISPATCH_MULT_MIN = 0.8
 DISPATCH_MULT_MAX = 1.5
 
-# --- Attributes & Training (§6.3; XP economy reworked M16) ---
-# Rank costs grow 1.5x per level: each rank is a real investment, but a
-# hero can be mastered inside a campaign rather than a dozen issues.
+# --- Attributes & Training (§6.3; XP economy reworked M16, resteepened M33) ---
+# Rank costs DOUBLE per level. M16 tried 1.5x, which made the back half of
+# the ladder cheap enough that ambush XP alone carried a team to rank 5
+# before Chapter 3 — and that is before gear starts adding ranks on top.
 # Keyed by the level you are training FROM (1 -> 2 costs 100).
-XP_TO_NEXT_RANK = {1: 100, 2: 150, 3: 225, 4: 340, 5: 510,
-                   6: 760, 7: 1140, 8: 1710, 9: 2560}
-# Training with the grain is cheaper than fighting your own nature: the
-# rank cost is scaled by BASE - STEP x boost, so a boost-7 attribute costs
-# 0.8x and a boost-0 one costs 1.5x (boost 5 is the neutral point).
-BOOST_XP_WEIGHT_BASE = 1.5
-BOOST_XP_WEIGHT_STEP = 0.1
+XP_TO_NEXT_RANK = {1: 100, 2: 200, 3: 400, 4: 800, 5: 1600,
+                   6: 3200, 7: 6400, 8: 12800, 9: 25600}
+# (M16b weighted the rank cost by innate talent. M33 removed it: a boost
+# pays the hero in COMBAT, in that category, and nowhere else — it does
+# not also make the ladder cheaper. The cost table above is what everyone
+# pays.)
 # What one rack session yields and how long the trainee is locked out,
 # also keyed by the level being trained.
 TRAINING_XP_BY_LEVEL = {1: 25, 2: 35, 3: 50, 4: 80, 5: 135,
@@ -276,6 +279,10 @@ TRAINING_XP_MULT_EVENT = 3          # during a training event
 ENEMY_XP_BY_LEVEL = {1: 12, 2: 24, 3: 36, 4: 54, 5: 72,
                      6: 90, 7: 114, 8: 138, 9: 162, 10: 192}
 PERK_CHOICE_RANKS = (3, 6)
+# M33: the rung above rank 10. Once ALL SIX attributes are maxed, a hero
+# can start Enlightenment — the next doubling after 9 -> 10 (25,600), and
+# the only place XP can still go once the six are full.
+ENLIGHTENMENT_XP = 51200
 
 # --- Combat formulas (§6.4) ---
 HP_BASE = 50

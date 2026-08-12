@@ -140,7 +140,7 @@ def test_xp_line_shows_progress_over_the_next_rank(content):
              "perks": [], "perk_choices": {}, "gear": {}, "ult_charge": 0,
              "energy": 100, "unspent_xp": 0}
     boosts = content["characters"]["captain_america"]["boosts"]
-    need = attrs.xp_for_rank(attrs.rank(entry, "strength"), boosts["strength"])
+    need = attrs.xp_for_rank(attrs.rank(entry, "strength"))
     assert need > 0
     # what the card composes: got/need, not a bare running total
     assert f"STR {entry['attribute_xp']['strength']}/{need}" == f"STR 40/{need}"

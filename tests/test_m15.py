@@ -106,45 +106,45 @@ def test_training_ceiling_is_rank_ten(content):
     assert e["trained_ranks"]["speed"] == config.TRAINED_MAX
 
 
-# --- M16b: training with the grain is cheaper ---
+# --- M33: talent pays in combat, and NOWHERE else ---
 
-def test_boost_weighted_rank_costs(content):
-    im = content["characters"]["iron_man"]["boosts"]     # STR 6, AGI 3
-    cap = content["characters"]["captain_america"]["boosts"]  # STR 2, AGI 5
-    # Iron Man climbs Strength cheaper than Cap does...
-    assert (attrs.xp_for_rank(5, im["strength"])
-            < attrs.xp_for_rank(5, cap["strength"]))
-    # ...and Cap climbs Agility cheaper than Iron Man does.
-    assert (attrs.xp_for_rank(5, cap["agility"])
-            < attrs.xp_for_rank(5, im["agility"]))
-    # boost 5 is the neutral point, and the tax/discount is bounded
-    assert attrs.xp_for_rank(5, 5) == config.XP_TO_NEXT_RANK[5]
-    assert attrs.boost_weight(0) == pytest.approx(1.5)
-    assert attrs.boost_weight(config.BOOST_MAX) == pytest.approx(0.8)
+def test_the_ladder_costs_the_same_no_matter_the_talent(content):
+    # M16b discounted the rank cost by the innate boost, which paid a hero
+    # twice for it — once in the combat math and again on the clock. The
+    # published ladder is now what everybody pays.
+    for level in range(1, config.TRAINED_MAX + 1):
+        assert attrs.xp_for_rank(level) == config.XP_TO_NEXT_RANK[level]
+    assert not hasattr(attrs, "boost_weight")
 
 
-def test_boost_weighting_applies_when_ranking_up(content):
+def test_the_same_xp_ranks_up_the_talented_and_the_hopeless_alike(content):
     boosts = content["characters"]["hulk"]["boosts"]     # STR 7, SPD 2
     strong, slow = entry(), entry()
-    cheap = attrs.xp_for_rank(1, boosts["strength"])
-    attrs.add_training_xp(boosts, strong, "strength", cheap)
-    assert strong["trained_ranks"]["strength"] == 1      # exactly enough
-    attrs.add_training_xp(boosts, slow, "speed", cheap)
-    assert slow["trained_ranks"].get("speed", 0) == 0    # not enough for Speed
-    assert slow["attribute_xp"]["speed"] == cheap
+    cost = attrs.xp_for_rank(1)
+    attrs.add_training_xp(boosts, strong, "strength", cost)
+    attrs.add_training_xp(boosts, slow, "speed", cost)
+    assert strong["trained_ranks"]["strength"] == 1
+    assert slow["trained_ranks"]["speed"] == 1           # boost 2, same price
+    # What Hulk's Strength talent buys him is the combat value, not the climb.
+    assert (attrs.effective_rank(boosts, strong, "strength")
+            > attrs.effective_rank(boosts, slow, "speed"))
 
 
-def test_mastery_is_reachable_inside_a_campaign(content):
-    # M16b sanity: the whole roster should master in the low hundreds of
-    # days, not the ~490 the pure-doubling curve implied.
+def test_the_ladder_is_cheap_early_and_a_long_haul_at_the_top(content):
+    # M33 deliberately resteepened this to a pure doubling. The early ranks
+    # — the ones Chapters 1-2 actually ask for — stay a few days' work; rank
+    # 10 becomes a long-campaign goal rather than something ambush XP hands
+    # you. (0.5 XP per training minute x 1,200 waking minutes = 600 XP/day.)
+    to_rank_five = sum(attrs.xp_for_rank(level) for level in range(1, 5))
+    assert to_rank_five == 1_500                    # ~2.5 days on one stat
+
     for char in content["characters"].values():
         if char["recruit"]["method"] == "npc":
             continue
-        total = sum(attrs.xp_for_rank(level, char["boosts"][attribute])
+        total = sum(attrs.xp_for_rank(level)
                     for attribute in config.ATTRIBUTES
                     for level in range(1, config.TRAINED_MAX + 1))
-        # 0.5 XP per training minute x 1200 waking minutes = 600 XP/day ceiling
-        assert 20_000 < total < 70_000, (char["id"], total)
+        assert 200_000 < total < 500_000, (char["id"], total)
 
 
 # --- signature spread attacks ---

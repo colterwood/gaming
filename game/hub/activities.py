@@ -47,14 +47,21 @@ def start_training(state, content, hero_id, attribute):
     battle-XP top-up any more — field XP lands on attributes when it is
     earned, not the next time someone uses the rack."""
     from game.progression import attributes as attrs
+    from game.progression import mastery
 
     character = content["characters"][hero_id]
     entry = state["roster"][hero_id]
+    capstone = attribute == mastery.ATTRIBUTE       # the rung above rank 10
     if entry.get("training"):
         return {"ok": False, "message": f"{character['name']} is already training."}
     if entry.get("dispatch"):
         return {"ok": False, "message": f"{character['name']} is away on assignment."}
-    if not attrs.can_train(character["boosts"], entry, attribute):
+    if capstone:
+        if not mastery.available(entry):
+            return {"ok": False,
+                    "message": (f"{character['name']} has to reach rank "
+                                f"{config.RANK_MAX} in all six first.")}
+    elif not attrs.can_train(character["boosts"], entry, attribute):
         return {"ok": False, "message": f"{attribute.title()} is already at max."}
     party = state.get("party", [])
     if hero_id not in party:                # M12: rack is party-only, even via
@@ -62,7 +69,9 @@ def start_training(state, content, hero_id, attribute):
                 "message": f"{character['name']} isn't on the team."}
     if len(party) <= 1:
         return {"ok": False, "message": "Someone has to stay on the team."}
-    level = attrs.rank(entry, attribute)
+    # The capstone is trained like a tenth rank: the hardest session there
+    # is, over and over, 51,200 XP deep.
+    level = config.RANK_MAX if capstone else attrs.rank(entry, attribute)
     en_cost, minutes = training_cost(level)
     # Strictly more EN than the cost: a session must not zero the trainee out
     # (they'd rejoin at 0 and instantly pass the team out).
@@ -99,16 +108,25 @@ def finish_training(state, content, hero_id, rejoin=True):
     lock = entry.pop("training", None)
     if not lock:
         return {"ok": False, "message": "They're not training."}
-    gain = attrs.add_training_xp(character["boosts"], entry,
-                                 lock["attribute"], lock["xp"])
     entry["idle_days"] = 0
-    message = (f"{character['name']} finishes training "
-               f"{lock['attribute'].title()}: +{lock['xp']} XP")
-    if gain["ranks_gained"]:
-        message += (f" - rank up! ({gain['rank']}/{config.RANK_MAX}, "
-                    f"combat {gain['effective_rank']:.1f})")
-    if mastery.update_mastery(character["boosts"], entry):
-        message += "  MASTERED - the card goes foil!"
+    if lock["attribute"] == mastery.ATTRIBUTE:
+        result = mastery.add_enlightenment_xp(entry, lock["xp"])
+        done, needed = mastery.progress(entry)
+        gain = {"ranks_gained": [], "enlightenment": result}
+        message = (f"{character['name']} sits with it: +{lock['xp']} toward "
+                   f"Enlightenment ({done}/{needed})")
+        if result["complete"]:
+            message += "  ENLIGHTENED."
+    else:
+        gain = attrs.add_training_xp(character["boosts"], entry,
+                                     lock["attribute"], lock["xp"])
+        message = (f"{character['name']} finishes training "
+                   f"{lock['attribute'].title()}: +{lock['xp']} XP")
+        if gain["ranks_gained"]:
+            message += (f" - rank up! ({gain['rank']}/{config.RANK_MAX}, "
+                        f"combat {gain['effective_rank']:.1f})")
+        if mastery.update_mastery(character["boosts"], entry):
+            message += "  All six at ten - Enlightenment opens at the rack!"
     party = state.setdefault("party", [])
     if rejoin and hero_id not in party and len(party) < config.PARTY_SIZE_MAX:
         party.append(hero_id)

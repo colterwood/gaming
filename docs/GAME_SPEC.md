@@ -261,30 +261,34 @@ being played and `App.SAVE_SLOT` follows it (M28).
   Cap keeps his Agility edge. Both constants are single-line tunables.
 - Enemies have no boosts — their `power_grid` IS the effective rank, and
   bosses may be written above the hero ladder up to `ENEMY_RANK_MAX` (20).
-- **Rank costs grow 1.5× per level** (M16, `XP_TO_NEXT_RANK`), keyed by the
-  level you are climbing FROM:
+- **Rank costs DOUBLE per level** (M33, `XP_TO_NEXT_RANK`), keyed by the
+  level you are climbing FROM — the published progression chart:
 
   | from level | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
   |---|---|---|---|---|---|---|---|---|---|
-  | XP | 100 | 150 | 225 | 340 | 510 | 760 | 1,140 | 1,710 | 2,560 |
+  | XP | 100 | 200 | 400 | 800 | 1,600 | 3,200 | 6,400 | 12,800 | 25,600 |
 
-- **Costs are boost-weighted** (M16b): the table above is multiplied by
-  `BOOST_XP_WEIGHT_BASE - BOOST_XP_WEIGHT_STEP × boost` (1.5 - 0.1 × boost),
-  so training with the grain is cheap and fighting your own nature is a
-  slog. Boost 5 is the neutral point; boost 7 pays 0.8× and boost 0 pays
-  1.5×. Atrophy refunds the same weighted amount when a rank decays.
+  M16 tried 1.5× growth; in play that made the back half of the ladder
+  cheap enough that ambush XP alone carried a team toward rank 5 before
+  Chapter 3, before gear started adding ranks on top.
 
-  | boost | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
-  |---|---|---|---|---|---|---|---|---|
-  | cost × | 1.50 | 1.40 | 1.30 | 1.20 | 1.10 | 1.00 | 0.90 | 0.80 |
-  | days for that attribute 1→10 | 30 | 27 | 26 | 24 | 23 | 21 | 18 | 17 |
+- **The cost is the same for everybody** (M33). M16b discounted it by the
+  hero's innate boost, which paid them twice for the same talent — once in
+  the combat math, again on the clock. A boost now buys exactly one thing:
+  the combat value in that category (§6.3 `effective_rank`).
 
-  Mastery (all six at rank 10) therefore costs ~46k–54k XP and lands at
-  **125–146 in-game days per hero**, character-shaped: Hulk masters
-  Strength in 17 days and Speed in 26, Iron Man the reverse. Because
-  benched heroes train in parallel (party caps at 4, the rest can all be
-  on the mats), a full roster masters in roughly the same calendar time as
-  one hero.
+- **Enlightenment** (`ENLIGHTENMENT_XP` 51,200) is the rung above rank 10 —
+  one more doubling. It **opens only when all six attributes are at
+  RANK_MAX**, appears as a seventh row on the rack, and is trained in
+  level-9 sessions. Once the six are full it is also where field XP goes,
+  since M21's split has nowhere else to put it. Finishing it sets
+  `enlightened`; `mastered` (all six at ten) keeps its name because the
+  card and binder read it for the foil treatment.
+
+  One attribute 1→10 is 51,100 XP, so a whole hero is ~307k plus the
+  capstone. At the training ceiling (0.5 XP per minute × 1,200 waking
+  minutes = 600 XP/day) that is a **long-campaign goal, not a checklist
+  item** — ranks 1–5 are the chapter-scale work, 6–10 is the long haul.
 - **A rack session yields and costs** by the level being trained (M16,
   `TRAINING_XP_BY_LEVEL` / `TRAINING_MINUTES_BY_LEVEL`; energy stays
   `15 + 5 × level`):

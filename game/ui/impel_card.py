@@ -351,8 +351,7 @@ class ImpelCardScene:
                 if not attrs.can_train(hero_boosts, entry, attribute):
                     parts.append(f"{attribute[:3].upper()} MAX")
                     continue
-                need = attrs.xp_for_rank(attrs.rank(entry, attribute),
-                                         hero_boosts.get(attribute, 0))
+                need = attrs.xp_for_rank(attrs.rank(entry, attribute))
                 parts.append(f"{attribute[:3].upper()} {got}/{need}")
             line = "XP:  " + "  ".join(parts)
             pixelkit.text(surface, line, 11, INK,

@@ -117,9 +117,8 @@ def test_you_can_get_up_early(med_bay):
     scene.handle_key(app, pygame.K_RETURN)          # stand up
     assert scene.mode == "normal"
     assert energy.team_energy(state) == 60          # keeps what it bought
-    frozen = state["time_minutes"]
-    scene.update(config.MEDBAY_REST_SECONDS_PER_TICK * 5, app)
-    assert state["time_minutes"] == frozen          # and the clock stops
+    tick(scene, app, 5)                             # ...and stops gaining
+    assert energy.team_energy(state) == 60
 
 
 def test_the_treatment_stops_itself_when_the_team_is_full(med_bay):
@@ -127,11 +126,20 @@ def test_the_treatment_stops_itself_when_the_team_is_full(med_bay):
     state = app.game_state
     put_player_at(scene, 5, 3)
     scene.handle_key(app, pygame.K_RETURN)
-    tick(scene, app, 20)                            # far more than needed
+    tick(scene, app, 6)                             # 40 -> 100 is six ticks
     assert scene.mode == "normal"
     assert energy.team_energy(state) == config.DAILY_ENERGY
-    # 40 -> 100 is six ticks; the clock must not have run past that.
     assert state["time_minutes"] == config.DAY_START_MINUTES + 60
+
+
+def test_the_chair_runs_at_the_same_speed_as_the_world(med_bay):
+    """M33: no fast-forward. An hour in the chair is an hour."""
+    scene, app = med_bay
+    state = app.game_state
+    put_player_at(scene, 5, 3)
+    scene.handle_key(app, pygame.K_RETURN)
+    scene.update(config.TICK_REAL_SECONDS, app)
+    assert state["time_minutes"] == config.DAY_START_MINUTES + config.TICK_GAME_MINUTES
 
 
 def test_a_full_team_is_turned_away(med_bay):
