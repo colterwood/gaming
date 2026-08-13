@@ -199,12 +199,12 @@ being played and `App.SAVE_SLOT` follows it (M28).
 | Training session | trainee EN 15+5/level; a LOCKOUT of TRAINING_MINUTES_BY_LEVEL (level 1 = 50 min, level 9 = 2,400) measured in WAKING minutes, so high-level sessions span days — see §6.3 |
 | Battle (ambush/trap, won) | +1 h clock (M12 BATTLE_MINUTES) |
 | Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
-| Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
-| Craft action | 15 energy, +60 min |
+| Combat mission | 40 energy, **no clock** (M37c); never refused for low EN (M11) nor by the hour (M36) |
+| Craft action | 15 energy, **0 min** (M37c) |
 | Scout point (M13, replaces hub small tasks) | **0 energy** (M36), **0 min** (M37b) |
 | Search a side-arc site (M17) | 5 energy, **0 min** (M37b) |
-| Talk / gift | 0 energy, +20 min |
-| Eat a ration (M10; M18) | 0 energy, +10 min; restores the item's `energy` EN to EVERY active party member, each capped at 100 |
+| Talk / gift | 0 energy, **0 min** (M37c) |
+| Eat a ration (M10; M18) | 0 energy, **0 min** (M37c); restores the item's `energy` EN to EVERY active party member, each capped at that hero's own ceiling |
 | Search a zone crate (M10) | 0 energy, **0 min** (M37b); daily-respawning loot, trap risk scales with danger |
 | Pass out (0 energy or 2 AM) | next day starts at 80 energy — **full energy if it happened inside the tower** (M36). Either way: 80% HP, and 10% of the purse capped at 5,000 |
 | Training session, at the door (M36) | `TRAINING_CREDITS_BY_LEVEL` — a credit per XP the basic rack pays |
@@ -1413,6 +1413,17 @@ a hole in it and hit one body.*
   says his piece; from then on interacting with him opens the fabricator
   (`HubScene.OPERATORS`). Same for Hank Pym and the autodocs. Room hours and
   the repair gate still apply — he refuses after six like the bench does.
+- **M37c — outside battle, the clock only moves with real time.** Engaging a
+  mission, talking, gifting, eating and hauling a part joined searching at
+  zero. What spends the day now: **playing it** (the cosmetic tick,
+  `TICK_GAME_MINUTES` per `TICK_REAL_SECONDS`), **the Quinjet** (30 min a
+  hop — crossing the city is a journey, and the one move that should
+  visibly cost daylight), and **the Med Bay chair**, whose entire price was
+  always hours. Battle keeps its own costs (`BATTLE_MINUTES`,
+  `DEFEAT_RECOVERY_MINUTES`). What gates everything else is ENERGY.
+  Consequence to watch: a training lockout is measured in waking minutes, so
+  with fewer things advancing the clock a session now passes largely in real
+  time — ~70 real seconds for a level-1 session, or one Quinjet round trip.
 *AC: train Stamina to 10 and see 230 in the morning; turn over a couch and
 watch the clock hold still; read the docks as the rougher of the two early
 zones on the badge AND in play; talk to Jarvis twice at the Tech Lab and end

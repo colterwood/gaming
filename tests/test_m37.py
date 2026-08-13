@@ -364,3 +364,54 @@ def party_state_for_scout(content):
         state["roster"][hero_id] = entry()
     state["party"] = ["iron_man", "captain_america"]
     return state
+
+
+# --- M37c: outside battle, only real time and the Quinjet -----------------
+
+def test_nothing_outside_battle_jumps_the_clock_except_the_quinjet():
+    zeroed = {
+        "MISSION_MINUTES": config.MISSION_MINUTES,
+        "TALK_GIFT_MINUTES": config.TALK_GIFT_MINUTES,
+        "EAT_MINUTES": config.EAT_MINUTES,
+        "REPAIR_PART_MINUTES": config.REPAIR_PART_MINUTES,
+        "CRAFT_MINUTES": config.CRAFT_MINUTES,
+        "SEARCH_MINUTES": config.SEARCH_MINUTES,
+        "MINE_MINUTES": config.MINE_MINUTES,
+        "SCOUT_MINUTES": config.SCOUT_MINUTES,
+        "UNLOCK_SEARCH_MINUTES": config.UNLOCK_SEARCH_MINUTES,
+        "FURNITURE_SEARCH_MINUTES": config.FURNITURE_SEARCH_MINUTES,
+    }
+    assert all(v == 0 for v in zeroed.values()), \
+        {k: v for k, v in zeroed.items() if v}
+    # the two deliberate exceptions
+    assert config.TRAVEL_MINUTES == 30, "crossing the city is a journey"
+    assert config.MEDBAY_TICK_MINUTES > 0, "the chair's whole price is hours"
+    # ...and battle keeps its costs
+    assert config.BATTLE_MINUTES > 0 and config.DEFEAT_RECOVERY_MINUTES > 0
+
+
+def test_engaging_a_mission_costs_energy_but_not_the_day(content):
+    state = save.new_game_state()
+    for hero_id in ("iron_man", "captain_america"):
+        state["roster"][hero_id] = entry()
+    state["party"] = ["iron_man", "captain_america"]
+    before = state["time_minutes"]
+
+    result = activities.launch_mission(state)
+
+    assert result["launch_battle"]
+    assert state["time_minutes"] == before
+    assert energy.team_energy(state) == 100 - config.MISSION_ENERGY
+
+
+def test_the_quinjet_still_costs_half_an_hour(content):
+    from tests.test_tower_scene import choose
+
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    before = state["time_minutes"]
+    scene.floor = "ops"
+    scene._open_room_station(app, "quinjet")
+    choose(scene, app, "Hudson Docks")
+    assert scene.area == "docks"
+    assert state["time_minutes"] == before + config.TRAVEL_MINUTES

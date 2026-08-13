@@ -114,11 +114,18 @@ MEDBAY_HP_PCT_PER_TICK = 0.10       # the chair mends HP at the same rate as EN
 # — a high-level session legitimately spans more than one day.
 TRAINING_ENERGY_BASE = 15
 TRAINING_ENERGY_PER_RANK = 5
+# M37c: OUTSIDE BATTLE, THE CLOCK ONLY MOVES WITH REAL TIME — plus the one
+# deliberate exception below. Engaging, talking, gifting, eating, hauling a
+# part: all of these lurched the world clock for a single keypress. The day
+# is spent by playing it (the cosmetic tick at TICK_GAME_MINUTES per
+# TICK_REAL_SECONDS), by flying somewhere, and by sitting in the Med Bay
+# chair, which is the one room whose whole price IS hours. What still gates
+# these actions is ENERGY.
 MISSION_ENERGY = 40
-MISSION_MINUTES = 180
+MISSION_MINUTES = 0
 CRAFT_ENERGY = 15
-CRAFT_MINUTES = 60
-TALK_GIFT_MINUTES = 20              # talking/gifting costs time, no energy
+CRAFT_MINUTES = 0
+TALK_GIFT_MINUTES = 0               # talking/gifting costs neither now
 
 # Walkable-map grid (tower floors and zones share it; §9 M8)
 MAP_TILES_W = 40
@@ -194,6 +201,8 @@ ATROPHY_GRACE_DAYS = 2              # same-spot days before decay starts
 ATROPHY_XP_PER_DAY = 20             # XP drained per unworked attribute
 
 MISSION_FAIL_COOLDOWN_DAYS = 2
+# THE EXCEPTION (M37c): crossing the city is a journey, not a keypress, and
+# it is the one move the player makes that should visibly cost them daylight.
 TRAVEL_MINUTES = 30                 # Quinjet hop tower <-> zone
 
 # --- Bag capacity (M18) ---
@@ -211,7 +220,7 @@ INVENTORY_STACK_MAX = 99
 # to be spent on decisions (where to fly, who to send, how long to sit in
 # the chair), not on rummaging. What still prices these is ENERGY, where it
 # applies: a swing at rock is 8 EN, a search is free.
-EAT_MINUTES = 10                    # eating a ration advances the clock
+EAT_MINUTES = 0                     # M37c: a keypress, not a sit-down meal
 SEARCH_MINUTES = 0                  # rummaging a crate/dumpster
 SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
 
@@ -237,7 +246,7 @@ UNLOCK_SEARCH_MINUTES = 0
 # So a job's whole price is 5 EN x however many heavy pieces it has:
 # elevator 0, Quinjet 15, training floor 5, and the three rooms 0.
 REPAIR_PART_ENERGY = 5
-REPAIR_PART_MINUTES = 20
+REPAIR_PART_MINUTES = 0             # M37c: the 5 EN on a heavy part is the price
 FURNITURE_SEARCH_MINUTES = 0
 # M36: furniture, planters and street trees are searchable at ALL times,
 # not only while a repair hunt is on. Almost all of it is empty — that is

@@ -180,11 +180,19 @@ def test_a_collapse_costs_a_tenth_of_the_purse_capped(purse, lost):
 # --- note 17: the clock never cancels a fight ----------------------------
 
 def test_a_mission_engaged_at_two_in_the_morning_still_happens(content):
+    """The clock never cancels a fight. M37c went further and made engaging
+    cost no clock at all, so even a mission taken with the day already spent
+    goes ahead — the reckoning is afterwards, in the hub."""
     state = party_state(content)
     state["time_minutes"] = config.DAY_END_MINUTES - 5
     result = activities.launch_mission(state)
     assert result["launch_battle"] and not result.get("passed_out")
-    assert activities.should_pass_out(state)        # the reckoning comes after
+    assert state["time_minutes"] == config.DAY_END_MINUTES - 5   # untouched
+
+    state["time_minutes"] = config.DAY_END_MINUTES
+    assert activities.should_pass_out(state)
+    result = activities.launch_mission(state)
+    assert result["launch_battle"], "the clock must never refuse the fight"
 
 
 # --- note 39: the Unibeam reaches exactly one panel either way -----------

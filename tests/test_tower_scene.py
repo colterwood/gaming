@@ -545,9 +545,12 @@ def test_gift_menu_lists_consumables(content):
 
 
 def test_talk_at_2am_sleeps_without_dialogue_box(content):
+    """An action that ends the day must not leave an orphaned dialogue box
+    on top of the new morning. M37c: talking no longer costs the clock, so
+    the day has to be spent already for this to arise."""
     scene, app = scene_with_app(content)
     state = app.game_state
-    state["time_minutes"] = config.DAY_END_MINUTES - 15     # 1:45 AM
+    state["time_minutes"] = config.DAY_END_MINUTES          # the day is gone
     put_player_at(scene, 4, 7)                              # Jarvis
     scene.handle_key(app, pygame.K_RETURN)
     choose(scene, app, "Talk")
