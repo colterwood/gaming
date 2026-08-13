@@ -253,11 +253,6 @@ def room_hours_label(floor):
     return clock.format_time(opens), clock.format_time(closes)
 
 
-def mastery_attribute():
-    from game.progression import mastery
-    return mastery.ATTRIBUTE
-
-
 def attrs_rank_for_training(content, state, hero_id):
     """The cheapest level this hero could train right now — what the rack
     row quotes as "from N cr", since the real price depends on which of the
@@ -771,12 +766,13 @@ class HubScene:
             app.go_to_sleep(passed_out=True)
 
     def _move(self, dt, app):
-        # M36: with the whole team on the mats there is nobody to walk as -
-        # _draw_entities already draws nothing at (px, py). Freezing here
-        # also closes the ambush roll, which would otherwise fire on an
-        # invisible party of zero.
-        if not self._party(app.game_state):
-            return
+        # M36 (round 2): movement is NEVER frozen. The first cut stopped the
+        # player walking while the team was empty, which turned watching your
+        # last hero train into a cage: the session ended, nobody was left to
+        # walk over and collect them with, and 2 AM arrived. You can always
+        # walk — off a floor that is closing, to the lift, to bed. There is
+        # nothing to guard against here anyway: field.roll_ambush returns
+        # None at party size 0 and _spring_squad refuses an empty squad.
         keys = pygame.key.get_pressed()
         dx = (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * 90 * dt
         dy = (keys[pygame.K_DOWN] - keys[pygame.K_UP]) * 90 * dt
@@ -875,8 +871,24 @@ class HubScene:
     # ----------------------------------------------------- generic submenus
 
     def _open_submenu(self, title, items):
-        self.submenu = {"title": title, "items": items, "index": 0}
+        # M36: start on the first thing that can actually be chosen. Menus
+        # here often open with a disabled label row — a job name, a question,
+        # a status line — and the cursor landed on it, so the player's first
+        # Enter did nothing at all and they had to work out that Down was
+        # required. Arrow keys skip those rows too, below.
+        self.submenu = {"title": title, "items": items,
+                        "index": self._first_enabled(items)}
         self.mode = "submenu"
+
+    @staticmethod
+    def _first_enabled(items, start=0, step=1):
+        """Index of the next selectable row from `start`, or `start` if the
+        menu is nothing but labels."""
+        for offset in range(len(items)):
+            index = (start + offset * step) % len(items)
+            if not items[index][1]:
+                return index
+        return start
 
     def _submenu_key(self, app, key):
         menu = self.submenu
@@ -885,9 +897,11 @@ class HubScene:
             self.reset_modes()
             return
         if key == pygame.K_UP:
-            menu["index"] = (menu["index"] - 1) % len(items)
+            menu["index"] = self._first_enabled(
+                items, (menu["index"] - 1) % len(items), -1)
         elif key == pygame.K_DOWN:
-            menu["index"] = (menu["index"] + 1) % len(items)
+            menu["index"] = self._first_enabled(
+                items, (menu["index"] + 1) % len(items), 1)
         elif key == pygame.K_RETURN:
             label, disabled, callback = items[menu["index"]]
             if disabled:
@@ -2346,39 +2360,53 @@ class HubScene:
         elif key == pygame.K_DOWN:
             self.submenu_index = (self.submenu_index + 1) % len(rows)
         elif key == pygame.K_RETURN:
-            attribute = rows[self.submenu_index % len(rows)]
-            hero_id = self.train_hero_id
-            result = activities.start_training(state, self.content, hero_id,
-                                               attribute, solo_ok=self.solo_ok)
-            if result.get("needs_solo_confirm"):
-                # M36: emptying the team is a decision, not an error. Ask.
-                self._open_solo_prompt(app, hero_id, attribute)
-                return
-            self.log(result["message"])
-            if result["ok"]:
-                if not self._party(state):
-                    name = self.content["characters"][hero_id]["name"]
-                    self.log(f"Watching {name} workout, hey? Creepy!")
-                self.solo_ok = False
-                self.reset_modes()      # they're off the team, on the mats
+            self._start_session(app, rows[self.submenu_index % len(rows)])
+
+    def _start_session(self, app, attribute):
+        """Put the chosen hero on the mats — the ONE place a session starts.
+
+        Every path lands here with the attribute already decided: straight
+        off the rack list, or back from the "nobody left on the team"
+        question. Confirming used to bounce the player onto the attribute
+        list a second time to re-pick what they had already picked."""
+        state = app.game_state
+        hero_id = self.train_hero_id
+        result = activities.start_training(state, self.content, hero_id,
+                                           attribute, solo_ok=self.solo_ok)
+        if result.get("needs_solo_confirm"):
+            # Emptying the team is a decision, not an error. Ask once.
+            self._open_solo_prompt(app, hero_id, attribute)
+            return
+        self.log(result["message"])
+        if result["ok"]:
+            if not self._party(state):
+                name = self.content["characters"][hero_id]["name"]
+                self.log(f"Watching {name} workout, hey? Creepy!")
+            self.solo_ok = False
+            self.reset_modes()          # they're off the team, on the mats
 
     # ------------------------------------------- training with nobody left
 
     def _open_solo_prompt(self, app, hero_id, attribute):
-        """Nobody would be left standing. Offer a benched hero the lead
-        first, because that is almost always what the player meant."""
+        """Nobody would be left standing. Ask once, plainly.
+
+        The first cut asked twice and phrased the confirm as "No - I'll just
+        watch", which reads as declining the thing it actually agrees to.
+        One question, and the answers answer it."""
         state = app.game_state
         name = self.content["characters"][hero_id]["name"]
-        items = [(f"{name} is the only one on the team.", True, None)]
+        items = [(f"{name} is the only one left on the team, do you want to "
+                  f"continue?", True, None)]
         for other in self._benched_candidates(state):
             other_name = self.content["characters"][other]["name"]
-            items.append((f"Put {other_name} on point", False,
+            items.append((f"Put {other_name} on point instead", False,
                           (lambda a, o=other, at=attribute:
                            self._promote_and_train(a, o, at))))
-        items.append(("No - I'll just watch", False,
-                      (lambda a, at=attribute: self._confirm_watch(a, at))))
-        items.append(("Never mind", False, None))
-        self._open_submenu("Nobody left on the team", items)
+        items.append(("Ya - I'll just watch", False,
+                      (lambda a, at=attribute:
+                       self._begin_solo_training(a, at))))
+        items.append(("No!", False, None))
+        self._open_submenu("Training", items)
 
     def _benched_candidates(self, state):
         """Roster heroes who could take the lead: off the team, not away,
@@ -2398,28 +2426,13 @@ class HubScene:
             return
         app.game_state["roster"][other_id].pop("done_training", None)
         energy.sync(app.game_state)
-        self._resume_training(attribute)
-
-    def _confirm_watch(self, app, attribute):
-        name = self.content["characters"][self.train_hero_id]["name"]
-        self._open_submenu(
-            "Nobody left on the team",
-            [(f"Nobody will be on the team while {name} trains.", True, None),
-             ("No, forget it", False, None),
-             ("Yes - I'll watch", False,
-              (lambda a, at=attribute: self._begin_solo_training(a, at)))])
+        # The team is no longer down to one, so this now goes straight
+        # through — with the attribute the player already chose.
+        self._start_session(app, attribute)
 
     def _begin_solo_training(self, app, attribute):
         self.solo_ok = True
-        self._resume_training(attribute)
-
-    def _resume_training(self, attribute):
-        """Drop back onto the attribute list with the choice remembered, so
-        the player doesn't have to re-pick what they already picked."""
-        rows = list(config.ATTRIBUTES) + [mastery_attribute()]
-        self.submenu = None
-        self.submenu_index = rows.index(attribute) if attribute in rows else 0
-        self.mode = "train_attr"
+        self._start_session(app, attribute)
 
     def _perk_choice_key(self, app, key):
         from game.progression import attributes as attrs
@@ -2566,6 +2579,11 @@ class HubScene:
         # arc is a hunt; the second trip is part of it.
         party = self._party(state)
         bob = int(self.walk_bob) % 2
+        if not party:
+            # M36: nobody on the team — the whole roster is on the mats or
+            # away. You still walk (see _move), so there has to be something
+            # on screen doing the walking.
+            entities.append(("player", self.px, self.py, self.facing_left, bob))
         for i, hero_id in enumerate(party):
             if i == 0:
                 entities.append((hero_id, self.px, self.py, self.facing_left, bob))

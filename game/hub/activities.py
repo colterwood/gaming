@@ -82,27 +82,31 @@ def start_training(state, content, hero_id, attribute, solo_ok=False):
     if hero_id not in party:                # M12: rack is party-only, even via
         return {"ok": False,                # the perk-chooser fall-through
                 "message": f"{character['name']} isn't on the team."}
-    if len(party) <= 1 and not solo_ok:
-        # M36: this is no longer a refusal, it's a question. The caller asks
-        # whether to promote a benched hero to leader or to just stand there
-        # and watch, then calls back with solo_ok=True.
-        return {"ok": False, "needs_solo_confirm": True,
-                "message": "That would leave nobody on the team."}
     # The capstone is trained like a tenth rank: the hardest session there
     # is, over and over, 51,200 XP deep.
     level = config.RANK_MAX if capstone else attrs.rank(entry, attribute)
     en_cost, minutes = training_cost(level)
-    # Strictly more EN than the cost: a session must not zero the trainee out
-    # (they'd rejoin at 0 and instantly pass the team out).
+    # EVERY reason this session simply cannot happen is checked BEFORE the
+    # solo question below. Asking "this will leave nobody on the team, are
+    # you sure?" and only then saying "you can't afford it anyway" wastes
+    # the player's decision on a session that was never going to start.
+    #
+    # Strictly more EN than the cost: a session must not zero the trainee
+    # out (they'd rejoin at 0 and instantly pass the team out).
     if energy.hero_energy(state, hero_id) <= en_cost:
         return {"ok": False, "message": f"{character['name']} is too exhausted."}
-    # M36: the rack bills at the door. Checked before anything is spent, the
-    # same discipline as buy_item.
+    # M36: the rack bills at the door, checked before anything is spent —
+    # the same discipline as buy_item.
     price = training_credits(level)
     if state.get("credits", 0) < price:
         return {"ok": False,
                 "message": (f"The rack wants {price} cr - you have "
                             f"{state.get('credits', 0)}.")}
+    if len(party) <= 1 and not solo_ok:
+        # Not a refusal — a question. The caller offers to promote a benched
+        # hero, or to just stand and watch, then calls back with solo_ok.
+        return {"ok": False, "needs_solo_confirm": True,
+                "message": "That would leave nobody on the team."}
     state["credits"] = state.get("credits", 0) - price
     energy.spend_hero(state, hero_id, en_cost)
     xp = attrs.session_xp(state, content["calendar"], level)
@@ -162,12 +166,20 @@ def finish_training(state, content, hero_id, rejoin=False):
         if mastery.update_mastery(character["boosts"], entry):
             message += "  All six at ten - Enlightenment opens at the rack!"
     party = state.setdefault("party", [])
-    if rejoin and hero_id not in party and len(party) < config.PARTY_SIZE_MAX:
+    # M36: "collect them in person" is a good rule when you HAVE a team. With
+    # nobody left it is a cage — the player watched their last hero train,
+    # the session ended, and there was no one to walk over and fetch them
+    # with. An empty team always gets its hero straight back.
+    alone = not party
+    if (rejoin or alone) and hero_id not in party \
+            and len(party) < config.PARTY_SIZE_MAX:
         party.append(hero_id)
-        message += "  Back on the team."
+        entry.pop("done_training", None)
+        message += ("  Back on their feet - and back on the team." if alone
+                    else "  Back on the team.")
     elif hero_id not in party:
-        # M36: they are standing on the training floor until fetched. The
-        # flag is what puts "Put them back on the team" on the rack menu.
+        # They are standing on the training floor until fetched. The flag is
+        # what puts "Put them back on the team" on the rack menu.
         entry["done_training"] = True
         message += "  Waiting at the mats."
     energy.sync(state)

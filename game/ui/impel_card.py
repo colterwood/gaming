@@ -251,6 +251,26 @@ class ImpelCardScene:
             pixelkit.text(surface, "v", 11, GREY,
                           bottomright=(panel.right - 6, panel.bottom - 1))
 
+    def _board_rows(self, state, tier):
+        """What is posted downstairs today — gated on having read it (M20)."""
+        rows = []
+        today = activities.assignment_tasks_today(
+            state, self.content["assignments"], tier)
+        for task in today:
+            job = dispatch.find(state, task["id"])
+            mark = "[>]" if job else "[ ]"
+            crew = (f"{task['heroes']}H/{task['days']}D" if job is None
+                    else f"back {job['days_left']}d")
+            pay = f"{task['credits']}cr"            # M23: XP was invisible
+            if task.get("xp"):
+                pay += f"/{task['xp']}xp"
+            if task.get("bond") and task.get("requested_by"):
+                pay += f"/{task['bond']}bond"
+            rows.append((f"{mark} {task['name']} -{pay} {crew}", bool(job)))
+        if not rows:
+            rows.append(("(nothing posted today)", True))
+        return rows
+
     def _progress_rows(self, state):
         """Everything the player has going, with how far along it is (M36).
 
@@ -292,12 +312,21 @@ class ImpelCardScene:
             lock = entry.get("training")
             if lock:
                 left = act.training_remaining(state, lock)
-                rows.append((f"[~] {name} training "
-                             f"{lock['attribute'].title()} - "
+                rows.append((f"[~] {name}: training "
+                             f"{lock['attribute'].title()}, "
                              f"{clock_mod.format_duration(left)} to go", False))
             elif entry.get("done_training"):
-                rows.append((f"[!] {name} is done on the mats - collect them",
-                             False))
+                rows.append((f"[!] {name}: done on the mats - collect them "
+                             f"at the rack", False))
+
+        # Away on a board job: who, where, and how many nights left.
+        for job in dispatch.active(state):
+            who = ", ".join(self.content["characters"][h]["name"]
+                            for h in job["heroes"])
+            where = self._area_label((job.get("spot") or [None])[0])
+            left = job["days_left"]
+            when = "back tonight" if left <= 1 else f"back in {left}d"
+            rows.append((f"[~] {who}: {job['name']} ({where}), {when}", False))
 
         for job in gear_mod.queue(state):
             item = self.content["items"].get(job["item"], {})
@@ -312,26 +341,18 @@ class ImpelCardScene:
         zone = self.content["zones"].get(area) if area else None
         return zone["name"] if zone else "the tower"
 
-    def _draw_quest_column(self, surface, panel, state, half, pad):
-        """The Tasks tab's right-hand quest list — drawn whether or not
-        today's board has been read (M20)."""
-        qx = panel.x + half + pad
-        btext(surface, "Quests", 12, INK, topleft=(qx, panel.y + 5))
-        quest_w = (half - 2 * pad) // 2 - 4
-        quests = sorted(state.get("quests", {}).items())
-        if not quests:
-            pixelkit.text(surface, "(no active quests)", 11, GREY,
-                          topleft=(qx, panel.y + 18))
-            return
-        col_w = (half - 2 * pad) // 2
-        for i, (qid, quest) in enumerate(quests[:8]):
-            col, row = divmod(i, 4)
+    def _quest_rows(self, state):
+        """The story chain, oldest first — [x] behind you, [>] in front.
+
+        M36: these used to be a separate right-hand column on the Tasks tab.
+        Folded into the one list so the whole panel width is available to
+        whatever the player actually has running."""
+        rows = []
+        for quest_id, quest in sorted(state.get("quests", {}).items()):
             done = quest.get("status") == "done"
             mark = "[x]" if done else "[>]"
-            pixelkit.text(
-                surface, self._fit(f"{mark} {quest.get('name', qid)}", quest_w, 10),
-                10, GREY if done else INK,
-                topleft=(qx + col * col_w, panel.y + 18 + row * 12))
+            rows.append((f"{mark} {quest.get('name', quest_id)}", done))
+        return rows or [("(no quests yet)", True)]
 
     # --- lower panel per tab ---
 
@@ -450,66 +471,48 @@ class ImpelCardScene:
                               topleft=(panel.x + pad, top))
             self._scroll_arrows(surface, panel, more_above, more_below)
         elif tab == "Tasks":
-            half = panel.width // 2
-            board_w = half - pad - 4
+            # M36: the lower panel is 596x66 — four rows at a readable pitch.
+            # The old layout spent half that width on a sparse quest column
+            # and gated the other half behind "go and read the board", which
+            # is how the progress lines ended up invisible. One list now,
+            # two columns across the FULL width (eight rows on screen), in
+            # priority order: what is running, what is posted, where the
+            # campaign is.
             tier = dispatch.roster_tier(self.content, state)
-            btext(surface, "Board (today)", 12, INK,
+            btext(surface, "In hand", 12, INK,
                   topleft=(panel.x + pad, panel.y + 5))
             row_h = 11
             list_top = panel.y + 18
+            col_w = (panel.width - 2 * pad) // 2
+            text_w = col_w - 6
+
+            rows = self._progress_rows(state)
+            if not rows:
+                rows.append(("(nothing on the go)", True))
+            rows.append(("-- Board today --", True))
             if not activities.board_checked_today(state):
-                # M20: the card is a notebook, not a wire. Postings only get
-                # written down once someone has actually read the board.
-                pixelkit.text(surface, "Check the board by Coulson!", 12, RED,
-                              topleft=(panel.x + pad, list_top))
-                self._draw_quest_column(surface, panel, state, half, pad)
-                surface.set_clip(None)
-                return
-            today = activities.assignment_tasks_today(
-                state, self.content["assignments"], tier)
-            today_ids = {t["id"] for t in today}
-            rows = []
-            for task in today:
-                job = dispatch.find(state, task["id"])
-                mark = "[>]" if job else "[ ]"
-                heroes, days = task["heroes"], task["days"]
-                crew = (f"{heroes}H/{days}D" if job is None else
-                        f"back {job['days_left']}d")
-                pay = f"{task['credits']}cr"        # M23: XP was invisible
-                if task.get("xp"):
-                    pay += f"/{task['xp']}xp"
-                if task.get("bond") and task.get("requested_by"):
-                    pay += f"/{task['bond']}bond"
-                rows.append((f"{mark} {task['name']} -{pay} {crew}", bool(job)))
-            for job in dispatch.active(state):
-                if job["task_id"] in today_ids:
-                    continue         # already shown above
-                names = ", ".join(self.content["characters"][h]["name"]
-                                  for h in job["heroes"])
-                rows.append((f"[>] {job['name']}: {names} -{job['days_left']}d",
-                            True))
-            rows += self._progress_rows(state)
-            visible = max(1, (panel.bottom - list_top) // row_h)
+                rows.append(("Check the board by Coulson!", False))
+            else:
+                rows += self._board_rows(state, tier)
+            rows.append(("-- Campaign --", True))
+            rows += self._quest_rows(state)
+
+            per_col = max(1, (panel.bottom - list_top) // row_h)
+            visible = per_col * 2
             first, more_above, more_below = self._scroll_window(
                 "Tasks", len(rows), visible)
-            y = list_top
-            for line, done in rows[first:first + visible]:
-                pixelkit.text(surface, self._fit(line, board_w),
+            for i, (line, done) in enumerate(rows[first:first + visible]):
+                if not line:
+                    continue
+                col, row = divmod(i, per_col)
+                pixelkit.text(surface, self._fit(line, text_w),
                               10, GREY if done else INK,
-                              topleft=(panel.x + pad, y))
-                y += row_h
-            if not rows:
-                pixelkit.text(surface, "(nothing on the board)", 11, GREY,
-                              topleft=(panel.x + pad, list_top))
-            board_panel = pygame.Rect(panel.x, list_top, half, panel.bottom - list_top)
-            self._scroll_arrows(surface, board_panel, more_above, more_below)
-
-            self._draw_quest_column(surface, panel, state, half, pad)
+                              topleft=(panel.x + pad + col * col_w,
+                                       list_top + row * row_h))
+            self._scroll_arrows(surface, panel, more_above, more_below)
         elif tab == "Map":
             btext(surface, "WORLD MAP - coming in a later issue", 15, GREY,
                   center=panel.center)
-        # (progress rows for everything in flight are built by
-        #  _progress_rows and appended to the Tasks list above)
         elif tab == "Options":
             btext(surface, f"The day autosaves when you sleep - "
                            f"slot {app.SAVE_SLOT}", 14, INK,

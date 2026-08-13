@@ -17,7 +17,7 @@ from game.combat.engine import BattleEngine
 from game.combat.entities import Combatant, make_enemy_group
 from game.core import calendar as cal
 from game.core import health, save
-from game.hub import activities, field, repairs, story, tower
+from game.hub import activities, dispatch, field, repairs, story, tower
 
 from tests.test_tower_scene import FakeApp, put_player_at
 
@@ -378,13 +378,79 @@ def test_training_the_last_hero_asks_and_then_allows(content):
     assert not activities.should_pass_out(state)
 
 
-def test_an_empty_team_freezes_the_walker_instead_of_collapsing(content):
+def test_an_empty_team_is_not_a_collapse_and_is_not_a_cage(content):
+    """The first cut froze movement with nobody on the team. Watching your
+    last hero train then became a trap: the session ended, there was no one
+    left to walk over and collect them with, and 2 AM arrived. You can always
+    walk — off a floor that is closing, to the lift, to bed."""
+    import collections
+    import unittest.mock as mock
+
     scene, app = tower.HubScene(content), FakeApp(content)
     app.game_state["party"] = []
-    before = (scene.px, scene.py)
-    scene._move(0.016, app)
-    assert (scene.px, scene.py) == before
     assert not activities.should_pass_out(app.game_state)
+
+    keys = collections.defaultdict(bool)
+    keys[pygame.K_RIGHT] = True
+    before = (scene.px, scene.py)
+    with mock.patch.object(pygame.key, "get_pressed", lambda: keys):
+        scene._move(0.5, app)
+    assert (scene.px, scene.py) != before, "the player must still be able to walk"
+
+
+def test_the_last_hero_comes_off_the_mats_by_themselves(content):
+    """With a team you collect a finished trainee in person. With NO team
+    there is nobody to collect them with, so they come back on their own —
+    otherwise the player never gets control of anything again."""
+    state = party_state(content)
+    state["party"] = ["captain_america"]
+    assert activities.start_training(state, content, "captain_america",
+                                     "strength", solo_ok=True)["ok"]
+    assert state["party"] == []
+
+    state["time_minutes"] += 50 * config.TRAINING_LOCKOUT_MULT
+    messages = activities.finish_due_training(state, content)
+
+    assert state["party"] == ["captain_america"]
+    assert "done_training" not in state["roster"]["captain_america"]
+    assert any("back on the team" in m.lower() for m in messages), messages
+
+
+def test_a_closing_floor_never_traps_the_hero_on_it(content):
+    """The training floor locks at 11 PM. A session that ends after that
+    must still hand the player back their hero, and the player must be able
+    to walk off the floor they are standing on."""
+    import collections
+    import unittest.mock as mock
+
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["credits"] = 5000
+    state["party"] = ["iron_man"]
+    scene.floor = "training"
+    state["time_minutes"] = 22 * 60 + 30
+    activities.start_training(state, content, "iron_man", "strength",
+                              solo_ok=True)
+
+    state["time_minutes"] = 23 * 60 + 30            # the mats close
+    assert not tower.room_open(state, "training")
+    assert scene.floor_locked(state, "training")[0]  # can't come back IN...
+    keys = collections.defaultdict(bool)
+    keys[pygame.K_RIGHT] = True
+    before = (scene.px, scene.py)
+    with mock.patch.object(pygame.key, "get_pressed", lambda: keys):
+        scene._move(0.5, app)
+    assert (scene.px, scene.py) != before            # ...but can walk OUT
+
+    scene._move = lambda dt, a: None
+    for _ in range(40):                              # watch it out
+        state["time_minutes"] += 10
+        if state["time_minutes"] >= config.DAY_END_MINUTES:
+            break
+        scene.update(0.0, app)
+        if state["party"]:
+            break
+    assert state["party"] == ["iron_man"], "control never came back"
 
 
 # --- note 14: perk tiers are the rank on the card ------------------------
@@ -619,6 +685,142 @@ def test_the_lockout_multiplier_does_what_the_comment_says():
     base6 = config.TRAINING_MINUTES_BY_LEVEL[6]
     assert (min(by_energy(6), day // base6)
             > min(by_energy(6), day // (base6 * config.TRAINING_LOCKOUT_MULT)))
+
+
+# --- playtest round 2: the Tasks tab and the training prompt -------------
+
+def test_the_tasks_tab_shows_progress_without_reading_the_board(content):
+    """The tab early-returned when today's board was unread, so every
+    progress line sat behind a trip to a corkboard downstairs. The M20 rule
+    is about POSTINGS; how long Cap has left on the mats is your own."""
+    from game.ui.impel_card import ImpelCardScene
+
+    state = party_state(content)
+    state["story_flags"]["board_unlocked"] = True
+    state["repairs"] = {}
+    repairs.accept(content, state, repairs.job_by_id(content, "repair_med_bay"))
+    activities.start_training(state, content, "captain_america", "strength")
+    state["upgrades"] = [{"item": "kevlar_weave", "level": 2, "days_left": 2}]
+
+    assert not activities.board_checked_today(state)
+    rows = [r[0] for r in ImpelCardScene(content)._progress_rows(state)]
+
+    assert any("Open the Med Bay" in r and "parts" in r for r in rows)
+    assert any("training Strength" in r and "to go" in r for r in rows)
+    assert any("Pym bench" in r and "left" in r for r in rows)
+
+
+def test_the_tasks_tab_shows_time_left_on_an_assignment(content):
+    from game.ui.impel_card import ImpelCardScene
+
+    state = party_state(content)
+    for hero_id in ("ant_man", "thor"):
+        state["roster"][hero_id] = {"trained_ranks": {}, "attribute_xp": {},
+                                    "perks": [], "perk_choices": {}, "gear": {},
+                                    "ult_charge": 0, "energy": 100}
+    state["party"] = ["iron_man", "captain_america", "thor"]
+    task = next(t for t in content["assignments"] if t["id"] == "sweep_hangar")
+    ok, message = dispatch.send(content, state, task, ["ant_man"])
+    assert ok, message
+
+    rows = [r[0] for r in ImpelCardScene(content)._progress_rows(state)]
+    away = [r for r in rows if "Ant-Man" in r]
+    assert away and ("back in" in away[0] or "back tonight" in away[0]), rows
+
+
+def test_a_menu_opens_on_something_you_can_actually_choose(content):
+    """Menus here often lead with a disabled label — a job name, a question.
+    The cursor started on it, so the first Enter did nothing at all."""
+    scene = tower.HubScene(content)
+    scene._open_submenu("t", [("a heading", True, None),
+                              ("do the thing", False, lambda a: None),
+                              ("never mind", False, None)])
+    assert scene.submenu["index"] == 1
+
+    # ...and arrowing around never parks on the heading again
+    for _ in range(6):
+        scene._submenu_key(None, pygame.K_UP)
+        assert not scene.submenu["items"][scene.submenu["index"]][1]
+        scene._submenu_key(None, pygame.K_DOWN)
+        assert not scene.submenu["items"][scene.submenu["index"]][1]
+
+
+def test_a_menu_of_pure_labels_does_not_hang_looking_for_a_row(content):
+    scene = tower.HubScene(content)
+    scene._open_submenu("t", [("just a label", True, None)])
+    assert scene.submenu["index"] == 0
+
+
+def test_being_broke_is_said_before_the_team_question(content):
+    """You were asked whether to empty the team, and only then told you
+    could not afford the session anyway."""
+    state = party_state(content, credits=0)
+    state["party"] = ["captain_america"]
+
+    result = activities.start_training(state, content, "captain_america",
+                                       "strength")
+
+    assert not result["ok"]
+    assert not result.get("needs_solo_confirm")
+    assert "cr" in result["message"]
+
+
+def test_too_exhausted_is_also_said_before_the_team_question(content):
+    state = party_state(content)
+    state["party"] = ["captain_america"]
+    state["roster"]["captain_america"]["energy"] = 1
+
+    result = activities.start_training(state, content, "captain_america",
+                                       "strength")
+
+    assert not result["ok"] and not result.get("needs_solo_confirm")
+    assert "exhausted" in result["message"]
+
+
+def test_confirming_the_solo_question_starts_the_session_it_asked_about(content):
+    """The confirm used to drop the player back on the attribute list to
+    re-pick the attribute they had already picked."""
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["credits"] = 5000
+    state["party"] = ["iron_man"]
+    scene.floor = "training"
+    put_player_at(scene, 35, 7)
+
+    scene.handle_key(app, pygame.K_RETURN)          # 1: the rack
+    scene.handle_key(app, pygame.K_RETURN)          # 2: Train Iron Man
+    scene.handle_key(app, pygame.K_RETURN)          # 3: Strength
+    assert scene.mode == "submenu"
+    assert scene.submenu["title"] == "Training"
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert labels[0].startswith("Iron Man is the only one left on the team")
+    assert "Ya - I'll just watch" in labels and "No!" in labels
+
+    scene.submenu["index"] = labels.index("Ya - I'll just watch")
+    scene.handle_key(app, pygame.K_RETURN)          # 4: and it STARTS
+
+    assert state["roster"]["iron_man"]["training"]["attribute"] == "strength"
+    assert scene.mode == "normal"
+    assert any("Creepy" in m for m in scene.messages)
+
+
+def test_saying_no_to_the_solo_question_leaves_everything_alone(content):
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["credits"] = 5000
+    state["party"] = ["iron_man"]
+    scene.floor = "training"
+    put_player_at(scene, 35, 7)
+    for _ in range(3):
+        scene.handle_key(app, pygame.K_RETURN)
+    labels = [i[0] for i in scene.submenu["items"]]
+    scene.submenu["index"] = labels.index("No!")
+    scene.handle_key(app, pygame.K_RETURN)
+
+    assert "training" not in state["roster"]["iron_man"]
+    assert state["credits"] == 5000                 # nothing charged
+    assert state["party"] == ["iron_man"]
+    assert scene.mode == "normal"
 
 
 # --- note 42: the HUD packs itself and cannot collide --------------------

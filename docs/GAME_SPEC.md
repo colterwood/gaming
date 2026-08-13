@@ -1314,6 +1314,32 @@ that turned out to be wrong underneath.
   in the leader's voice. **The HUD packs itself from both edges**, so the
   S.H.I.E.L.D. Supply Drop banner can no longer be drawn through the floor
   name. **Pepper raises the Quinjet as you step off the lift.**
+**M36b — the same day, played again.** Five things the first cut got wrong,
+found by playing it:
+
+- **An empty team must never be a cage.** Freezing the walker with nobody on
+  the team turned "sit and watch your last hero train" into a softlock: the
+  session ended, there was no one left to walk over and collect them with,
+  2 AM arrived, and the player woke with no characters at all. Movement is
+  never frozen (`field.roll_ambush` already returns None at party size 0, so
+  it was guarding nothing), a marker is drawn for the walker, and **a
+  finished trainee rejoins by themselves when the team would otherwise be
+  empty** — collect-in-person is a rule for when you HAVE a team.
+- **A closing floor never traps anyone.** You can always walk off the
+  training floor after 11 PM; the lock is on coming back in.
+- **The Tasks tab early-returned when today's board was unread**, so every
+  progress line was hidden behind a trip to a corkboard. The M20 rule is
+  about POSTINGS. The tab is now one list across the full panel width — what
+  is running, then what is posted, then the campaign chain — and the sparse
+  right-hand quest column is folded into it.
+- **The rack asked before it refused.** Credits and energy are checked
+  before the "nobody left on the team" question, so a broke player is told
+  so instead of answering a question about a session that cannot start. The
+  question itself is one page, and confirming STARTS the session rather than
+  returning the player to the attribute list to re-pick what they picked.
+- **Menus open on something selectable.** A leading disabled label — a job
+  name, a question — used to take the cursor, so the first Enter did
+  nothing; arrow keys skip those rows now too.
 *AC: fit a repair and watch the clock and the purse hold still; turn over a
 planter on day one and still find the Training Floor part in it that
 afternoon; win an ambush on 30% HP and start the next fight on 30%; collapse
