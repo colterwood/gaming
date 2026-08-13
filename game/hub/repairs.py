@@ -104,6 +104,37 @@ def triggered_by(content, state, char_id):
     return None
 
 
+def blocked(content, state):
+    """Repairs that exist, aren't done, and the board WON'T post yet.
+
+    M37: these used to be invisible — the Tech Lab simply wasn't on the
+    board and nothing said why, so "is it gated, or is this a bug?" was a
+    question the player could only answer by reading the JSON. A locked
+    room the player can see is a goal; one they can't is a mystery."""
+    return [job for job in content["repairs"]
+            if not job.get("trigger") and not is_done(state, job)
+            and not is_active(state, job) and not gate_open(state, job)]
+
+
+def why_blocked(content, state, job):
+    """What a blocked repair is waiting on, in words. None if it isn't."""
+    flags = state.get("story_flags", {})
+    requires = job.get("requires", {})
+    for flag in requires.get("flags", []):
+        if flags.get(flag):
+            continue
+        return {"board_unlocked": "the assignment board",
+                "pym_lab_unlocked": "Scott Lang's door code"}.get(
+                    flag, flag.replace("_", " "))
+    quests = state.get("quests", {})
+    for quest_id in requires.get("quests", []):
+        if (quests.get(quest_id) or {}).get("status") == "done":
+            continue
+        quest = next((q for q in content["story"] if q["id"] == quest_id), None)
+        return quest["name"] if quest else quest_id
+    return None
+
+
 def active(content, state):
     return [job for job in content["repairs"] if is_active(state, job)]
 

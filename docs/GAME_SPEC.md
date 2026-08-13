@@ -195,7 +195,7 @@ being played and `App.SAVE_SLOT` follows it (M28).
 |---|---|
 | Day span | 6:00 → 26:00 (2 AM) |
 | Tick | 10 in-game minutes per 7 real seconds (cosmetic in POC; activities also advance the clock in fixed jumps) |
-| Daily energy | 100 |
+| Daily energy | 100 at Stamina rank 1, **+`ENERGY_PER_STAMINA_RANK` (5) per rank above it** (M37) — 145 at Stamina 10 |
 | Training session | trainee EN 15+5/level; a LOCKOUT of TRAINING_MINUTES_BY_LEVEL (level 1 = 50 min, level 9 = 2,400) measured in WAKING minutes, so high-level sessions span days — see §6.3 |
 | Battle (ambush/trap, won) | +1 h clock (M12 BATTLE_MINUTES) |
 | Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
@@ -1359,6 +1359,44 @@ on the common floor and wake up full, beside the bed, 10% poorer; walk into
 the Tech Lab at 7 PM and find Jarvis and a cold bench; train your last hero
 and get asked twice before the game lets you; take a Unibeam to a line with
 a hole in it and hit one body.*
+
+**M37 — Levelling feels like levelling** *(added post-POC)*.
+- **Stamina raises the daily ceiling** (`energy.max_for`). Daily energy was
+  a flat 100 for everybody, so the attribute named Stamina bought HP and a
+  little battle bulk and nothing whatsoever to do with how much you can get
+  done in a day. Every rank above the first is worth
+  `ENERGY_PER_STAMINA_RANK`. Everything that used to compare against a flat
+  `DAILY_ENERGY` now asks the hero: waking up, the HUD bar, the Med Bay
+  forecast, "is the team full?", and the M9 initiative penalty. The collapse
+  penalty became `PASS_OUT_ENERGY_FRACTION` of the hero's own ceiling — a
+  flat 80 would have punished a Stamina-10 hero less than a Stamina-1 one.
+- **A rank-up restores the hero** (`attrs.level_up`): full energy, to the
+  ceiling the rank may have just raised, and full HP. It fires wherever the
+  rank came from — the rack, a fight, a board job, a repair — because it
+  hangs off `add_training_xp`, the one place ranks are actually granted.
+- **And it chimes.** `attrs.level_up` leaves a `leveled_up` flag on the
+  roster entry and the hub reads it, so the pure layer never imports sound.
+  One chime however many ranks landed that frame.
+- **A teammate who is free again says so, in person**
+  (`activities.report_in`): finishing a rack session or a board job queues a
+  dialogue box in that hero's voice with its own sound, instead of one grey
+  line in the corner of the screen at the moment they become available.
+  Lines live in `data/flavor.json` (`training_done`, `assignment_done`) with
+  a `default` pool so a new recruit is never silent.
+- **New procedural sounds** — `level_up`, `training_done`,
+  `assignment_done`: soft struck-bell arpeggios, eased in over 12 ms so
+  nothing clicks, mixed well under the thunder (42%/34% of full scale
+  against its 92%) because these fire constantly and it fires once.
+- **The board explains what it is NOT offering.** A repair that exists but
+  is still gated was simply absent, which is indistinguishable from a bug —
+  the Tech Lab waits on the Ch. 1 boss and nothing said so. `repairs.blocked`
+  / `why_blocked` put a `LOCKED - <room> (needs <thing>)` row on the board,
+  and a posted repair greys out with `[finish X first]` while another is in
+  hand rather than looking pickable and refusing on click.
+*AC: train Stamina and watch the morning ceiling rise past 100; rank up and
+find the hero at full EN and HP with a chime; finish a session and have them
+tell you to your face; open the board before the Ch. 1 boss and read why the
+Tech Lab is not there.*
 
 **Ch. 3–4** *(decided, not yet built)*.
 - **Gate**: every Ch. 1–2 mission complete AND the tower repaired.

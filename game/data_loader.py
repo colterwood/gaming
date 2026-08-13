@@ -741,7 +741,9 @@ def load_repairs(data_dir=None):
 
 
 FLAVOR_POOLS = {"part_lift": (), "mining": ("material",),
-                "scouting": ()}          # M36: working a scout point
+                "scouting": (),          # M36: working a scout point
+                # M37: "I'm done, use me" — reported in person, in a box
+                "training_done": (), "assignment_done": ()}
 
 
 def load_flavor(data_dir=None):

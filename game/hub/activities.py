@@ -46,6 +46,30 @@ def training_credits(level):
     return config.TRAINING_CREDITS_BY_LEVEL[level]
 
 
+def report_in(state, content, hero_id, pool, sound):
+    """Queue a hero's "I'm done, use me" dialogue box (M37).
+
+    Finishing a session or a job used to be one grey line in the corner of
+    the screen, which is where the player was least likely to be looking —
+    and it is the moment a teammate becomes available again, which is worth
+    a beat. Lines come from data/flavor.json per hero, with a `default` pool
+    so a new recruit is never silent."""
+    from game.hub import unlocks
+
+    lines = (content.get("flavor", {}).get(pool) or {})
+    pool_lines = lines.get(hero_id) or lines.get("default")
+    if not pool_lines:
+        return
+    index = (state.get("day", 1) + state.get("time_minutes", 0) // 10) \
+        % len(pool_lines)
+    unlocks.queue_scene(state, {
+        "character": hero_id,
+        "title": content["characters"][hero_id]["name"],
+        "lines": [pool_lines[index]],
+        "sound": sound,
+    })
+
+
 def training_session(state):
     """Legacy generic session (M2 tests): rank-2 equivalent team costs.
     In-game training is the M12 lockout — start_training/finish_training."""
@@ -185,6 +209,8 @@ def finish_training(state, content, hero_id, rejoin=False):
         entry["done_training"] = True
         message += "  Waiting at the mats."
     energy.sync(state)
+    # M37: they come and tell you, in a box, with a sound.
+    report_in(state, content, hero_id, "training_done", "training_done")
     return {"ok": True, "message": message, **gain}
 
 
@@ -298,9 +324,7 @@ def can_rest(state):
     members = energy.party(state)
     if not members:
         return False, "Nobody here to treat."
-    if (all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
-            for h in members)
-            and not health.party_needs_treatment(state)):
+    if energy.team_is_full(state) and not health.party_needs_treatment(state):
         return False, "The team is already at full strength."
     return True, ""
 
@@ -327,7 +351,7 @@ def rest_tick(state):
     mended = not health.party_needs_treatment(state)
     return {"hit_day_end": hit_end, "team_energy": team,
             "team_hp": health.team_hp_fraction(state),
-            "full": team >= config.DAILY_ENERGY and mended}
+            "full": energy.team_is_full(state) and mended}
 
 
 def treatment_forecast(state):
@@ -348,7 +372,9 @@ def treatment_forecast(state):
     def ticks(short, per_tick):
         return 0 if short <= 0 else int(math.ceil(short / per_tick))
 
-    energy_ticks = ticks(config.DAILY_ENERGY - energy.team_energy(state),
+    energy_ticks = ticks(max((energy.hero_max(state, h)
+                              - energy.hero_energy(state, h)
+                              for h in energy.party(state)), default=0),
                          config.MEDBAY_ENERGY_PER_TICK)
     hp_ticks = ticks(health.FULL - health.team_hp_fraction(state),
                      config.MEDBAY_HP_PCT_PER_TICK)
@@ -386,8 +412,7 @@ def eat_food(state, content, item_id):
     members = energy.party(state)
     if not members:
         return {"ok": False, "message": "Nobody on the team to eat it."}
-    tired = any(energy.hero_energy(state, h) < config.DAILY_ENERGY
-                for h in members)
+    tired = not energy.team_is_full(state)
     hurt = health.party_needs_treatment(state)
     if not (restore and tired) and not (mend and hurt):
         return {"ok": False, "message": "The team is already at full strength."}

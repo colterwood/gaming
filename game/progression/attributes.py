@@ -66,6 +66,28 @@ def session_xp(state, calendar_data, level=1):
             * facility_multiplier(state, calendar_data))
 
 
+def level_up(roster_entry):
+    """A rank landed (M37). Two things happen, wherever it came from —
+    the rack, a fight, a board job, a repair:
+
+      * the hero is restored: full energy (to their OWN ceiling, which a
+        Stamina rank may have just raised) and full HP. Getting stronger
+        should feel like getting stronger, and it gives the carried-HP
+        system a second way to recover that isn't the clock.
+      * a flag is left on the entry for the hub to notice and chime on.
+
+    The flag rather than a sound call because this is the pure-logic layer
+    and it has no business importing pygame; and rather than a return value
+    because add_training_xp is called from four different places, and a
+    notification that only fires down some of them isn't one.
+    """
+    from game.core import energy
+
+    roster_entry["energy"] = energy.max_for(roster_entry)
+    roster_entry["hp_fraction"] = 1.0
+    roster_entry["leveled_up"] = True
+
+
 def add_training_xp(boosts, roster_entry, attribute, xp):
     """Bank XP and consume it into trained ranks (0..TRAINED_MAX). Multiple
     rank-ups can occur; training past the cap is blocked by can_train."""
@@ -81,6 +103,8 @@ def add_training_xp(boosts, roster_entry, attribute, xp):
         xp_bank[attribute] -= cost
         ranks[attribute] = next_rank
         gained.append(next_rank)
+    if gained:
+        level_up(roster_entry)
     return {"ranks_gained": gained,
             "trained_rank": ranks.get(attribute, 0),
             "rank": rank(roster_entry, attribute),

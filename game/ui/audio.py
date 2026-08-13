@@ -3,8 +3,11 @@ optional: if the mixer can't start — headless test run, no audio device,
 an unexpected sample format — every call here is a silent no-op.
 
 Like the art (M7), sounds are generated in code rather than shipped as
-assets. So far the only one the game needs is the thunder crash that
-lands with the Thor signal.
+assets. The thunder crash that lands with the Thor signal is the loud one
+and fires once a campaign; the M37 chimes fire constantly, so they are
+soft, eased in rather than struck, and mixed well underneath it:
+
+    thunder 92% of full scale | level up 42% | training/assignment 34%
 """
 
 import array
@@ -59,7 +62,49 @@ def _thunder(frequency, channels):
     return samples.tobytes()
 
 
-GENERATORS = {"thunder": _thunder}
+def _bell(frequency, channels, notes, length, attack=0.012, volume=0.85):
+    """A soft struck-bell arpeggio: sine fundamental plus a quiet octave and
+    twelfth, each note eased in over `attack` seconds so nothing clicks, and
+    decaying away. Deliberately blunt — these fire often, and a sharp
+    transient that is pleasant once is a hazard by the fiftieth time."""
+    samples = array.array("h")
+    per_note = length / len(notes)
+    total = int(frequency * length)
+    for i in range(total):
+        t = i / frequency
+        index = min(int(t / per_note), len(notes) - 1)
+        local = t - index * per_note
+        pitch = notes[index]
+        # ease in, then a long exponential tail
+        envelope = min(1.0, local / attack) * math.exp(-local * 4.2)
+        value = (math.sin(2 * math.pi * pitch * local)
+                 + 0.30 * math.sin(4 * math.pi * pitch * local)
+                 + 0.12 * math.sin(6 * math.pi * pitch * local))
+        sample = int(max(-1.0, min(1.0, value * envelope * 0.5)) * 30000 * volume)
+        for _ in range(channels):
+            samples.append(sample)
+    return samples.tobytes()
+
+
+def _level_up(frequency, channels):
+    """Rising major triad — the one that means "you got stronger"."""
+    return _bell(frequency, channels, (523.25, 659.25, 783.99), 0.62)
+
+
+def _training_done(frequency, channels):
+    """Two notes, up: somebody is off the mats and back."""
+    return _bell(frequency, channels, (587.33, 880.00), 0.44, volume=0.70)
+
+
+def _assignment_done(frequency, channels):
+    """Two notes, down and settling: somebody is home from a job."""
+    return _bell(frequency, channels, (783.99, 523.25), 0.46, volume=0.70)
+
+
+GENERATORS = {"thunder": _thunder,
+              "level_up": _level_up,
+              "training_done": _training_done,
+              "assignment_done": _assignment_done}
 
 
 def play(name):

@@ -959,6 +959,63 @@ def test_the_chair_shows_both_bars(content):
     assert any("both by" in t for t in drawn)
 
 
+# --- the board explains itself -------------------------------------------
+
+def test_a_gated_repair_says_what_it_is_waiting_for(content):
+    """A room that is still broken but not yet offered used to be simply
+    absent from the board, which is indistinguishable from a bug."""
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["repairs"], state["story_flags"] = {}, {}
+    for job_id in ("repair_elevator", "repair_quinjet", "repair_training"):
+        job = repairs.job_by_id(content, job_id)
+        state["repairs"][job_id] = {"status": "done",
+                                    "found": list(range(len(job["parts"])))}
+        state["story_flags"][job["flag"]] = True
+        for flag, value in job.get("flags", {}).items():
+            state["story_flags"][flag] = value
+
+    ids = [j["id"] for j in repairs.blocked(content, state)]
+    assert "repair_tech_lab" in ids and "repair_pym_lab" in ids
+    assert repairs.why_blocked(
+        content, state, repairs.job_by_id(content, "repair_tech_lab")
+    ) == "Siege of the Tower"
+
+    scene._open_board(app)
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert any("LOCKED - Restart the Tech Lab" in l
+               and "Siege of the Tower" in l for l in labels), labels
+
+
+def test_the_tech_lab_opens_once_the_chapter_one_boss_is_down(content):
+    state = party_state(content)
+    state["repairs"], state["story_flags"] = {}, {"board_unlocked": True}
+    tech = repairs.job_by_id(content, "repair_tech_lab")
+    assert tech in repairs.blocked(content, state)
+
+    state["quests"]["ch1_siege"] = {"name": "Siege", "status": "done"}
+
+    assert repairs.why_blocked(content, state, tech) is None
+    assert tech in repairs.posted(content, state)
+
+
+def test_a_posted_repair_greys_out_while_another_is_in_hand(content):
+    """One repair at a time. The row used to look pickable and only refuse
+    once you chose it."""
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["repairs"], state["story_flags"] = {}, {"board_unlocked": True}
+    repairs.accept(content, state, repairs.job_by_id(content, "repair_training"))
+
+    scene._open_board(app)
+    rows = [(l, d) for l, d in
+            [(i[0], i[1]) for i in scene.submenu["items"]]
+            if l.startswith("REPAIR - ")]
+    assert rows, [i[0] for i in scene.submenu["items"]]
+    for label, disabled in rows:
+        assert disabled and "finish Restore the Training Floor first" in label
+
+
 # --- note 42: the HUD packs itself and cannot collide --------------------
 
 def test_the_event_banner_never_runs_through_the_floor_name(content):

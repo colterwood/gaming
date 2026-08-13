@@ -196,6 +196,12 @@ def process_day(content, state):
                     entry, job["xp"] * max(1, len(gain["per_attribute"])))
         _release(state, job)
         active(state).remove(job)
+        # M37: they report in themselves, in a dialogue box with a sound,
+        # rather than only as a line in the morning's message dump.
+        from game.hub import activities
+        for hero_id in job["heroes"]:
+            activities.report_in(state, content, hero_id,
+                                 "assignment_done", "assignment_done")
         names = " and ".join(content["characters"][h]["name"] for h in job["heroes"])
         reward = f"+{job['credits']} cr"
         if job["xp"]:

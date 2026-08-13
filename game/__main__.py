@@ -179,7 +179,8 @@ class App:
             for hid in hero_ids:
                 for key, value in gear_fx[hid].items():
                     perk_fx[hid][key] = perk_fx[hid].get(key, 0) + value
-            energy_frac = {hid: energy.hero_energy(self.game_state, hid) / config.DAILY_ENERGY
+            energy_frac = {hid: (energy.hero_energy(self.game_state, hid)
+                                 / energy.hero_max(self.game_state, hid))
                            for hid in hero_ids}
             synergy_crit = {}
             for hid in hero_ids:

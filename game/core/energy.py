@@ -8,17 +8,55 @@ member. state["energy"] mirrors team energy for HUD/save compatibility.
 from game import config
 
 
+def max_for(entry):
+    """This hero's daily ceiling (M37).
+
+    Stamina is the "how much can you get done in a day" attribute and it did
+    nothing for the day — it bought HP and a little battle bulk and stopped
+    there, while the thing it is named after was a flat 100 for everybody.
+    Every Stamina rank above the first is worth ENERGY_PER_STAMINA_RANK, so
+    a Stamina-10 hero runs to 145.
+
+    Reads the trained rank straight off the entry rather than going through
+    progression.attributes, so game.core stays free of an upward import."""
+    if not entry:
+        return config.DAILY_ENERGY
+    trained = min(config.TRAINED_MAX,
+                  entry.get("trained_ranks", {}).get("stamina", 0))
+    return config.DAILY_ENERGY + config.ENERGY_PER_STAMINA_RANK * trained
+
+
+def hero_max(state, hero_id):
+    return max_for(state.get("roster", {}).get(hero_id))
+
+
 def hero_energy(state, hero_id):
     entry = state["roster"].get(hero_id)
     if entry is None:
         return 0
-    return entry.setdefault("energy", config.DAILY_ENERGY)
+    return entry.setdefault("energy", max_for(entry))
 
 
 def set_hero_energy(state, hero_id, value):
     entry = state["roster"].get(hero_id)
     if entry is not None:
-        entry["energy"] = max(0, min(config.DAILY_ENERGY, value))
+        entry["energy"] = max(0, min(max_for(entry), value))
+
+
+def team_max(state):
+    """The ceiling the HUD bar measures against — the lowest in the party,
+    matching team_energy being the lowest current."""
+    members = party(state)
+    if not members:
+        return config.DAILY_ENERGY
+    return min(hero_max(state, h) for h in members)
+
+
+def team_is_full(state):
+    """Every active member at their OWN maximum."""
+    members = party(state)
+    return bool(members) and all(
+        hero_energy(state, h) >= hero_max(state, h) for h in members)
 
 
 def party(state):

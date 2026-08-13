@@ -69,12 +69,23 @@ DAY_START_MINUTES = 6 * 60          # 6:00 AM
 DAY_END_MINUTES = 26 * 60           # 2:00 AM next day
 TICK_GAME_MINUTES = 10              # cosmetic tick: 10 in-game minutes...
 TICK_REAL_SECONDS = 7               # ...per 7 real seconds
-DAILY_ENERGY = 100
+DAILY_ENERGY = 100          # what a rank-1 Stamina hero wakes up with
+# M37: ...and it is no longer the ceiling. Stamina is the "how much can you
+# do in a day" attribute and it did nothing for the day — HP and a little
+# battle bulk, and that was all. Every rank above the first adds this much
+# to that hero's daily maximum, so a Stamina-10 hero runs to 145 while a
+# Stamina-1 hero still runs to 100.
+ENERGY_PER_STAMINA_RANK = 5
 PASS_OUT_NEXT_DAY_ENERGY = 80
+# The morning after a collapse, as a FRACTION of that hero's own maximum —
+# 80 of a flat 100 is what this used to be, and it has to scale now that the
+# maximum does.
+PASS_OUT_ENERGY_FRACTION = PASS_OUT_NEXT_DAY_ENERGY / DAILY_ENERGY
 # M36: collapsing INSIDE the tower costs nothing the next morning — you are
-# already home and in a bed. The 80-energy penalty is for going down in the
-# field, where the night is spent wherever the team fell.
-PASS_OUT_SHELTERED_ENERGY = DAILY_ENERGY
+# already home and in a bed. The penalty above is for going down in the
+# field, where the night is spent wherever the team fell. (No constant for
+# the sheltered case: it is simply the hero's own full ceiling.)
+#
 # ...but a collapse always costs money, wherever it happens: med fees,
 # dropped kit, and whoever went through the team's pockets.
 PASS_OUT_CREDIT_PCT = 0.10

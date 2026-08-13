@@ -83,5 +83,55 @@
     "default": [
       "Nothing out of place, and no sign anyone's been watching back."
     ]
+  },
+  "training_done": {
+    "iron_man": [
+      "\"Session logged. I ran the numbers twice because the first set was insulting. Ready when you are.\"",
+      "\"Done. Sweating in a machine I designed, which is a special kind of humiliating. Put me back in.\""
+    ],
+    "captain_america": [
+      "\"All done. I've still got a few hours in me if you need them.\"",
+      "\"Finished. Feels good.\" He says it like a man who would have kept going if nobody stopped him."
+    ],
+    "ant_man": [
+      "\"Okay! Done! I did the whole thing! Ask me about my form. Please ask me about my form.\"",
+      "\"Finished. Also I think I broke the timer, but in a good way.\""
+    ],
+    "thor": [
+      "\"The work is done and I am barely winded. Find me something to hit.\"",
+      "\"Your machines are small and they complain, but they are honest. I am ready.\""
+    ],
+    "hulk": [
+      "\"Hulk done. Hulk ready.\"",
+      "\"Finished. Bag did not survive.\" He seems fine about this."
+    ],
+    "default": [
+      "\"That's me finished. Ready whenever you need me.\""
+    ]
+  },
+  "assignment_done": {
+    "iron_man": [
+      "\"Back. Signed everything, shook the hands, said the words. Never again - until the next one. What's next?\"",
+      "\"Job's done and the paperwork is somebody else's problem now. Put me on the roster.\""
+    ],
+    "captain_america": [
+      "\"Back, and it went fine. Reporting for whatever's next.\"",
+      "\"All wrapped up. I'd like to be useful again as soon as you'll have me.\""
+    ],
+    "ant_man": [
+      "\"I'm back! Nobody noticed I was gone, which honestly stings a little. Anyway - available.\"",
+      "\"Finished. Made a friend. His name is Carl. Ready to go.\""
+    ],
+    "thor": [
+      "\"The task is complete. It required no thunder, which I mention only so you know I offered.\"",
+      "\"I have returned. Give me the next one, and let it be louder.\""
+    ],
+    "hulk": [
+      "\"Hulk back. Hulk did the thing.\"",
+      "\"Done. Nobody yelled at Hulk.\" A pause. \"Hulk counts that.\""
+    ],
+    "default": [
+      "\"Back, and the job's done. Ready when you need me.\""
+    ]
   }
 }

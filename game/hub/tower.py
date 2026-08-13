@@ -761,9 +761,25 @@ class HubScene:
             self.log(msg)           # sessions ending (M12). M36: never a
                                     # rejoin - they wait on the mats to be
                                     # collected, wherever the player is
+        self._announce_level_ups(state)
         if activities.should_pass_out(state):
             self.log("The team passes out...")
             app.go_to_sleep(passed_out=True)
+
+    def _announce_level_ups(self, state):
+        """M37: chime once for any rank that landed since the last frame,
+        wherever it came from — the rack, a fight, a board job, a repair.
+        attrs.level_up leaves the flag; this is the only thing that reads
+        it, so the pure layer never has to know about sound."""
+        rang = False
+        for hero_id, entry in state.get("roster", {}).items():
+            if not entry.pop("leveled_up", False):
+                continue
+            if not rang:                        # one chime, not one per rank
+                audio.play("level_up")
+                rang = True
+            name = self.content["characters"][hero_id]["name"]
+            self.log(f"{name} levels up - back to full strength.")
 
     def _move(self, dt, app):
         # M36 (round 2): movement is NEVER frozen. The first cut stopped the
@@ -1614,8 +1630,7 @@ class HubScene:
             self.log("No rations in the bag - the cafe and street carts sell food.")
             return
         # M18: a ration feeds the WHOLE team, so there's nobody to pick.
-        fed = all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
-                  for h in self._party(state))
+        fed = energy.team_is_full(state)
         hurt = health.party_needs_treatment(state)
         items = []
         for iid, n in foods:
@@ -1641,8 +1656,7 @@ class HubScene:
         self.reset_modes()
         # M18: one ration does the whole team, so only stay in the menu if
         # there is both something left to use and someone still short.
-        needed = (any(energy.hero_energy(state, h) < config.DAILY_ENERGY
-                      for h in self._party(state))
+        needed = (not energy.team_is_full(state)
                   or health.party_needs_treatment(state))
         if result["ok"] and needed and self._rations(state):
             self._open_rations(app)
@@ -1932,11 +1946,17 @@ class HubScene:
         repair_rows = repairs.posted(self.content, state)
         busy = repairs.active_job(self.content, state)
         for job in repair_rows:
-            items.append((f"REPAIR - {job['name']}", False,
+            # M37: one repair at a time. The row used to look available and
+            # only refuse when you picked it.
+            held_up = busy is not None
+            label = f"REPAIR - {job['name']}"
+            if held_up:
+                label += f"  [finish {busy['name']} first]"
+            items.append((label, held_up,
                           (lambda a, j=job: self._accept_repair(a, j))))
             items.append((f"   {job.get('board_line', job['desc'])}",
                           True, None))
-            items.append((f"   {job['credits']} cr, {job['xp']} XP, "
+            items.append((f"   {job['xp']} XP, "
                           f"{len(job['parts'])} parts to find", True, None))
         for job in repairs.active(self.content, state):
             left = repairs.parts_left(state, job)
@@ -1944,6 +1964,13 @@ class HubScene:
             progress = (f"parts {len(job['parts']) - left}/{len(job['parts'])}"
                         if left else "ready to fit")
             items.append((f"In hand: {job['name']} - {where}, {progress}",
+                          True, None))
+        # M37: rooms that are still broken but not yet offered, and WHY. An
+        # absent job is indistinguishable from a bug.
+        for job in repairs.blocked(self.content, state):
+            reason = repairs.why_blocked(self.content, state, job)
+            items.append((f"LOCKED - {job['name']}"
+                          + (f"  (needs {reason})" if reason else ""),
                           True, None))
         posted = activities.assignment_tasks_today(
             state, self.content["assignments"], tier)
@@ -2511,8 +2538,9 @@ class HubScene:
         bar = pygame.Rect(box.x + 30, box.y + 52, 164, 11)
         pixelkit.text(surface, "EN", 11, "green",
                       midleft=(bar.x - 20, bar.centery))
-        widgets.bar(surface, bar, team / config.DAILY_ENERGY, "green",
-                    label=f"{team} / {config.DAILY_ENERGY}")
+        top = energy.team_max(state)
+        widgets.bar(surface, bar, team / top, "green",
+                    label=f"{team} / {top}")
         bar = bar.move(0, 15)
         pixelkit.text(surface, "HP", 11, "red",
                       midleft=(bar.x - 20, bar.centery))
@@ -2656,9 +2684,9 @@ class HubScene:
             left_edge = x
         else:
             team_en = energy.team_energy(state)
+            top = energy.team_max(state)        # M37: Stamina raises it
             widgets.bar(surface, pygame.Rect(x, 5, HUD_BAR_W, 10),
-                        team_en / config.DAILY_ENERGY, "green",
-                        label=f"{team_en}")
+                        team_en / top, "green", label=f"{team_en}")
             x += HUD_BAR_W + 4
             hp = health.team_hp_fraction(state)
             widgets.bar(surface, pygame.Rect(x, 5, HUD_BAR_W, 10), hp, "red",

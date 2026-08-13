@@ -6,6 +6,7 @@ M12 rolling window in bonds.gift_allowed — nothing resets weekly anymore.)
 """
 
 from game import config
+from game.core import energy
 
 
 def week_of_day(day):
@@ -60,13 +61,26 @@ def sleep(state, passed_out=False, sheltered=False):
         state["issue"] += 1
     state["time_minutes"] = config.DAY_START_MINUTES
     rough = passed_out and not sheltered
-    morning = (config.PASS_OUT_NEXT_DAY_ENERGY if rough
-               else config.DAILY_ENERGY)
-    if not rough and state.get("story_flags", {}).get("jarvis_service"):
-        morning += config.JARVIS_ENERGY_BONUS               # NPC bond unlock
+    bonus = (config.JARVIS_ENERGY_BONUS
+             if not rough and state.get("story_flags", {}).get("jarvis_service")
+             else 0)                                        # NPC bond unlock
+    # M37: everybody wakes at their OWN ceiling, which Stamina raises. The
+    # collapse penalty is a fraction of that rather than a flat 80, or a
+    # Stamina-10 hero would be punished less than a Stamina-1 one.
     for entry in state.get("roster", {}).values():          # per-hero (M9)
-        entry["energy"] = morning
-    state["energy"] = morning
+        top = energy.max_for(entry)
+        entry["energy"] = (int(top * config.PASS_OUT_ENERGY_FRACTION) if rough
+                           else top + bonus)
+    # state["energy"] mirrors the team for the HUD and the save. With nobody
+    # ON the team there is no team figure, so mirror what a hero woke up
+    # with — the best-rested one, or the notional rank-1 figure if the
+    # roster is empty. Waking up is not being exhausted.
+    default = (int(config.DAILY_ENERGY * config.PASS_OUT_ENERGY_FRACTION)
+               if rough else config.DAILY_ENERGY + bonus)
+    state["energy"] = (energy.team_energy(state) if state.get("party")
+                       else max((e.get("energy", default)
+                                 for e in state.get("roster", {}).values()),
+                                default=default))
     health.restore_all(state, config.PASS_OUT_HP_FRACTION if passed_out
                        else config.SLEEP_HP_FRACTION)
     if passed_out:
