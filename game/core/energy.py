@@ -14,8 +14,11 @@ def max_for(entry):
     Stamina is the "how much can you get done in a day" attribute and it did
     nothing for the day — it bought HP and a little battle bulk and stopped
     there, while the thing it is named after was a flat 100 for everybody.
-    Every Stamina rank above the first is worth ENERGY_PER_STAMINA_RANK, so
-    a Stamina-10 hero runs to 145.
+
+    The bonus accelerates (`ENERGY_BY_STAMINA_RANK`, cumulative and keyed by
+    the CARD rank): 100 at rank 1, 120 at 5, 230 at 10, and 730 once the
+    hero is Enlightened. Rank costs double every step, so the late ranks
+    have to be worth more than the early ones.
 
     Reads the trained rank straight off the entry rather than going through
     progression.attributes, so game.core stays free of an upward import."""
@@ -23,7 +26,11 @@ def max_for(entry):
         return config.DAILY_ENERGY
     trained = min(config.TRAINED_MAX,
                   entry.get("trained_ranks", {}).get("stamina", 0))
-    return config.DAILY_ENERGY + config.ENERGY_PER_STAMINA_RANK * trained
+    rank = config.RANK_START + trained
+    top = config.DAILY_ENERGY + config.ENERGY_BY_STAMINA_RANK.get(rank, 0)
+    if entry.get("enlightened"):
+        top += config.ENLIGHTENMENT_ENERGY_BONUS
+    return top
 
 
 def hero_max(state, hero_id):

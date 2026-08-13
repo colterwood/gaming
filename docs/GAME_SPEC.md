@@ -195,17 +195,17 @@ being played and `App.SAVE_SLOT` follows it (M28).
 |---|---|
 | Day span | 6:00 → 26:00 (2 AM) |
 | Tick | 10 in-game minutes per 7 real seconds (cosmetic in POC; activities also advance the clock in fixed jumps) |
-| Daily energy | 100 at Stamina rank 1, **+`ENERGY_PER_STAMINA_RANK` (5) per rank above it** (M37) — 145 at Stamina 10 |
+| Daily energy | `DAILY_ENERGY` 100 at Stamina 1, raised by `ENERGY_BY_STAMINA_RANK` (M37/M37b, cumulative and ACCELERATING): 105/110/115/120/130/140/160/190/**230** at rank 10, **+500** once Enlightened |
 | Training session | trainee EN 15+5/level; a LOCKOUT of TRAINING_MINUTES_BY_LEVEL (level 1 = 50 min, level 9 = 2,400) measured in WAKING minutes, so high-level sessions span days — see §6.3 |
 | Battle (ambush/trap, won) | +1 h clock (M12 BATTLE_MINUTES) |
 | Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
 | Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
 | Craft action | 15 energy, +60 min |
-| Scout point (M13, replaces hub small tasks) | **0 energy** (M36), +20 min per point |
-| Search a side-arc site (M17) | 5 energy, +20 min per stand searched |
+| Scout point (M13, replaces hub small tasks) | **0 energy** (M36), **0 min** (M37b) |
+| Search a side-arc site (M17) | 5 energy, **0 min** (M37b) |
 | Talk / gift | 0 energy, +20 min |
 | Eat a ration (M10; M18) | 0 energy, +10 min; restores the item's `energy` EN to EVERY active party member, each capped at 100 |
-| Search a zone crate (M10) | 0 energy, +15 min; daily-respawning loot, trap risk scales with danger |
+| Search a zone crate (M10) | 0 energy, **0 min** (M37b); daily-respawning loot, trap risk scales with danger |
 | Pass out (0 energy or 2 AM) | next day starts at 80 energy — **full energy if it happened inside the tower** (M36). Either way: 80% HP, and 10% of the purse capped at 5,000 |
 | Training session, at the door (M36) | `TRAINING_CREDITS_BY_LEVEL` — a credit per XP the basic rack pays |
 
@@ -1393,6 +1393,31 @@ a hole in it and hit one body.*
   / `why_blocked` put a `LOCKED - <room> (needs <thing>)` row on the board,
   and a posted repair greys out with `[finish X first]` while another is in
   hand rather than looking pickable and refusing on click.
+**M37b — the map stops lying, and searching stops costing the day.**
+- **The Stamina bonus accelerates** rather than paying a flat 5 a rank
+  (`ENERGY_BY_STAMINA_RANK`): +5 a rank to 5, then +10, +20, +30, +40, so
+  rank 10 is 230 and Enlightenment adds another 500. A ladder whose XP cost
+  doubles every step cannot pay a flat reward at every step. Becoming
+  Enlightened is a level-up like any other — it restores and chimes.
+- **SEARCHING COSTS NO CLOCK.** Furniture, crates, ore seams, side-arc
+  stands and scout points were 5/15/30/20/20 minutes for a single keypress.
+  The day is meant to be spent on decisions — where to fly, who to send,
+  how long to sit in the chair — not on rummaging. Energy still prices the
+  ones that are real work (a swing at rock is 8 EN).
+- **The map agreed with the mechanics again.** M36 decoupled `ambush_rate`
+  from `danger` and left the docks reading `[!]` while being jumped twice as
+  often as Midtown's `[!!]` — and with half the trap risk and a softer enemy
+  pool. Danger is now docks 2 / Midtown 1 / HYDRA 3, matching the rates. The
+  decoupling MECHANISM stays; the shipped three simply agree.
+- **An operator is their bench.** Talk to Jarvis in the Tech Lab once and he
+  says his piece; from then on interacting with him opens the fabricator
+  (`HubScene.OPERATORS`). Same for Hank Pym and the autodocs. Room hours and
+  the repair gate still apply — he refuses after six like the bench does.
+*AC: train Stamina to 10 and see 230 in the morning; turn over a couch and
+watch the clock hold still; read the docks as the rougher of the two early
+zones on the badge AND in play; talk to Jarvis twice at the Tech Lab and end
+up at the fabricator.*
+
 *AC: train Stamina and watch the morning ceiling rise past 100; rank up and
 find the hero at full EN and HP with a chime; finish a session and have them
 tell you to your face; open the board before the Ch. 1 boss and read why the

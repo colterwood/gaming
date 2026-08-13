@@ -181,6 +181,9 @@ def finish_training(state, content, hero_id, rejoin=False):
                    f"Enlightenment ({done}/{needed})")
         if result["complete"]:
             message += "  ENLIGHTENED."
+            # The rung above ten is a level like any other — and the one
+            # that raises the daily ceiling furthest (M37b).
+            attrs.level_up(entry)
     else:
         gain = attrs.add_training_xp(character["boosts"], entry,
                                      lock["attribute"], lock["xp"])

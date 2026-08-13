@@ -235,12 +235,27 @@ def test_midtown_is_the_safest_block_and_hydra_the_worst(content):
     assert rates["hydra_district"] == pytest.approx(rates["docks"] * 2)
 
 
-def test_ambush_rate_is_not_the_same_number_as_danger(content):
-    """Midtown is danger 2 and the CALMEST street. Tying the two together
-    forced one ranking on both, and it was the wrong one."""
-    midtown = content["zones"]["midtown"]
-    assert midtown["danger"] > content["zones"]["docks"]["danger"]
-    assert field.ambush_rate(midtown) < field.ambush_rate(content["zones"]["docks"])
+def test_ambush_rate_is_a_separate_knob_from_danger(content):
+    """They are free to disagree — `danger` drives the badge, the trap risk
+    and the enemy pool, `ambush_rate` drives how often you get jumped — and
+    a zone written without a rate falls back to its danger.
+
+    M37b: the shipped three now AGREE (see below), because having the map
+    badge say the opposite of the ambush rate confused a real player. The
+    mechanism stays: it is what lets them disagree deliberately later."""
+    assert field.ambush_rate({"danger": 3}) == 3
+    assert field.ambush_rate({"danger": 3, "ambush_rate": 0.25}) == 0.25
+
+
+def test_the_badge_the_traps_and_the_ambushes_all_agree(content):
+    """M37b: the docks read [!] while being jumped twice as often as
+    Midtown's [!!]. A player who reads the map should not be misled."""
+    order = ["midtown", "docks", "hydra_district"]
+    zones = [content["zones"][z] for z in order]
+    dangers = [z["danger"] for z in zones]
+    rates = [field.ambush_rate(z) for z in zones]
+    assert dangers == sorted(dangers) == [1, 2, 3], dangers
+    assert rates == sorted(rates), rates          # same ranking as the badge
 
 
 def test_a_zone_runs_out_of_patrols_for_the_day(content):

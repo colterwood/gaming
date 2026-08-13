@@ -2,7 +2,7 @@
   {
     "id": "docks",
     "name": "Hudson Docks",
-    "danger": 1,
+    "danger": 2,
     "ambush_rate": 1.0,
     "spawn": [
       3,
@@ -55,7 +55,7 @@
   {
     "id": "midtown",
     "name": "Midtown",
-    "danger": 2,
+    "danger": 1,
     "ambush_rate": 0.5,
     "spawn": [
       3,

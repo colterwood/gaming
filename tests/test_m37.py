@@ -36,14 +36,26 @@ def entry(**trained):
 
 def test_stamina_raises_the_daily_energy_ceiling():
     assert energy.max_for(entry()) == config.DAILY_ENERGY
-    assert energy.max_for(entry(stamina=config.TRAINED_MAX)) == (
-        config.DAILY_ENERGY
-        + config.ENERGY_PER_STAMINA_RANK * config.TRAINED_MAX)
-    # every rank is worth exactly the constant, no more and no less
-    for trained in range(config.TRAINED_MAX):
-        assert (energy.max_for(entry(stamina=trained + 1))
-                - energy.max_for(entry(stamina=trained))
-                == config.ENERGY_PER_STAMINA_RANK)
+    assert energy.max_for(entry(stamina=config.TRAINED_MAX)) == 230
+
+
+def test_the_stamina_bonus_accelerates():
+    """M37b: rank costs double every step, so the late ranks have to buy
+    more than the early ones. A flat 5 a rank made rank 10 worth exactly
+    what rank 2 was worth."""
+    tops = [energy.max_for(entry(stamina=t)) for t in range(config.TRAINED_MAX + 1)]
+    steps = [b - a for a, b in zip(tops, tops[1:])]
+    assert steps == [5, 5, 5, 5, 10, 10, 20, 30, 40], steps
+    assert steps == sorted(steps), "the curve must never flatten backwards"
+    assert tops == [100, 105, 110, 115, 120, 130, 140, 160, 190, 230]
+
+
+def test_enlightenment_is_worth_more_than_the_whole_climb():
+    top = entry(stamina=config.TRAINED_MAX)
+    before = energy.max_for(top)
+    top["enlightened"] = True
+    assert energy.max_for(top) - before == config.ENLIGHTENMENT_ENERGY_BONUS
+    assert energy.max_for(top) - before > before - config.DAILY_ENERGY
 
 
 def test_energy_is_clamped_to_the_heros_own_ceiling():
@@ -51,7 +63,7 @@ def test_energy_is_clamped_to_the_heros_own_ceiling():
              "party": ["tough", "soft"]}
     energy.set_hero_energy(state, "tough", 999)
     energy.set_hero_energy(state, "soft", 999)
-    assert energy.hero_energy(state, "tough") == 145
+    assert energy.hero_energy(state, "tough") == 230
     assert energy.hero_energy(state, "soft") == 100
 
 
@@ -64,7 +76,7 @@ def test_everyone_wakes_at_their_own_ceiling():
 
     cal.sleep(state)
 
-    assert state["roster"]["tough"]["energy"] == 145
+    assert state["roster"]["tough"]["energy"] == 230
     assert state["roster"]["soft"]["energy"] == 100
     assert state["energy"] == 100                # team = the weakest link
 
@@ -79,7 +91,7 @@ def test_the_collapse_penalty_scales_with_the_ceiling():
 
     assert state["roster"]["soft"]["energy"] == config.PASS_OUT_NEXT_DAY_ENERGY
     assert state["roster"]["tough"]["energy"] == int(
-        145 * config.PASS_OUT_ENERGY_FRACTION)
+        230 * config.PASS_OUT_ENERGY_FRACTION)
 
 
 def test_the_chair_fills_a_bigger_tank_and_says_so(content):
@@ -94,7 +106,7 @@ def test_the_chair_fills_a_bigger_tank_and_says_so(content):
     for _ in range(60):
         if activities.rest_tick(state)["full"]:
             break
-    assert state["roster"]["tough"]["energy"] == 145    # not 100
+    assert state["roster"]["tough"]["energy"] == 230    # not 100
     assert state["time_minutes"] == predicted           # the quote was honest
 
 
@@ -104,7 +116,7 @@ def test_a_full_team_means_each_at_their_own_maximum():
     energy.set_hero_energy(state, "soft", 100)
     energy.set_hero_energy(state, "tough", 100)         # full for soft, not tough
     assert not energy.team_is_full(state)
-    energy.set_hero_energy(state, "tough", 145)
+    energy.set_hero_energy(state, "tough", 230)
     assert energy.team_is_full(state)
 
 
@@ -134,7 +146,7 @@ def test_a_stamina_rank_up_restores_to_the_NEW_ceiling():
     e = entry()
     e["energy"] = 12
     attrs.add_training_xp({}, e, "stamina", attrs.xp_for_rank(1))
-    assert e["energy"] == config.DAILY_ENERGY + config.ENERGY_PER_STAMINA_RANK
+    assert e["energy"] == energy.max_for(e) == 105
 
 
 def test_a_rank_up_from_the_field_restores_too(content):
@@ -257,3 +269,98 @@ def test_a_dead_mixer_never_breaks_anything(monkeypatch):
     monkeypatch.setattr(audio, "_mixer", lambda: None)
     for name in ("level_up", "training_done", "assignment_done", None, "nope"):
         audio.play(name)                # must not raise
+
+
+# --- M37b: the operator IS the bench --------------------------------------
+
+def test_talking_to_jarvis_twice_at_the_tech_lab_opens_the_bench(content):
+    from tests.test_tower_scene import choose
+
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["credits"] = 5000
+    state["time_minutes"] = 10 * 60                 # inside the lab's hours
+    scene.floor = "tech_lab"
+    assert "jarvis" in [c for c, _, _ in scene._characters_here(state)]
+
+    scene._interact_char(app, "jarvis")             # first visit: he talks
+    labels = [i[0] for i in scene.submenu["items"]]
+    assert "Tech Bench..." in labels and "Talk" in labels
+    choose(scene, app, "Talk")
+    assert scene.mode == "scene"
+    scene.reset_modes()
+
+    scene._interact_char(app, "jarvis")             # second: straight in
+    assert scene.submenu["title"].startswith("Tech Bench")
+
+
+def test_jarvis_on_the_common_floor_is_just_jarvis(content):
+    scene, app = tower.HubScene(content), FakeApp(content)
+    from game.social import bonds
+    bonds.talk(app.game_state, "jarvis")            # already spoken to today
+    scene.floor = "common"
+    scene._interact_char(app, "jarvis")
+    assert scene.submenu["title"].startswith("Edwin Jarvis")
+    assert not any("Bench" in i[0] for i in scene.submenu["items"])
+
+
+def test_an_operator_cannot_open_a_room_that_is_not_built(content):
+    scene, app = tower.HubScene(content), FakeApp(content)
+    app.game_state["repairs"] = {}
+    app.game_state["story_flags"] = {}
+    scene.floor = "tech_lab"
+    assert scene._operator_station(app.game_state, "jarvis") is None
+
+
+def test_an_operator_still_keeps_the_rooms_hours(content):
+    scene, app = tower.HubScene(content), FakeApp(content)
+    from game.social import bonds
+    state = app.game_state
+    bonds.talk(state, "jarvis")
+    state["time_minutes"] = 20 * 60                 # the labs shut at 6 PM
+    scene.floor = "tech_lab"
+    scene._interact_char(app, "jarvis")
+    assert scene.submenu is None
+    assert any("cold" in m or "Back at" in m for m in scene.messages)
+
+
+# --- M37b: searching costs no clock ---------------------------------------
+
+def test_searching_anything_costs_no_clock():
+    """One keypress used to lurch the world clock 5, 15 or 30 minutes. The
+    day is for decisions, not for rummaging — energy still prices the ones
+    that are real work."""
+    assert config.FURNITURE_SEARCH_MINUTES == 0
+    assert config.SEARCH_MINUTES == 0
+    assert config.MINE_MINUTES == 0
+    assert config.SCOUT_MINUTES == 0
+    assert config.UNLOCK_SEARCH_MINUTES == 0
+    assert config.MINE_ENERGY > 0, "a swing at rock is still real work"
+
+
+def test_turning_over_furniture_does_not_move_the_clock(content):
+    scene, app = tower.HubScene(content), FakeApp(content)
+    state = app.game_state
+    before = state["time_minutes"]
+    tx, ty, *_ = scene._furniture_here(state)[0]
+    scene._search_furniture(app, tx, ty)
+    assert state["time_minutes"] == before
+
+
+def test_a_scout_point_does_not_move_the_clock(content):
+    from game.hub import story as story_mod
+
+    state = party_state_for_scout(content)
+    quest = next(q for q in content["story"] if q["kind"] == "scout")
+    story_mod.accept(state, quest)
+    before = state["time_minutes"]
+    assert story_mod.do_scout(state, quest, 0, content["story"])["ok"]
+    assert state["time_minutes"] == before
+
+
+def party_state_for_scout(content):
+    state = save.new_game_state()
+    for hero_id in ("iron_man", "captain_america"):
+        state["roster"][hero_id] = entry()
+    state["party"] = ["iron_man", "captain_america"]
+    return state

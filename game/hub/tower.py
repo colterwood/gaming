@@ -1688,7 +1688,19 @@ class HubScene:
                        self._recall_dispatch(a, tid))),
                      ("Never mind", False, None)])
             return
+        # M37b: an operator standing at a working bench IS the bench. Talk to
+        # Jarvis in the Tech Lab once and he says his piece; from then on he
+        # opens the fabricator, because walking past the man who runs it to
+        # press Enter on a table two tiles away is silly.
+        station = self._operator_station(state, char_id)
+        if station and bonds.talked_today(state, char_id):
+            self._open_room_station(app, station)
+            return
+
         items = []
+        if station:
+            items.append((f"{STATION_LABELS[station]}...", False,
+                          (lambda a, k=station: self._open_room_station(a, k))))
         if bonds.bondable(char):
             bond = bonds.ensure_bond(state, char_id)
             can_gift, _ = bonds.gift_allowed(state, char_id)
@@ -1714,6 +1726,26 @@ class HubScene:
         if entry is not None:
             title += f"  EN {energy.hero_energy(state, char_id)}"
         self._open_submenu(title, items)
+
+    # M37b: who runs which bench. The station only opens through them once
+    # the room is repaired AND inside its hours — _open_room_station handles
+    # both, so this only has to say who stands where.
+    OPERATORS = {"jarvis": ("tech_lab", "techlab"),
+                 "hank_pym": ("pym_lab", "pymlab"),
+                 "medbay_unit": ("med_bay", "medbay")}
+
+    def _operator_station(self, state, char_id):
+        """The station this character is manning right here, or None."""
+        posting = self.OPERATORS.get(char_id)
+        if not posting or self.area != "tower":
+            return None
+        floor, station = posting
+        if self.floor != floor:
+            return None            # Jarvis on the common floor is just Jarvis
+        job = self._station_repair_job(state, station)
+        if job and not repairs.flag_set(state, job):
+            return None            # the room isn't built yet
+        return station
 
     def _play_scene(self, scene):
         """Put a queued story scene on screen, with its sound if it has one

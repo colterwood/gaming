@@ -45,6 +45,12 @@ def add_points(state, char_id, amount):
             "gained": amount, "level_up": after_level > before_level}
 
 
+def talked_today(state, char_id):
+    """Whether this character has already had their say today (M37b: what
+    makes a second visit to an operator open their bench instead)."""
+    return bool((state.get("bonds", {}).get(char_id) or {}).get("talked_today"))
+
+
 def talk(state, char_id):
     """Daily talk: +15, once per day per character (§6.2)."""
     bond = ensure_bond(state, char_id)

@@ -72,10 +72,18 @@ TICK_REAL_SECONDS = 7               # ...per 7 real seconds
 DAILY_ENERGY = 100          # what a rank-1 Stamina hero wakes up with
 # M37: ...and it is no longer the ceiling. Stamina is the "how much can you
 # do in a day" attribute and it did nothing for the day — HP and a little
-# battle bulk, and that was all. Every rank above the first adds this much
-# to that hero's daily maximum, so a Stamina-10 hero runs to 145 while a
-# Stamina-1 hero still runs to 100.
-ENERGY_PER_STAMINA_RANK = 5
+# battle bulk, and that was all.
+#
+# M37b: the bonus ACCELERATES rather than paying a flat 5 a rank. A linear
+# table made the last rank worth exactly as much as the first, which is the
+# wrong shape for a ladder whose XP cost doubles every step (§6.3): the
+# expensive ranks have to buy more. Keyed by the rank shown on the card, and
+# CUMULATIVE — a Stamina-7 hero is at 140, not 100 plus a running total.
+ENERGY_BY_STAMINA_RANK = {1: 0, 2: 5, 3: 10, 4: 15, 5: 20,
+                          6: 30, 7: 40, 8: 60, 9: 90, 10: 130}
+# ...and Enlightenment, the rung above ten, is worth more than the whole
+# climb that precedes it.
+ENLIGHTENMENT_ENERGY_BONUS = 500
 PASS_OUT_NEXT_DAY_ENERGY = 80
 # The morning after a collapse, as a FRACTION of that hero's own maximum —
 # 80 of a flat 100 is what this used to be, and it has to scale now that the
@@ -197,8 +205,14 @@ INVENTORY_SLOTS_MAX = 16            # = SLOTS_PER_HERO x PARTY_SIZE_MAX (4)
 INVENTORY_STACK_MAX = 99
 
 # --- Field life (M10) ---
+# M37b: SEARCHING COSTS NO CLOCK. Turning over a couch, opening a crate,
+# swinging at a seam, combing a stand of trees — these are one keypress and
+# they used to lurch the world clock 5, 15 or 30 minutes. The day is meant
+# to be spent on decisions (where to fly, who to send, how long to sit in
+# the chair), not on rummaging. What still prices these is ENERGY, where it
+# applies: a swing at rock is 8 EN, a search is free.
 EAT_MINUTES = 10                    # eating a ration advances the clock
-SEARCH_MINUTES = 15                 # rummaging a crate/dumpster
+SEARCH_MINUTES = 0                  # rummaging a crate/dumpster
 SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
 
 # --- Scout quests (M13): field work per scout point ---
@@ -206,11 +220,11 @@ SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
 # the clock and nothing else — the energy price made casing a block feel
 # like heavy labour, which is not what the action is.
 SCOUT_ENERGY = 0
-SCOUT_MINUTES = 20
+SCOUT_MINUTES = 0
 
 # --- Story unlocks (M17): combing a search site in a side arc ---
 UNLOCK_SEARCH_ENERGY = 5
-UNLOCK_SEARCH_MINUTES = 20
+UNLOCK_SEARCH_MINUTES = 0
 
 # --- Tower repairs (M29) ---
 # Salvaging a part is scout-point work that happens indoors; fitting it is
@@ -224,7 +238,7 @@ UNLOCK_SEARCH_MINUTES = 20
 # elevator 0, Quinjet 15, training floor 5, and the three rooms 0.
 REPAIR_PART_ENERGY = 5
 REPAIR_PART_MINUTES = 20
-FURNITURE_SEARCH_MINUTES = 5
+FURNITURE_SEARCH_MINUTES = 0
 # M36: furniture, planters and street trees are searchable at ALL times,
 # not only while a repair hunt is on. Almost all of it is empty — that is
 # the point of letting the player paw at everything.
@@ -272,7 +286,7 @@ GEAR_LEVEL_MAX = 3
 # priced like a heavy crate search, with the same danger-scaled trap risk
 # — the best metal is in the worst neighbourhood.
 MINE_ENERGY = 8
-MINE_MINUTES = 30
+MINE_MINUTES = 0                    # the 8 EN is the price of a swing
 # Leaving gear at the Pym bench: what a level costs and how many nights it
 # is gone for. Keyed by the level being upgraded TO.
 GEAR_UPGRADE_CREDITS = {2: 250, 3: 600}
