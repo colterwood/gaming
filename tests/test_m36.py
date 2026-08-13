@@ -823,6 +823,58 @@ def test_saying_no_to_the_solo_question_leaves_everything_alone(content):
     assert scene.mode == "normal"
 
 
+def _waiting_at_the_mats(content, extra=("thor",)):
+    """A finished trainee, benched, flagged for collection."""
+    from game.hub import party as party_mod
+
+    state = party_state(content)
+    for hero_id in extra:
+        state["roster"][hero_id] = {"trained_ranks": {}, "attribute_xp": {},
+                                    "perks": [], "perk_choices": {}, "gear": {},
+                                    "ult_charge": 0, "energy": 100}
+        state["party"].append(hero_id)
+    activities.start_training(state, content, "captain_america", "strength")
+    state["time_minutes"] += 50 * config.TRAINING_LOCKOUT_MULT
+    activities.finish_due_training(state, content)
+    assert state["roster"]["captain_america"]["done_training"] is True
+    return state, party_mod
+
+
+@pytest.mark.parametrize("how", ["open slot", "swap"])
+def test_collecting_a_trainee_anywhere_stops_the_card_asking(content, how):
+    """"Waiting at the mats" stops being true the moment they are on the
+    team, HOWEVER they got there. The flag was cleared by the rack menu
+    only, so collecting them by walking up to them in the world left it set
+    and the Tasks tab went on telling the player to fetch a hero already
+    following them around."""
+    from game.ui.impel_card import ImpelCardScene
+
+    state, party_mod = _waiting_at_the_mats(content)
+    if how == "open slot":
+        state["party"].remove("thor")               # make room
+        ok, message = party_mod.add_to_party(content, state, "captain_america")
+    else:
+        ok, message = party_mod.swap(content, state, "captain_america", "thor")
+    assert ok, message
+
+    assert "captain_america" in state["party"]
+    assert "done_training" not in state["roster"]["captain_america"]
+    rows = [r[0] for r in ImpelCardScene(content)._progress_rows(state)]
+    assert not [r for r in rows if "collect them" in r], rows
+
+
+def test_the_card_never_asks_you_to_collect_someone_on_the_team(content):
+    """Belt and braces: even with the flag somehow set, a hero who is on the
+    team is not waiting anywhere."""
+    from game.ui.impel_card import ImpelCardScene
+
+    state = party_state(content)
+    state["roster"]["captain_america"]["done_training"] = True
+    assert "captain_america" in state["party"]
+    rows = [r[0] for r in ImpelCardScene(content)._progress_rows(state)]
+    assert not [r for r in rows if "collect them" in r], rows
+
+
 # --- note 42: the HUD packs itself and cannot collide --------------------
 
 def test_the_event_banner_never_runs_through_the_floor_name(content):

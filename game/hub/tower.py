@@ -2265,9 +2265,7 @@ class HubScene:
             self.reset_modes()
             return
         ok, message = party_mod.add_to_party(self.content, state, hero_id)
-        if ok:
-            state["roster"][hero_id].pop("done_training", None)
-        self.log(message)
+        self.log(message)           # add_to_party clears done_training
         energy.sync(state)
         self.reset_modes()
 
@@ -2424,7 +2422,6 @@ class HubScene:
         if not ok:
             self.reset_modes()
             return
-        app.game_state["roster"][other_id].pop("done_training", None)
         energy.sync(app.game_state)
         # The team is no longer down to one, so this now goes straight
         # through — with the attribute the player already chose.

@@ -315,7 +315,8 @@ class ImpelCardScene:
                 rows.append((f"[~] {name}: training "
                              f"{lock['attribute'].title()}, "
                              f"{clock_mod.format_duration(left)} to go", False))
-            elif entry.get("done_training"):
+            elif entry.get("done_training") and hero_id not in state.get(
+                    "party", []):
                 rows.append((f"[!] {name}: done on the mats - collect them "
                              f"at the rack", False))
 

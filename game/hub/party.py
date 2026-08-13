@@ -70,6 +70,7 @@ def swap(content, state, incoming_id, outgoing_id):
         roster[outgoing_id]["assignment"] = assignment
     party = state["party"]
     party[party.index(outgoing_id)] = incoming_id
+    roster[incoming_id].pop("done_training", None)      # M36b: see below
     incoming = content["characters"][incoming_id]["name"]
     outgoing = content["characters"][outgoing_id]["name"]
     message = f"{incoming} joins the team; {outgoing} steps out"
@@ -91,5 +92,11 @@ def add_to_party(content, state, hero_id):
         return False, "They're mid-training."
     state["roster"][hero_id].pop("assignment", None)
     state["roster"][hero_id]["idle_days"] = 0
+    # M36b: "waiting at the mats to be collected" stops being true the moment
+    # they are on the team, however they got there. The flag used to be
+    # cleared by the rack menu only, so collecting a finished trainee by
+    # walking up to them in the world left it set — and the Tasks tab went on
+    # telling the player to go and fetch a hero already following them around.
+    state["roster"][hero_id].pop("done_training", None)
     state["party"].append(hero_id)
     return True, f"{content['characters'][hero_id]['name']} joins the team."
