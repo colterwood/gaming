@@ -39,14 +39,14 @@ def test_the_bible_is_up_to_date(tmp_path):
 
 
 def test_the_browsable_edition_is_up_to_date():
-    """docs/bible.html is rendered from the markdown. Same rule: rebuild and
+    """docs/index.html is rendered from the markdown. Same rule: rebuild and
     commit, or the two disagree.
 
         python tools/build_bible_html.py
     """
-    page = os.path.join(ROOT, "docs", "bible.html")
+    page = os.path.join(ROOT, "docs", "index.html")
     builder = os.path.join(ROOT, "tools", "build_bible_html.py")
-    assert os.path.exists(page), "docs/bible.html is missing — run the builder"
+    assert os.path.exists(page), "docs/index.html is missing — run the builder"
     before = open(page, encoding="utf-8").read()
 
     result = subprocess.run([sys.executable, builder], cwd=ROOT,
@@ -56,7 +56,7 @@ def test_the_browsable_edition_is_up_to_date():
 
     if before != after:
         open(page, "w", encoding="utf-8").write(before)
-        pytest.fail("docs/bible.html is out of date. Run "
+        pytest.fail("docs/index.html is out of date. Run "
                     "`python tools/build_bible_html.py` and commit it.")
 
 
@@ -65,7 +65,7 @@ def test_the_page_resolves_in_every_theme_state():
     sits behind a media query or a [data-theme] stamp never applies in the
     un-stamped 'system' state, and the page renders one theme's text on the
     other theme's ground."""
-    css = open(os.path.join(ROOT, "docs", "bible.html"),
+    css = open(os.path.join(ROOT, "docs", "index.html"),
                encoding="utf-8").read().split("<style>")[1].split("</style>")[0]
     assert "background: var(--paper)" in css, \
         "body must paint its own ground or it borrows the host's"

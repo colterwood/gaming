@@ -99,6 +99,17 @@ header.mast {
 :root[data-theme="dark"] .mast .sub { color: #4a3d05; }
 .mast .sub code { background: rgba(0,0,0,.09); }
 
+.ways {
+  display: flex; flex-wrap: wrap; gap: 4px 20px;
+  margin: 14px 0 0; max-width: none;
+}
+.ways a {
+  color: #14100a; font-size: 13px; font-weight: 600;
+  text-decoration-thickness: 2px; text-underline-offset: 3px;
+}
+.ways a:hover { text-decoration-color: #E80000; }
+.ways a:focus-visible { outline: 2px solid #14100a; outline-offset: 3px; }
+
 ul.chips {
   display: flex; flex-wrap: wrap; gap: 6px 8px;
   list-style: none; margin: 16px 0 0; padding: 0;
@@ -259,6 +270,11 @@ td:first-child { font-weight: 600; }
 <li><b>6</b> tower repairs</li>
 <li><b>4</b> bond scenes</li>
   </ul>
+  <p class="ways">
+    <a href="https://github.com/colterwood/gaming">Source on GitHub</a>
+    <a href="https://github.com/colterwood/gaming/blob/main/docs/GAME_SPEC.md">Design spec</a>
+    <a href="https://github.com/colterwood/gaming/blob/main/docs/BIBLE.md">Markdown edition</a>
+  </p>
 </header>
 
 <div class="shell">

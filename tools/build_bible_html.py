@@ -1,4 +1,4 @@
-"""Render docs/BIBLE.md into docs/bible.html — the browsable edition.
+"""Render docs/BIBLE.md into docs/index.html — the browsable edition.
 
     python tools/build_bible_html.py
 
@@ -24,7 +24,9 @@ from game import config                                     # noqa: E402
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(HERE, "docs", "BIBLE.md")
-OUT = os.path.join(HERE, "docs", "bible.html")
+# docs/ is the GitHub Pages root, so this is index.html: the project's
+# front door at colterwood.github.io/gaming/.
+OUT = os.path.join(HERE, "docs", "index.html")
 
 CARD = config.CARD_PALETTE
 PIXEL = config.PIXEL_PALETTE
@@ -250,6 +252,17 @@ header.mast {{
 :root[data-theme="dark"] .mast .sub {{ color: #4a3d05; }}
 .mast .sub code {{ background: rgba(0,0,0,.09); }}
 
+.ways {{
+  display: flex; flex-wrap: wrap; gap: 4px 20px;
+  margin: 14px 0 0; max-width: none;
+}}
+.ways a {{
+  color: #14100a; font-size: 13px; font-weight: 600;
+  text-decoration-thickness: 2px; text-underline-offset: 3px;
+}}
+.ways a:hover {{ text-decoration-color: {card[red]}; }}
+.ways a:focus-visible {{ outline: 2px solid #14100a; outline-offset: 3px; }}
+
 ul.chips {{
   display: flex; flex-wrap: wrap; gap: 6px 8px;
   list-style: none; margin: 16px 0 0; padding: 0;
@@ -399,6 +412,11 @@ td:first-child {{ font-weight: 600; }}
   <ul class="chips">
 {chips}
   </ul>
+  <p class="ways">
+    <a href="https://github.com/colterwood/gaming">Source on GitHub</a>
+    <a href="https://github.com/colterwood/gaming/blob/main/docs/GAME_SPEC.md">Design spec</a>
+    <a href="https://github.com/colterwood/gaming/blob/main/docs/BIBLE.md">Markdown edition</a>
+  </p>
 </header>
 
 <div class="shell">
