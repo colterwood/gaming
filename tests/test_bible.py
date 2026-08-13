@@ -38,6 +38,44 @@ def test_the_bible_is_up_to_date(tmp_path):
                     "`python tools/build_bible.py` and commit the result.")
 
 
+def test_the_browsable_edition_is_up_to_date():
+    """docs/bible.html is rendered from the markdown. Same rule: rebuild and
+    commit, or the two disagree.
+
+        python tools/build_bible_html.py
+    """
+    page = os.path.join(ROOT, "docs", "bible.html")
+    builder = os.path.join(ROOT, "tools", "build_bible_html.py")
+    assert os.path.exists(page), "docs/bible.html is missing — run the builder"
+    before = open(page, encoding="utf-8").read()
+
+    result = subprocess.run([sys.executable, builder], cwd=ROOT,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    after = open(page, encoding="utf-8").read()
+
+    if before != after:
+        open(page, "w", encoding="utf-8").write(before)
+        pytest.fail("docs/bible.html is out of date. Run "
+                    "`python tools/build_bible_html.py` and commit it.")
+
+
+def test_the_page_resolves_in_every_theme_state():
+    """The classic unreadable-artifact bug: a colour whose only definition
+    sits behind a media query or a [data-theme] stamp never applies in the
+    un-stamped 'system' state, and the page renders one theme's text on the
+    other theme's ground."""
+    css = open(os.path.join(ROOT, "docs", "bible.html"),
+               encoding="utf-8").read().split("<style>")[1].split("</style>")[0]
+    assert "background: var(--paper)" in css, \
+        "body must paint its own ground or it borrows the host's"
+    assert '@media (prefers-color-scheme: dark)' in css
+    assert ':root:not([data-theme="light"])' in css, \
+        "an explicit light choice must beat a dark OS"
+    assert ':root[data-theme="dark"]' in css, \
+        "the toggle must win in the other direction too"
+
+
 def test_the_bible_covers_every_tuned_constant():
     """Every number in config.py should be reachable from the document —
     either printed, or deliberately listed here as internal."""

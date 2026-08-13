@@ -1,0 +1,1098 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roads to Secret Wars — The Bible</title>
+<style>
+:root {
+  --paper:   #F0E8D8;
+  --card:    #F8E8D8;
+  --banner:  #F8D808;
+  --blue:    #0A10C8;
+  --bar:     #E07098;
+  --strip:   #E80000;
+  --ink:     #17131d;
+  --muted:   #5d5647;
+  --rule:    #cabfa6;
+  --sunk:    #e6dcc4;
+  --shadow:  rgba(23,19,29,.13);
+  --dot:     rgba(23,19,29,.10);
+  --display: Haettenschweiler, "Arial Narrow Bold", "Franklin Gothic Heavy",
+             Impact, "Anton", sans-serif;
+  --body:    ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial,
+             sans-serif;
+  --mono:    ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas,
+             monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:  #16121E;
+    --card:   #2A2438;
+    --banner: #FFC72C;
+    --blue:   #4FA4E8;
+    --bar:    #E07098;
+    --strip:  #E82C2C;
+    --ink:    #F8EFDC;
+    --muted:  #7C8BA6;
+    --rule:   #48506B;
+    --sunk:   #211c2c;
+    --shadow: rgba(0,0,0,.5);
+    --dot:    rgba(255,253,245,.05);
+  }
+}
+:root[data-theme="dark"] {
+  --paper:  #16121E;
+  --card:   #2A2438;
+  --banner: #FFC72C;
+  --blue:   #4FA4E8;
+  --bar:    #E07098;
+  --strip:  #E82C2C;
+  --ink:    #F8EFDC;
+  --muted:  #7C8BA6;
+  --rule:   #48506B;
+  --sunk:   #211c2c;
+  --shadow: rgba(0,0,0,.5);
+  --dot:    rgba(255,253,245,.05);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 7px 7px;
+  color: var(--ink);
+  font: 16px/1.6 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- masthead: the card's yellow name banner ---- */
+header.mast {
+  background: var(--banner);
+  border-bottom: 3px solid var(--ink);
+  padding: 26px clamp(16px, 4vw, 48px) 20px;
+}
+.mast h1 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(34px, 7vw, 68px);
+  line-height: .92;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+  color: var(--blue);
+  text-wrap: balance;
+}
+/* On the gold banner the link-blue would be near-illegible in the dark
+   palette, so the banner keeps ink lettering there — the banner is the one
+   surface that does not flip with the theme. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mast h1 { color: #14100a; }
+}
+:root[data-theme="dark"] .mast h1 { color: #14100a; }
+.mast .sub {
+  margin: 8px 0 0;
+  max-width: 62ch;
+  color: #3a3320;
+  font-size: 14.5px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .mast .sub { color: #4a3d05; }
+}
+:root[data-theme="dark"] .mast .sub { color: #4a3d05; }
+.mast .sub code { background: rgba(0,0,0,.09); }
+
+ul.chips {
+  display: flex; flex-wrap: wrap; gap: 6px 8px;
+  list-style: none; margin: 16px 0 0; padding: 0;
+}
+ul.chips li {
+  background: var(--paper); color: var(--ink);
+  border: 1.5px solid var(--ink);
+  padding: 2px 9px; font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+ul.chips b { font-family: var(--mono); }
+
+/* ---- shell ---- */
+.shell {
+  display: grid; grid-template-columns: 232px minmax(0,1fr);
+  gap: clamp(20px, 3vw, 44px);
+  max-width: 1240px; margin: 0 auto;
+  padding: 28px clamp(16px, 4vw, 48px) 96px;
+  align-items: start;
+}
+@media (max-width: 900px) { .shell { grid-template-columns: 1fr; } }
+
+nav.rail { position: sticky; top: 18px; }
+@media (max-width: 900px) { nav.rail { position: static; } }
+.finder {
+  width: 100%; padding: 9px 11px; margin-bottom: 14px;
+  background: var(--card); color: var(--ink);
+  border: 2px solid var(--ink); border-radius: 0;
+  font: 13px var(--body);
+}
+.finder::placeholder { color: var(--muted); }
+.finder:focus-visible { outline: 3px solid var(--bar); outline-offset: 1px; }
+nav.rail ol { list-style: none; margin: 0; padding: 0; }
+nav.rail a {
+  display: flex; gap: 9px; align-items: baseline;
+  padding: 3px 7px; text-decoration: none; color: var(--ink);
+  font-size: 13.5px; border-left: 3px solid transparent;
+}
+nav.rail a:hover { background: var(--sunk); }
+nav.rail a.on { border-left-color: var(--strip); background: var(--sunk); }
+nav.rail .n {
+  font-family: var(--mono); font-size: 11px; color: var(--muted);
+  min-width: 1.5em; text-align: right; font-variant-numeric: tabular-nums;
+}
+nav.rail a:focus-visible { outline: 2px solid var(--bar); }
+
+/* ---- content ---- */
+main { min-width: 0; }
+section {
+  background: var(--card);
+  border: 2px solid var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow);
+  padding: 0 clamp(14px, 2.4vw, 30px) 26px;
+  margin-bottom: 26px;
+}
+h2 {
+  display: flex; align-items: baseline; gap: 12px;
+  margin: 0 clamp(-14px, -2.4vw, -30px) 20px;
+  padding: 9px clamp(14px, 2.4vw, 30px);
+  background: var(--banner);
+  border-bottom: 2px solid var(--ink);
+}
+h2 .num {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: #6b5a00; letter-spacing: .04em;
+}
+h2 .ttl {
+  font-family: var(--display); text-transform: uppercase;
+  font-size: clamp(21px, 3.2vw, 30px); font-weight: 400;
+  letter-spacing: .015em; color: var(--blue); line-height: 1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) h2 .num { color: #4a3d05; }
+  :root:not([data-theme="light"]) h2 .ttl { color: #1a1508; }
+}
+:root[data-theme="dark"] h2 .num { color: #4a3d05; }
+:root[data-theme="dark"] h2 .ttl { color: #1a1508; }
+
+h3 {
+  margin: 30px 0 10px;
+  font: 700 12.5px/1.3 var(--body);
+  text-transform: uppercase; letter-spacing: .1em;
+  color: var(--ink);
+  padding-bottom: 5px; border-bottom: 2px solid var(--bar);
+  text-wrap: balance;
+}
+h3:first-of-type { margin-top: 20px; }
+
+p { margin: 0 0 11px; max-width: 74ch; }
+p:last-child { margin-bottom: 0; }
+a { color: var(--blue); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+strong { font-weight: 700; }
+sub { display: inline-block; font-size: 12px; color: var(--muted); }
+hr { border: 0; border-top: 2px solid var(--rule); margin: 22px 0; }
+
+code {
+  font: 12.5px/1.4 var(--mono);
+  background: var(--sunk); padding: 1px 5px;
+  border: 1px solid var(--rule);
+}
+
+ol.toc {
+  columns: 2; column-gap: 28px;
+  margin: 0; padding-left: 1.4em; font-size: 14.5px;
+}
+@media (max-width: 620px) { ol.toc { columns: 1; } }
+ol.toc li { break-inside: avoid; margin-bottom: 2px; }
+
+/* ---- tables: the power-rating grid ---- */
+.scroll { overflow-x: auto; margin: 0 0 16px; border: 1px solid var(--rule); }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th {
+  background: var(--ink); color: var(--card);
+  text-align: left; padding: 6px 10px;
+  font: 700 11px/1.3 var(--body);
+  text-transform: uppercase; letter-spacing: .07em;
+  white-space: nowrap; position: sticky; top: 0;
+}
+td {
+  padding: 5px 10px; border-top: 1px solid var(--rule);
+  vertical-align: top; font-variant-numeric: tabular-nums;
+}
+tbody tr:nth-child(odd) { background: color-mix(in srgb, var(--bar) 11%, transparent); }
+tbody tr:hover { background: color-mix(in srgb, var(--bar) 24%, transparent); }
+td code { background: transparent; border: 0; padding: 0; }
+td:first-child { font-weight: 600; }
+
+.hidden { display: none !important; }
+.nohits { color: var(--muted); font-style: italic; padding: 6px 0; }
+
+@media print {
+  nav.rail, .finder { display: none; }
+  .shell { display: block; }
+  section { box-shadow: none; break-inside: avoid; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<header class="mast">
+  <h1>Roads to Secret Wars<br>The Bible</h1>
+  <p class="sub">Every number in the game, generated from the code. Rebuild
+     with <code>python tools/build_bible.py</code> then
+     <code>python tools/build_bible_html.py</code>. The design narrative
+     lives in GAME_SPEC.md; this is the reference sheet.</p>
+  <ul class="chips">
+<li><b>5</b> playable heroes</li>
+<li><b>5</b> npcs</li>
+<li><b>5</b> enemy types</li>
+<li><b>4</b> enemy level variants</li>
+<li><b>29</b> items</li>
+<li><b>3</b> zones</li>
+<li><b>6</b> tower floors</li>
+<li><b>7</b> story quests</li>
+<li><b>1</b> side arcs</li>
+<li><b>16</b> board jobs</li>
+<li><b>6</b> tower repairs</li>
+<li><b>4</b> bond scenes</li>
+  </ul>
+</header>
+
+<div class="shell">
+  <nav class="rail">
+    <input class="finder" type="search" id="finder" placeholder="Filter rows…"
+           aria-label="Filter every table in the document">
+    <ol>
+<li><a href="#1-the-day"><span class="n">1</span><span>The day</span></a></li>
+<li><a href="#2-energy-health"><span class="n">2</span><span>Energy &amp; health</span></a></li>
+<li><a href="#3-progression"><span class="n">3</span><span>Progression</span></a></li>
+<li><a href="#4-combat"><span class="n">4</span><span>Combat</span></a></li>
+<li><a href="#5-heroes"><span class="n">5</span><span>Heroes</span></a></li>
+<li><a href="#6-npcs"><span class="n">6</span><span>NPCs</span></a></li>
+<li><a href="#7-enemies"><span class="n">7</span><span>Enemies</span></a></li>
+<li><a href="#8-items"><span class="n">8</span><span>Items</span></a></li>
+<li><a href="#9-gear"><span class="n">9</span><span>Gear</span></a></li>
+<li><a href="#10-the-tower"><span class="n">10</span><span>The tower</span></a></li>
+<li><a href="#11-tower-repairs"><span class="n">11</span><span>Tower repairs</span></a></li>
+<li><a href="#12-zones-the-field"><span class="n">12</span><span>Zones &amp; the field</span></a></li>
+<li><a href="#13-story"><span class="n">13</span><span>Story</span></a></li>
+<li><a href="#14-side-arcs"><span class="n">14</span><span>Side arcs</span></a></li>
+<li><a href="#15-the-assignment-board"><span class="n">15</span><span>The assignment board</span></a></li>
+<li><a href="#16-bonds"><span class="n">16</span><span>Bonds</span></a></li>
+<li><a href="#17-calendar"><span class="n">17</span><span>Calendar</span></a></li>
+<li><a href="#18-the-save-file"><span class="n">18</span><span>The save file</span></a></li>
+    </ol>
+  </nav>
+  <main id="doc">
+<p><em>Every number in the game, generated from the code.</em> Run <code>python tools/build_bible.py</code> to rebuild.</p>
+<p>This file is <strong>generated</strong>. Do not hand-edit it — edit <code>game/config.py</code>, <code>data/*.json</code> or <code>tools/build_bible.py</code> and regenerate. The design <em>narrative</em> (why things are the way they are, milestone by milestone) lives in <a href="GAME_SPEC.md">GAME_SPEC.md</a>; this is the reference sheet.</p>
+<p><strong>At a glance:</strong> 5 playable heroes · 5 npcs · 5 enemy types · 4 enemy level variants · 29 items · 3 zones · 6 tower floors · 7 story quests · 1 side arcs · 16 board jobs · 6 tower repairs · 4 bond scenes</p>
+<section id="contents">
+<h2><span class="ttl">Contents</span></h2>
+<ol class="toc"><li><a href="#1-the-day">The day</a></li><li><a href="#2-energy--health">Energy &amp; health</a></li><li><a href="#3-progression">Progression</a></li><li><a href="#4-combat">Combat</a></li><li><a href="#5-heroes">Heroes</a></li><li><a href="#6-npcs">NPCs</a></li><li><a href="#7-enemies">Enemies</a></li><li><a href="#8-items">Items</a></li><li><a href="#9-gear">Gear</a></li><li><a href="#10-the-tower">The tower</a></li><li><a href="#11-tower-repairs">Tower repairs</a></li><li><a href="#12-zones--the-field">Zones &amp; the field</a></li><li><a href="#13-story">Story</a></li><li><a href="#14-side-arcs">Side arcs</a></li><li><a href="#15-the-assignment-board">The assignment board</a></li><li><a href="#16-bonds">Bonds</a></li><li><a href="#17-calendar">Calendar</a></li><li><a href="#18-the-save-file">The save file</a></li></ol>
+</section>
+<section id="1-the-day">
+<h2><span class="num">1</span><span class="ttl">The day</span></h2>
+<p>The day runs <strong>6:00 AM to 2:00 AM</strong> — 1200 in-game minutes. Past the end, the team passes out.</p>
+<p>The world clock ticks <strong>10 in-game minutes per 7 real seconds</strong> while you are on your feet in the hub, which makes a full day about <strong>14 real minutes</strong> of standing still. The clock is frozen inside menus and cutscenes (M25) — reading is not an activity.</p>
+<h3 id="what-costs-what">What costs what</h3>
+<p><strong>Outside battle, almost nothing jumps the clock</strong> (M37c). Energy is the gate; the day is spent by playing it, by flying, and by sitting in the Med Bay chair.</p>
+<div class="scroll"><table>
+<thead><tr><th>Action</th><th>Energy</th><th>Clock</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Walk around</td><td>—</td><td>real time</td><td>the cosmetic tick</td></tr>
+<tr><td>Search furniture / a crate / trees</td><td>—</td><td>—</td><td>always available, usually empty</td></tr>
+<tr><td>Mine an ore seam</td><td>8</td><td>—</td><td>one swing per node per day</td></tr>
+<tr><td>Work a scout point</td><td>—</td><td>—</td><td>free; the walk is the cost</td></tr>
+<tr><td>Search a side-arc stand</td><td>5</td><td>—</td><td></td></tr>
+<tr><td>Salvage a repair part</td><td>5 if <strong>heavy</strong></td><td>—</td><td>light parts are free</td></tr>
+<tr><td>Fit a repair</td><td>—</td><td>—</td><td>the hunt was the price</td></tr>
+<tr><td>Talk / give a gift</td><td>—</td><td>—</td><td></td></tr>
+<tr><td>Eat a ration / use a med kit</td><td>—</td><td>—</td><td>treats the whole active party</td></tr>
+<tr><td>Engage a mission</td><td>40</td><td>—</td><td>never refused for low EN or a late hour</td></tr>
+<tr><td><strong>Quinjet hop</strong></td><td>—</td><td><strong>30m</strong></td><td>the one journey that costs daylight</td></tr>
+<tr><td><strong>Med Bay chair</strong></td><td>—</td><td><strong>10 min/tick</strong></td><td>runs in real time; the hours ARE the price</td></tr>
+<tr><td>Training session</td><td>15 + 5 × level</td><td>a <em>lockout</em>, not a jump</td><td>see Progression</td></tr>
+<tr><td>Win an ambush / trap fight</td><td>—</td><td>1h 00m</td><td>battle keeps its costs</td></tr>
+<tr><td>Lose any fight</td><td>capped at 10</td><td>3h 00m</td><td>HP floored at 10%</td></tr>
+</tbody></table></div>
+<h3 id="sleep-and-collapse">Sleep and collapse</h3>
+<div class="scroll"><table>
+<thead><tr><th></th><th>Energy</th><th>HP</th><th>Credits</th></tr></thead>
+<tbody>
+<tr><td>Sleep in a bed</td><td>full (each hero's own ceiling)</td><td>100%</td><td>—</td></tr>
+<tr><td>Collapse <strong>in the tower</strong></td><td>full</td><td>80%</td><td>−10%, max 5,000</td></tr>
+<tr><td>Collapse <strong>in the field</strong></td><td>80% of ceiling</td><td>80%</td><td>−10%, max 5,000</td></tr>
+</tbody></table></div>
+<p>You always wake beside your own bed on the Common Floor. Jarvis's espresso (bond 4) adds <strong>+10 EN</strong> to a proper night's sleep.</p>
+<p>Cleared every night: crate/seam searches, the per-zone fight cap, daily talk flags. Autosave happens at lights-out and <strong>nowhere else</strong> — quit mid-day and you resume at 6:00 AM that morning.</p>
+</section>
+<section id="2-energy-health">
+<h2><span class="num">2</span><span class="ttl">Energy &amp; health</span></h2>
+<h3 id="daily-energy-by-stamina">Daily energy by Stamina</h3>
+<p>Team energy is the <strong>minimum</strong> across the active party; team actions drain every member.</p>
+<div class="scroll"><table>
+<thead><tr><th>Stamina rank</th><th>Daily max EN</th><th>vs rank 1</th><th>after a field collapse</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>100</td><td>+0</td><td>80</td></tr>
+<tr><td>2</td><td>105</td><td>+5</td><td>84</td></tr>
+<tr><td>3</td><td>110</td><td>+10</td><td>88</td></tr>
+<tr><td>4</td><td>115</td><td>+15</td><td>92</td></tr>
+<tr><td>5</td><td>120</td><td>+20</td><td>96</td></tr>
+<tr><td>6</td><td>130</td><td>+30</td><td>104</td></tr>
+<tr><td>7</td><td>140</td><td>+40</td><td>112</td></tr>
+<tr><td>8</td><td>160</td><td>+60</td><td>128</td></tr>
+<tr><td>9</td><td>190</td><td>+90</td><td>152</td></tr>
+<tr><td>10</td><td>230</td><td>+130</td><td>184</td></tr>
+<tr><td>Enlightened</td><td>730</td><td>+500 on top</td><td>—</td></tr>
+</tbody></table></div>
+<h3 id="low-energy-initiative-penalty">Low-energy initiative penalty</h3>
+<p>Below <strong>60%</strong> of a hero's own ceiling, initiative drops 5 per tier, one tier per further 10% down, capped at 6 tiers.</p>
+<div class="scroll"><table>
+<thead><tr><th>Energy</th><th>Tiers</th><th>Initiative lost</th></tr></thead>
+<tbody>
+<tr><td>100%</td><td>0</td><td>0</td></tr>
+<tr><td>60%</td><td>0</td><td>0</td></tr>
+<tr><td>50%</td><td>1</td><td>-5</td></tr>
+<tr><td>40%</td><td>2</td><td>-10</td></tr>
+<tr><td>30%</td><td>3</td><td>-15</td></tr>
+<tr><td>20%</td><td>4</td><td>-20</td></tr>
+<tr><td>10%</td><td>5</td><td>-25</td></tr>
+<tr><td>0%</td><td>6</td><td>-30</td></tr>
+</tbody></table></div>
+<h3 id="health">Health</h3>
+<p><code>max_hp = 50 + stamina × 20 + durability × 10</code> (effective ranks).</p>
+<p><strong>HP is carried between fights</strong>, stored as a fraction of maximum so a rank-up or a piece of gear raises the pool with it. Restored by: sleeping (full), a rank-up (full), the Med Bay chair (10% per 10 min), and med kits out of combat. A KO in a won fight revives at 10%.</p>
+</section>
+<section id="3-progression">
+<h2><span class="num">3</span><span class="ttl">Progression</span></h2>
+<p>Every hero starts at <strong>rank 1</strong> in all six attributes and trains to <strong>10</strong>. What differentiates them is the innate <strong>boost</strong> table (0–7), transcribed from the 1991 Impel card backs.</p>
+<p><code>effective_rank = (rank + boost × 0.5) × (1 + boost × 0.01)</code></p>
+<p>A boost buys the combat value <strong>and nothing else</strong> — it does not make the ladder cheaper (M33).</p>
+<h3 id="the-ladder">The ladder</h3>
+<div class="scroll"><table>
+<thead><tr><th>Rank</th><th>XP needed</th><th>XP/session</th><th>Sessions</th><th>EN/session</th><th>cr/session</th><th>Lockout</th><th>cr for the rank</th><th>cr cumulative</th></tr></thead>
+<tbody>
+<tr><td>1 → 2</td><td>100</td><td>25</td><td>4</td><td>20</td><td>25</td><td>1h 40m</td><td>100</td><td>100</td></tr>
+<tr><td>2 → 3</td><td>200</td><td>35</td><td>6</td><td>25</td><td>35</td><td>2h 20m</td><td>210</td><td>310</td></tr>
+<tr><td>3 → 4</td><td>400</td><td>50</td><td>8</td><td>30</td><td>50</td><td>3h 20m</td><td>400</td><td>710</td></tr>
+<tr><td>4 → 5</td><td>800</td><td>80</td><td>10</td><td>35</td><td>80</td><td>5h 20m</td><td>800</td><td>1,510</td></tr>
+<tr><td>5 → 6</td><td>1,600</td><td>135</td><td>12</td><td>40</td><td>135</td><td>9h 00m</td><td>1,620</td><td>3,130</td></tr>
+<tr><td>6 → 7</td><td>3,200</td><td>225</td><td>15</td><td>45</td><td>225</td><td>15h 00m</td><td>3,375</td><td>6,505</td></tr>
+<tr><td>7 → 8</td><td>6,400</td><td>400</td><td>16</td><td>50</td><td>400</td><td>1d 6h</td><td>6,400</td><td>12,905</td></tr>
+<tr><td>8 → 9</td><td>12,800</td><td>700</td><td>19</td><td>55</td><td>700</td><td>2d 6h</td><td>13,300</td><td>26,205</td></tr>
+<tr><td>9 → 10</td><td>25,600</td><td>1200</td><td>22</td><td>60</td><td>1,200</td><td>4d 0h</td><td>26,400</td><td>52,605</td></tr>
+</tbody></table></div>
+<p>One attribute 1 → 10 is <strong>51,100 XP</strong> and <strong>52,605 cr</strong>; all six is <strong>306,600 XP</strong>. Enlightenment (all six at 10 first) is another <strong>51,200 XP</strong>, trained in level-9 sessions.</p>
+<p>Facility multiplier on session XP: ×1 basic, ×2 upgraded (after the Ch. 1 boss), ×3 during a training event. The credit price keys off the BASE table, so the upgraded rack is also half price per XP.</p>
+<p><strong>Sessions per day</strong> are the lesser of what energy allows and what the day allows:</p>
+<div class="scroll"><table>
+<thead><tr><th>Level</th><th>by energy</th><th>by clock</th><th>actual</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>4</td><td>12</td><td>4</td></tr>
+<tr><td>2</td><td>3</td><td>8</td><td>3</td></tr>
+<tr><td>3</td><td>3</td><td>6</td><td>3</td></tr>
+<tr><td>4</td><td>2</td><td>3</td><td>2</td></tr>
+<tr><td>5</td><td>2</td><td>2</td><td>2</td></tr>
+<tr><td>6</td><td>2</td><td>1</td><td>1</td></tr>
+<tr><td>7</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><td>8</td><td>1</td><td>0</td><td>0</td></tr>
+<tr><td>9</td><td>1</td><td>0</td><td>0</td></tr>
+</tbody></table></div>
+<p><sub>0 by clock means the lockout is longer than a single day — the session still runs, it just spans nights. Energy binds through level 5, so <code>TRAINING_LOCKOUT_MULT</code> first bites at level 6.</sub></p>
+<p>A rank-up <strong>restores the hero to full EN and HP</strong> and chimes, wherever the XP came from.</p>
+<h3 id="perks">Perks</h3>
+<p>Two choices per attribute, at <strong>card ranks 5 and 10</strong>. Effects are flat and stack with gear.</p>
+<div class="scroll"><table>
+<thead><tr><th>Attribute</th><th>Rank</th><th>Perk</th><th>Blurb</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Strength</td><td>5</td><td>Haymaker</td><td>+10% basic damage</td><td>basic_damage_pct +10</td></tr>
+<tr><td>Strength</td><td>5</td><td>Power Through</td><td>+5% max HP</td><td>max_hp_pct +5</td></tr>
+<tr><td>Strength</td><td>10</td><td>Wrecking Ball</td><td>+10% special damage</td><td>special_damage_pct +10</td></tr>
+<tr><td>Strength</td><td>10</td><td>Unstoppable</td><td>+15% basic damage</td><td>basic_damage_pct +15</td></tr>
+<tr><td>Speed</td><td>5</td><td>Quickdraw</td><td>+5 ult charge per turn</td><td>ult_turn_charge_bonus +5</td></tr>
+<tr><td>Speed</td><td>5</td><td>Fleet Footed</td><td>+3% dodge</td><td>dodge_bonus +3</td></tr>
+<tr><td>Speed</td><td>10</td><td>Blur</td><td>+5% dodge</td><td>dodge_bonus +5</td></tr>
+<tr><td>Speed</td><td>10</td><td>Momentum</td><td>+4% crit</td><td>crit_bonus +4</td></tr>
+<tr><td>Agility</td><td>5</td><td>Precision</td><td>+4% crit</td><td>crit_bonus +4</td></tr>
+<tr><td>Agility</td><td>5</td><td>Evasive</td><td>+3% dodge</td><td>dodge_bonus +3</td></tr>
+<tr><td>Agility</td><td>10</td><td>Killer Instinct</td><td>+6% crit</td><td>crit_bonus +6</td></tr>
+<tr><td>Agility</td><td>10</td><td>Untouchable</td><td>+6% dodge</td><td>dodge_bonus +6</td></tr>
+<tr><td>Stamina</td><td>5</td><td>Conditioning</td><td>+10% max HP</td><td>max_hp_pct +10</td></tr>
+<tr><td>Stamina</td><td>5</td><td>Second Wind</td><td>+5 battle energy</td><td>battle_energy_flat +5</td></tr>
+<tr><td>Stamina</td><td>10</td><td>Iron Lungs</td><td>+10 battle energy</td><td>battle_energy_flat +10</td></tr>
+<tr><td>Stamina</td><td>10</td><td>Juggernaut</td><td>+15% max HP</td><td>max_hp_pct +15</td></tr>
+<tr><td>Durability</td><td>5</td><td>Thick Skin</td><td>+8% max HP</td><td>max_hp_pct +8</td></tr>
+<tr><td>Durability</td><td>5</td><td>Shrug It Off</td><td>+2% dodge</td><td>dodge_bonus +2</td></tr>
+<tr><td>Durability</td><td>10</td><td>Fortress</td><td>+12% max HP</td><td>max_hp_pct +12</td></tr>
+<tr><td>Durability</td><td>10</td><td>Retaliation</td><td>+4% crit</td><td>crit_bonus +4</td></tr>
+<tr><td>Intelligence</td><td>5</td><td>Tactician</td><td>+8% special damage</td><td>special_damage_pct +8</td></tr>
+<tr><td>Intelligence</td><td>5</td><td>Efficient</td><td>+5 battle energy</td><td>battle_energy_flat +5</td></tr>
+<tr><td>Intelligence</td><td>10</td><td>Mastermind</td><td>+12% special damage</td><td>special_damage_pct +12</td></tr>
+<tr><td>Intelligence</td><td>10</td><td>Overcharge</td><td>+10 ult charge per turn</td><td>ult_turn_charge_bonus +10</td></tr>
+</tbody></table></div>
+<h3 id="xp-from-the-field">XP from the field</h3>
+<p>Battle XP is paid <strong>per enemy defeated</strong>, to every participating hero (KO'd participants get 50%), and lands on their six attributes immediately, split evenly. There is no bank.</p>
+<div class="scroll"><table>
+<thead><tr><th>Enemy level</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th></tr></thead>
+<tbody>
+<tr><td>XP</td><td>12</td><td>24</td><td>36</td><td>54</td><td>72</td><td>90</td><td>114</td><td>138</td><td>162</td><td>192</td></tr>
+</tbody></table></div>
+<h3 id="passive-assignments-benched-heroes">Passive assignments (benched heroes)</h3>
+<div class="scroll"><table>
+<thead><tr><th>Assignment</th><th>Pays</th><th>Requires</th></tr></thead>
+<tbody>
+<tr><td>Attribute training</td><td>xp/day: 40</td><td>—</td></tr>
+<tr><td>Ops support</td><td>credits/day: 25</td><td>Intelligence 3+</td></tr>
+<tr><td>Tower socializing</td><td>bond/day: 15</td><td>—</td></tr>
+</tbody></table></div>
+<p>After <strong>2</strong> consecutive days in the same spot (or idle), unworked attributes decay by <strong>20 XP/day</strong> — banked XP first, then trained ranks.</p>
+</section>
+<section id="4-combat">
+<h2><span class="num">4</span><span class="ttl">Combat</span></h2>
+<p>Party size max <strong>4</strong>. Menu order: Basic, Special, Ultimate, Defend, Item.</p>
+<div class="scroll"><table>
+<thead><tr><th>Quantity</th><th>Formula</th></tr></thead>
+<tbody>
+<tr><td>Max HP</td><td>50 + stamina×20 + durability×10</td></tr>
+<tr><td>Battle energy</td><td>20 + intelligence×5 (refills each battle)</td></tr>
+<tr><td>Initiative</td><td>speed×10 + rand(1, 6), re-rolled each round</td></tr>
+<tr><td>Basic damage</td><td>power + rank×4 − target durability×2 (min 1)</td></tr>
+<tr><td>Special/ultimate damage</td><td>power + rank×5 − target durability×2 (min 1)</td></tr>
+<tr><td>Crit chance</td><td>agility×4% → ×1.5 damage</td></tr>
+<tr><td>Dodge chance</td><td>agility×3% (rolled after the hit, before crit)</td></tr>
+<tr><td>Defend</td><td>×0.5 incoming until your next turn</td></tr>
+<tr><td>Ultimate charge</td><td>+20/turn, +10/hit taken, fires at 100; <strong>carries between battles</strong></td></tr>
+</tbody></table></div>
+<p>Status effects: <strong>Burn</strong> 5 dmg/turn for 3 turns · <strong>Stun</strong> skip 1 turn.</p>
+<h3 id="signature-spreads">Signature spreads</h3>
+<div class="scroll"><table>
+<thead><tr><th>Spread</th><th>Who</th><th>Hits</th></tr></thead>
+<tbody>
+<tr><td><code>adjacent</code></td><td>Iron Man — Unibeam</td><td>the target plus its immediate living neighbours <strong>in the drawn line</strong> (a downed body blocks the sweep)</td></tr>
+<tr><td><code>random</code> + <code>extra_targets</code></td><td>Ant-Man — Pym Particle Barrage</td><td>the target plus N others at random</td></tr>
+<tr><td><code>random_range</code></td><td>Cap — Shield Throw</td><td>the target plus extra_min..extra_max others, decided by coin flips</td></tr>
+</tbody></table></div>
+<h3 id="enemy-ai">Enemy AI</h3>
+<div class="scroll"><table>
+<thead><tr><th>AI</th><th>Behaviour</th></tr></thead>
+<tbody>
+<tr><td><code>aggressive</code></td><td>highest-damage action at the lowest-HP target</td></tr>
+<tr><td><code>defensive</code></td><td>guards below 40% HP — but never two turns running, and not at all below 15%, where it swings with everything</td></tr>
+<tr><td><code>support</code></td><td>heals/buffs an ally below 50% HP, else attacks</td></tr>
+</tbody></table></div>
+</section>
+<section id="5-heroes">
+<h2><span class="num">5</span><span class="ttl">Heroes</span></h2>
+<h3 id="ant-man">Ant-Man</h3>
+<p><em>Rare</em> · Chapter 1 · story recruit</p>
+<p>Birthday: Issue 1, Day 6</p>
+<div class="scroll"><table>
+<thead><tr><th>Attribute</th><th>Boost</th><th>Effective @ rank 1</th><th>Effective @ rank 10</th></tr></thead>
+<tbody>
+<tr><td>Strength</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Speed</td><td>3</td><td>2.58</td><td>11.85</td></tr>
+<tr><td>Agility</td><td>5</td><td>3.68</td><td>13.12</td></tr>
+<tr><td>Stamina</td><td>3</td><td>2.58</td><td>11.85</td></tr>
+<tr><td>Durability</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Intelligence</td><td>5</td><td>3.68</td><td>13.12</td></tr>
+</tbody></table></div>
+<p>At rank 1: <strong>121 HP</strong>, <strong>38 battle EN</strong>, crit 15%, dodge 11%. At rank 10: <strong>399 HP</strong>, <strong>85 battle EN</strong>, crit 52%, dodge 39%.</p>
+<div class="scroll"><table>
+<thead><tr><th>Ability</th><th>Type</th><th>Power</th><th>Scales</th><th>Cost</th><th>Target</th><th>Dmg @1*</th><th>Dmg @10*</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Shrink Strike</td><td>basic</td><td>11</td><td>AGI</td><td>—</td><td>single</td><td>25</td><td>63</td><td>—</td></tr>
+<tr><td>Pym Particle Barrage</td><td>special</td><td>26</td><td>INT</td><td>10</td><td>single (random +2)</td><td>44</td><td>91</td><td>—</td></tr>
+<tr><td>Giant-Man Stomp</td><td>ultimate</td><td>48</td><td>STR</td><td>100</td><td>all</td><td>58</td><td>104</td><td>—</td></tr>
+</tbody></table></div>
+<p><sub>* against durability 0 — subtract 2× the target's durability.</sub></p>
+<p><strong>Gifts</strong> — loved: Deluxe Ant Farm, Double Espresso · liked: Tech Scrap, Magic Trick Kit · disliked: Bug Spray · hated: Stack of Paperwork</p>
+<h3 id="captain-america">Captain America</h3>
+<p><em>Legendary</em> · starts with you</p>
+<p>Birthday: Issue 1, Day 20</p>
+<div class="scroll"><table>
+<thead><tr><th>Attribute</th><th>Boost</th><th>Effective @ rank 1</th><th>Effective @ rank 10</th></tr></thead>
+<tbody>
+<tr><td>Strength</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Speed</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Agility</td><td>5</td><td>3.68</td><td>13.12</td></tr>
+<tr><td>Stamina</td><td>4</td><td>3.12</td><td>12.48</td></tr>
+<tr><td>Durability</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Intelligence</td><td>3</td><td>2.58</td><td>11.85</td></tr>
+</tbody></table></div>
+<p>At rank 1: <strong>132 HP</strong>, <strong>32 battle EN</strong>, crit 15%, dodge 11%. At rank 10: <strong>411 HP</strong>, <strong>79 battle EN</strong>, crit 52%, dodge 39%.</p>
+<div class="scroll"><table>
+<thead><tr><th>Ability</th><th>Type</th><th>Power</th><th>Scales</th><th>Cost</th><th>Target</th><th>Dmg @1*</th><th>Dmg @10*</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Shield Strike</td><td>basic</td><td>12</td><td>STR</td><td>—</td><td>single</td><td>20</td><td>56</td><td>—</td></tr>
+<tr><td>Shield Throw</td><td>special</td><td>28</td><td>AGI</td><td>10</td><td>single (random +2–3)</td><td>46</td><td>93</td><td>—</td></tr>
+<tr><td>Avengers Assemble</td><td>ultimate</td><td>50</td><td>STR</td><td>100</td><td>all</td><td>60</td><td>106</td><td>—</td></tr>
+</tbody></table></div>
+<p><sub>* against durability 0 — subtract 2× the target's durability.</sub></p>
+<p><strong>Gifts</strong> — loved: 1940s Memorabilia, War Bonds Poster · liked: Sketchbook, Vintage Vinyl · disliked: Modern Slang Guide · hated: HYDRA Propaganda Leaflet</p>
+<p><strong>Synergy — Old Friends</strong> with Iron Man: crit_bonus +8 (bond 6+)</p>
+<h3 id="hulk">Hulk</h3>
+<p><em>Legendary</em> · Chapter 2 · bond recruit at Bond 4 · appears once <code>hulk_arrived</code></p>
+<p>Birthday: Issue 1, Day 18</p>
+<div class="scroll"><table>
+<thead><tr><th>Attribute</th><th>Boost</th><th>Effective @ rank 1</th><th>Effective @ rank 10</th></tr></thead>
+<tbody>
+<tr><td>Strength</td><td>7</td><td>4.82</td><td>14.45</td></tr>
+<tr><td>Speed</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Agility</td><td>2</td><td>2.04</td><td>11.22</td></tr>
+<tr><td>Stamina</td><td>6</td><td>4.24</td><td>13.78</td></tr>
+<tr><td>Durability</td><td>6</td><td>4.24</td><td>13.78</td></tr>
+<tr><td>Intelligence</td><td>5</td><td>3.68</td><td>13.12</td></tr>
+</tbody></table></div>
+<p>At rank 1: <strong>177 HP</strong>, <strong>38 battle EN</strong>, crit 8%, dodge 6%. At rank 10: <strong>463 HP</strong>, <strong>85 battle EN</strong>, crit 45%, dodge 34%.</p>
+<div class="scroll"><table>
+<thead><tr><th>Ability</th><th>Type</th><th>Power</th><th>Scales</th><th>Cost</th><th>Target</th><th>Dmg @1*</th><th>Dmg @10*</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Smash</td><td>basic</td><td>14</td><td>STR</td><td>—</td><td>single</td><td>33</td><td>71</td><td>—</td></tr>
+<tr><td>Thunderclap</td><td>special</td><td>24</td><td>STR</td><td>12</td><td>all</td><td>48</td><td>96</td><td>—</td></tr>
+<tr><td>Worldbreaker</td><td>ultimate</td><td>60</td><td>STR</td><td>100</td><td>all</td><td>84</td><td>132</td><td>—</td></tr>
+</tbody></table></div>
+<p><sub>* against durability 0 — subtract 2× the target's durability.</sub></p>
+<p><strong>Gifts</strong> — loved: Energy Bar, Double Espresso · liked: Vintage Vinyl, Sketchbook · disliked: Bag of Magnets, Bug Spray · hated: Stack of Paperwork, HYDRA Propaganda Leaflet</p>
+<h3 id="iron-man">Iron Man</h3>
+<p><em>Legendary</em> · starts with you</p>
+<p>Birthday: Issue 2, Day 14</p>
+<div class="scroll"><table>
+<thead><tr><th>Attribute</th><th>Boost</th><th>Effective @ rank 1</th><th>Effective @ rank 10</th></tr></thead>
+<tbody>
+<tr><td>Strength</td><td>6</td><td>4.24</td><td>13.78</td></tr>
+<tr><td>Speed</td><td>6</td><td>4.24</td><td>13.78</td></tr>
+<tr><td>Agility</td><td>3</td><td>2.58</td><td>11.85</td></tr>
+<tr><td>Stamina</td><td>4</td><td>3.12</td><td>12.48</td></tr>
+<tr><td>Durability</td><td>5</td><td>3.68</td><td>13.12</td></tr>
+<tr><td>Intelligence</td><td>5</td><td>3.68</td><td>13.12</td></tr>
+</tbody></table></div>
+<p>At rank 1: <strong>149 HP</strong>, <strong>38 battle EN</strong>, crit 10%, dodge 8%. At rank 10: <strong>430 HP</strong>, <strong>85 battle EN</strong>, crit 47%, dodge 36%.</p>
+<div class="scroll"><table>
+<thead><tr><th>Ability</th><th>Type</th><th>Power</th><th>Scales</th><th>Cost</th><th>Target</th><th>Dmg @1*</th><th>Dmg @10*</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Repulsor Blast</td><td>basic</td><td>12</td><td>INT</td><td>—</td><td>single</td><td>26</td><td>64</td><td>—</td></tr>
+<tr><td>Unibeam</td><td>special</td><td>30</td><td>INT</td><td>12</td><td>single (adjacent)</td><td>48</td><td>95</td><td>—</td></tr>
+<tr><td>House Party Protocol</td><td>ultimate</td><td>55</td><td>INT</td><td>100</td><td>all</td><td>73</td><td>120</td><td>—</td></tr>
+</tbody></table></div>
+<p><sub>* against durability 0 — subtract 2× the target's durability.</sub></p>
+<p><strong>Gifts</strong> — loved: Rare Alloy, Double Espresso · liked: Tech Scrap, Vintage Vinyl · disliked: Bag of Magnets · hated: Stack of Paperwork</p>
+<p><strong>Synergy — Old Friends</strong> with Captain America: crit_bonus +8 (bond 6+)</p>
+<h3 id="thor">Thor</h3>
+<p><em>Legendary</em> · Chapter 2 · story recruit</p>
+<p>Birthday: Issue 2, Day 8</p>
+<div class="scroll"><table>
+<thead><tr><th>Attribute</th><th>Boost</th><th>Effective @ rank 1</th><th>Effective @ rank 10</th></tr></thead>
+<tbody>
+<tr><td>Strength</td><td>7</td><td>4.82</td><td>14.45</td></tr>
+<tr><td>Speed</td><td>6</td><td>4.24</td><td>13.78</td></tr>
+<tr><td>Agility</td><td>4</td><td>3.12</td><td>12.48</td></tr>
+<tr><td>Stamina</td><td>7</td><td>4.82</td><td>14.45</td></tr>
+<tr><td>Durability</td><td>6</td><td>4.24</td><td>13.78</td></tr>
+<tr><td>Intelligence</td><td>3</td><td>2.58</td><td>11.85</td></tr>
+</tbody></table></div>
+<p>At rank 1: <strong>188 HP</strong>, <strong>32 battle EN</strong>, crit 12%, dodge 9%. At rank 10: <strong>476 HP</strong>, <strong>79 battle EN</strong>, crit 50%, dodge 37%.</p>
+<div class="scroll"><table>
+<thead><tr><th>Ability</th><th>Type</th><th>Power</th><th>Scales</th><th>Cost</th><th>Target</th><th>Dmg @1*</th><th>Dmg @10*</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Stormbreaker Swing</td><td>basic</td><td>14</td><td>STR</td><td>—</td><td>single</td><td>33</td><td>71</td><td>—</td></tr>
+<tr><td>Chain Lightning</td><td>special</td><td>26</td><td>STR</td><td>14</td><td>single (random +3)</td><td>50</td><td>98</td><td>—</td></tr>
+<tr><td>Bifrost Strike</td><td>ultimate</td><td>58</td><td>STR</td><td>100</td><td>all</td><td>82</td><td>130</td><td>—</td></tr>
+</tbody></table></div>
+<p><sub>* against durability 0 — subtract 2× the target's durability.</sub></p>
+<p><strong>Gifts</strong> — loved: Shawarma Wrap, Rare Alloy · liked: 1940s Memorabilia, Vintage Vinyl · disliked: Modern Slang Guide · hated: HYDRA Propaganda Leaflet</p>
+<p><strong>Synergy — The Worthy</strong> with Captain America: crit_bonus +6 (bond 6+)</p>
+</section>
+<section id="6-npcs">
+<h2><span class="num">6</span><span class="ttl">NPCs</span></h2>
+<p>NPCs have no power grid and never fight. They are the talk/gift cast.</p>
+<div class="scroll"><table>
+<thead><tr><th>NPC</th><th>Bondable</th><th>Birthday</th><th>Bond unlocks</th></tr></thead>
+<tbody>
+<tr><td>Agent Coulson</td><td>yes</td><td>I1 D22</td><td>Bond 4: <code>coulson_intel</code></td></tr>
+<tr><td>Edwin Jarvis</td><td>yes</td><td>I1 D9</td><td>Bond 4: <code>jarvis_service</code></td></tr>
+<tr><td>Hank Pym</td><td>yes</td><td>I1 D24</td><td>—</td></tr>
+<tr><td>Pepper Potts</td><td>yes</td><td>I1 D15</td><td>Bond 4: <code>pepper_requisitions</code></td></tr>
+<tr><td>S.H.I.E.L.D. Autodoc</td><td>no</td><td>I1 D1</td><td>—</td></tr>
+</tbody></table></div>
+<div class="scroll"><table>
+<thead><tr><th>Flag</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td><code>jarvis_service</code></td><td>+10 energy every morning</td></tr>
+<tr><td><code>pepper_requisitions</code></td><td>shop prices ×0.8</td></tr>
+<tr><td><code>coulson_intel</code></td><td>mission credits ×1.5</td></tr>
+</tbody></table></div>
+</section>
+<section id="7-enemies">
+<h2><span class="num">7</span><span class="ttl">Enemies</span></h2>
+<p>Enemies have no boosts — their <code>power_grid</code> <strong>is</strong> their effective rank, valid up to 20 so bosses can sit above the hero ladder. An encounter can ask for a variant at another level with <code>id@level</code>.</p>
+<div class="scroll"><table>
+<thead><tr><th>id</th><th>Name</th><th>Lvl</th><th>AI</th><th>HP</th><th>EN</th><th>STR/SPD/AGI/STA/DUR/INT</th><th>XP</th><th>cr</th><th></th></tr></thead>
+<tbody>
+<tr><td><code>crossbones</code></td><td>Crossbones</td><td>8</td><td>aggressive</td><td>380</td><td>35</td><td>7/4/5/13/7/3</td><td>138</td><td>150</td><td>boss</td></tr>
+<tr><td><code>hydra_enforcer@1</code></td><td>HYDRA Enforcer</td><td>1</td><td>defensive</td><td>80</td><td>25</td><td>1/1/1/1/1/1</td><td>12</td><td>7</td><td></td></tr>
+<tr><td><code>hydra_enforcer@2</code></td><td>HYDRA Enforcer</td><td>2</td><td>defensive</td><td>110</td><td>25</td><td>2/1/1/2/2/1</td><td>24</td><td>13</td><td></td></tr>
+<tr><td><code>hydra_enforcer</code></td><td>HYDRA Enforcer</td><td>3</td><td>defensive</td><td>140</td><td>30</td><td>3/2/2/3/3/2</td><td>36</td><td>20</td><td></td></tr>
+<tr><td><code>hydra_medic@1</code></td><td>HYDRA Field Medic</td><td>1</td><td>support</td><td>80</td><td>25</td><td>1/1/1/1/1/1</td><td>12</td><td>7</td><td></td></tr>
+<tr><td><code>hydra_medic</code></td><td>HYDRA Field Medic</td><td>3</td><td>support</td><td>100</td><td>40</td><td>1/3/2/2/1/4</td><td>36</td><td>20</td><td></td></tr>
+<tr><td><code>hydra_grunt@1</code></td><td>HYDRA Grunt</td><td>1</td><td>aggressive</td><td>80</td><td>25</td><td>1/1/1/1/1/1</td><td>12</td><td>8</td><td></td></tr>
+<tr><td><code>hydra_grunt</code></td><td>HYDRA Grunt</td><td>2</td><td>aggressive</td><td>110</td><td>30</td><td>2/2/2/2/2/2</td><td>24</td><td>15</td><td></td></tr>
+<tr><td><code>hydra_siege_captain</code></td><td>HYDRA Siege Captain</td><td>6</td><td>aggressive</td><td>260</td><td>35</td><td>5/3/3/8/5/3</td><td>90</td><td>100</td><td>boss</td></tr>
+</tbody></table></div>
+<p><strong>Crossbones</strong> enrages below 30% HP: ×1.5 damage.</p>
+<p><strong>Abilities</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Enemy</th><th>Ability</th><th>Type</th><th>Power</th><th>Scales</th><th>Cost</th><th>Target</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Crossbones</td><td>Gauntlet Smash</td><td>basic</td><td>15</td><td>STR</td><td>—</td><td>single</td><td>—</td></tr>
+<tr><td>Crossbones</td><td>Concussive Charge</td><td>special</td><td>26</td><td>STR</td><td>12</td><td>single</td><td>stun</td></tr>
+<tr><td>HYDRA Enforcer</td><td>Riot Baton</td><td>basic</td><td>12</td><td>STR</td><td>—</td><td>single</td><td>—</td></tr>
+<tr><td>HYDRA Field Medic</td><td>Sidearm</td><td>basic</td><td>8</td><td>INT</td><td>—</td><td>single</td><td>—</td></tr>
+<tr><td>HYDRA Field Medic</td><td>Field Stim</td><td>special</td><td>25</td><td>INT</td><td>8</td><td>single</td><td>heal</td></tr>
+<tr><td>HYDRA Grunt</td><td>Rifle Burst</td><td>basic</td><td>9</td><td>STR</td><td>—</td><td>single</td><td>—</td></tr>
+<tr><td>HYDRA Grunt</td><td>Frag Grenade</td><td>special</td><td>13</td><td>STR</td><td>12</td><td>all</td><td>—</td></tr>
+<tr><td>HYDRA Siege Captain</td><td>Siege Hammer</td><td>basic</td><td>14</td><td>STR</td><td>—</td><td>single</td><td>—</td></tr>
+<tr><td>HYDRA Siege Captain</td><td>Incendiary Rounds</td><td>special</td><td>24</td><td>STR</td><td>10</td><td>single</td><td>burn</td></tr>
+</tbody></table></div>
+</section>
+<section id="8-items">
+<h2><span class="num">8</span><span class="ttl">Items</span></h2>
+<p><strong>Consumables</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Cup of Coffee</td><td><code>coffee</code></td><td>20</td><td>tower_cafe, street_cart</td><td>+10 EN (team)</td></tr>
+<tr><td>Energy Bar</td><td><code>energy_bar</code></td><td>30</td><td>tower_cafe</td><td>+10 battle EN</td></tr>
+<tr><td>Jarvis's Power Smoothie</td><td><code>power_smoothie</code></td><td>110</td><td>tower_cafe</td><td>+40 EN (team)</td></tr>
+<tr><td>Med Kit</td><td><code>med_kit</code></td><td>50</td><td>tower_shop, street_cart</td><td>+40 HP in battle / +40% out</td></tr>
+<tr><td>Shawarma Wrap</td><td><code>shawarma</code></td><td>60</td><td>tower_cafe, street_cart</td><td>+25 EN (team)</td></tr>
+</tbody></table></div>
+<p><strong>Gifts</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>1940s Memorabilia</td><td><code>forties_memorabilia</code></td><td>100</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Bag of Magnets</td><td><code>magnets</code></td><td>15</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Bug Spray</td><td><code>bug_spray</code></td><td>12</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Deluxe Ant Farm</td><td><code>ant_farm</code></td><td>75</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Double Espresso</td><td><code>double_espresso</code></td><td>40</td><td>tower_cafe</td><td>—</td></tr>
+<tr><td>HYDRA Propaganda Leaflet</td><td><code>hydra_propaganda</code></td><td>10</td><td>missions</td><td>—</td></tr>
+<tr><td>Magic Trick Kit</td><td><code>magic_trick_kit</code></td><td>30</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Modern Slang Guide</td><td><code>modern_slang_guide</code></td><td>20</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Rare Alloy</td><td><code>rare_alloy</code></td><td>120</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Sketchbook</td><td><code>sketchbook</code></td><td>35</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Stack of Paperwork</td><td><code>paperwork</code></td><td>5</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>Tech Scrap</td><td><code>tech_scrap</code></td><td>25</td><td>tower_shop, missions</td><td>—</td></tr>
+<tr><td>Vintage Vinyl</td><td><code>vintage_vinyl</code></td><td>60</td><td>tower_shop</td><td>—</td></tr>
+<tr><td>War Bonds Poster</td><td><code>war_bonds_poster</code></td><td>80</td><td>tower_shop</td><td>—</td></tr>
+</tbody></table></div>
+<p><strong>Materials</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Adamantium Ingot</td><td><code>adamantium</code></td><td>340</td><td>mining</td><td>—</td></tr>
+<tr><td>ISO-8 Crystal</td><td><code>iso8</code></td><td>90</td><td>mining</td><td>—</td></tr>
+<tr><td>Vibranium Shard</td><td><code>vibranium</code></td><td>260</td><td>mining</td><td>—</td></tr>
+</tbody></table></div>
+<p><strong>Weapons</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Combat Gauntlets</td><td><code>combat_gauntlets</code></td><td>400</td><td>tech_lab</td><td>strength +2</td></tr>
+<tr><td>Targeting Optics</td><td><code>targeting_optics</code></td><td>450</td><td>tech_lab</td><td>crit_bonus +8</td></tr>
+</tbody></table></div>
+<p><strong>Armors</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Kevlar Weave</td><td><code>kevlar_weave</code></td><td>380</td><td>tech_lab</td><td>durability +2</td></tr>
+<tr><td>Stark Underlay</td><td><code>stark_underlay</code></td><td>520</td><td>tech_lab</td><td>max_hp_pct +10, stamina +1</td></tr>
+</tbody></table></div>
+<p><strong>Accessorys</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Arc Cell</td><td><code>arc_cell</code></td><td>480</td><td>tech_lab</td><td>battle_energy_flat +10, intelligence +1</td></tr>
+<tr><td>Field Stim Rig</td><td><code>field_stim_rig</code></td><td>350</td><td>tech_lab</td><td>speed +2</td></tr>
+</tbody></table></div>
+<p><strong>Artifacts</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>id</th><th>Price</th><th>Sources</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Stormbreaker</td><td><code>stormbreaker</code></td><td>0</td><td>midtown</td><td>—</td></tr>
+</tbody></table></div>
+<p><strong>Who loves what</strong> — gift reactions are worth loved +80, liked +45, neutral +20, disliked -20, hated -40, ×8 on a birthday.</p>
+<div class="scroll"><table>
+<thead><tr><th>Item</th><th>Reactions</th></tr></thead>
+<tbody>
+<tr><td>1940s Memorabilia</td><td>Captain America (loved) · Agent Coulson (loved) · Edwin Jarvis (liked) · Thor (liked)</td></tr>
+<tr><td>Bag of Magnets</td><td>Hulk (disliked) · Iron Man (disliked) · Pepper Potts (disliked)</td></tr>
+<tr><td>Bug Spray</td><td>Ant-Man (disliked) · Agent Coulson (hated) · Hank Pym (disliked) · Hulk (disliked) · Edwin Jarvis (disliked) · Pepper Potts (hated)</td></tr>
+<tr><td>Deluxe Ant Farm</td><td>Ant-Man (loved)</td></tr>
+<tr><td>Double Espresso</td><td>Ant-Man (loved) · Hank Pym (liked) · Hulk (loved) · Iron Man (loved) · Edwin Jarvis (loved) · Pepper Potts (loved)</td></tr>
+<tr><td>Energy Bar</td><td>Hulk (loved)</td></tr>
+<tr><td>HYDRA Propaganda Leaflet</td><td>Captain America (hated) · Agent Coulson (disliked) · Hank Pym (hated) · Hulk (hated) · Edwin Jarvis (hated) · Thor (hated)</td></tr>
+<tr><td>ISO-8 Crystal</td><td>Hank Pym (loved)</td></tr>
+<tr><td>Magic Trick Kit</td><td>Ant-Man (liked) · Agent Coulson (liked)</td></tr>
+<tr><td>Modern Slang Guide</td><td>Captain America (disliked) · Thor (disliked)</td></tr>
+<tr><td>Rare Alloy</td><td>Iron Man (loved) · Thor (loved)</td></tr>
+<tr><td>Shawarma Wrap</td><td>Thor (loved)</td></tr>
+<tr><td>Sketchbook</td><td>Captain America (liked) · Hank Pym (loved) · Hulk (liked) · Edwin Jarvis (liked) · Pepper Potts (liked)</td></tr>
+<tr><td>Stack of Paperwork</td><td>Ant-Man (hated) · Hulk (hated) · Iron Man (hated) · Pepper Potts (loved)</td></tr>
+<tr><td>Tech Scrap</td><td>Ant-Man (liked) · Hank Pym (liked) · Iron Man (liked)</td></tr>
+<tr><td>Vintage Vinyl</td><td>Captain America (liked) · Agent Coulson (liked) · Hulk (liked) · Iron Man (liked) · Edwin Jarvis (loved) · Thor (liked)</td></tr>
+<tr><td>War Bonds Poster</td><td>Captain America (loved) · Agent Coulson (loved) · Pepper Potts (liked)</td></tr>
+</tbody></table></div>
+</section>
+<section id="9-gear">
+<h2><span class="num">9</span><span class="ttl">Gear</span></h2>
+<p>An effect is <strong>either</strong> a flat attribute rank bonus — which is how gear takes a hero past the trained ceiling of 10 — <strong>or</strong> one of the perk effect keys, summed with whatever the perks give. Worn or carried, never both.</p>
+<p>Upgrade levels belong to the <strong>schematic</strong>, not the object: a level-3 Kevlar Weave means the lab builds them that way now. Effects scale ×1 / ×1.5 / ×2.0, attribute bonuses rounded to whole ranks. Max level 3.</p>
+<div class="scroll"><table>
+<thead><tr><th>To level</th><th>Credits</th><th>Materials</th><th>Days at the bench</th></tr></thead>
+<tbody>
+<tr><td>2</td><td>250</td><td>3× ISO-8 Crystal</td><td>2</td></tr>
+<tr><td>3</td><td>600</td><td>8× ISO-8 Crystal</td><td>3</td></tr>
+</tbody></table></div>
+<p>Nothing is applied until the piece is <strong>collected in person</strong>; the team fights without it in the meantime.</p>
+</section>
+<section id="10-the-tower">
+<h2><span class="num">10</span><span class="ttl">The tower</span></h2>
+<div class="scroll"><table>
+<thead><tr><th>Floor</th><th>id</th><th>Hours</th><th>When shut</th><th>Needs flag</th></tr></thead>
+<tbody>
+<tr><td>Common Floor</td><td><code>common</code></td><td>always open</td><td>—</td><td>—</td></tr>
+<tr><td>Ops Floor</td><td><code>ops</code></td><td>always open</td><td>—</td><td><code>elevator_repaired</code></td></tr>
+<tr><td>Training Floor</td><td><code>training</code></td><td>6:00 AM–11:00 PM</td><td><strong>locks</strong></td><td><code>elevator_repaired</code></td></tr>
+<tr><td>Med Bay</td><td><code>med_bay</code></td><td>6:00 AM–10:00 PM</td><td>station only</td><td><code>elevator_repaired</code></td></tr>
+<tr><td>Tech Lab</td><td><code>tech_lab</code></td><td>9:00 AM–6:00 PM</td><td>station only</td><td><code>elevator_repaired</code></td></tr>
+<tr><td>Pym Lab</td><td><code>pym_lab</code></td><td>9:00 AM–6:00 PM</td><td>station only</td><td><code>pym_lab_unlocked</code></td></tr>
+</tbody></table></div>
+<div class="scroll"><table>
+<thead><tr><th>Room</th><th>Operator</th><th>What they run</th></tr></thead>
+<tbody>
+<tr><td>Tech Lab</td><td>Jarvis</td><td>the fabricator — talk once, then he opens it</td></tr>
+<tr><td>Pym Lab</td><td>Hank Pym</td><td>the upgrade bench</td></tr>
+<tr><td>Med Bay</td><td>two S.H.I.E.L.D. autodocs</td><td>the treatment chair (not bondable)</td></tr>
+<tr><td>Common Floor</td><td>Jarvis, Coulson</td><td>talk, gifts, the board</td></tr>
+<tr><td>Ops Floor</td><td>Pepper Potts</td><td>the ops console, the Quinjet bay</td></tr>
+</tbody></table></div>
+<p><strong>Bag capacity</strong> is derived from who is on the team: 4 slots per active member, 16 at a full party of 4. One slot holds up to 99 of one item.</p>
+</section>
+<section id="11-tower-repairs">
+<h2><span class="num">11</span><span class="ttl">Tower repairs</span></h2>
+<p>Accepted at the board (or raised in conversation), then <strong>worked in person</strong>. One at a time. Fitting costs nothing — the hunt is the price.</p>
+<div class="scroll"><table>
+<thead><tr><th>Repair</th><th>id</th><th>Floor</th><th>Parts</th><th>Kinds</th><th>EN cost</th><th>XP</th><th>Offered by</th><th>Gated on</th><th>Sets</th></tr></thead>
+<tbody>
+<tr><td>Fix the Service Elevator</td><td><code>repair_elevator</code></td><td>Common Floor</td><td>3</td><td>1 hidden 1 npc 1 plain</td><td>0</td><td>30</td><td>jarvis</td><td>—</td><td><code>elevator_repaired</code></td></tr>
+<tr><td>Get the Quinjet Airworthy</td><td><code>repair_quinjet</code></td><td>Ops Floor</td><td>4</td><td>2 hidden 2 plain</td><td>15</td><td>36</td><td>pepper_potts</td><td><code>elevator_repaired</code></td><td><code>quinjet_repaired</code></td></tr>
+<tr><td>Restore the Training Floor</td><td><code>repair_training</code></td><td>Training Floor</td><td>3</td><td>2 hidden 1 plain</td><td>5</td><td>30</td><td>board</td><td><code>board_unlocked</code></td><td><code>training_repaired</code></td></tr>
+<tr><td>Open the Med Bay</td><td><code>repair_med_bay</code></td><td>Med Bay</td><td>4</td><td>3 hidden 1 plain</td><td>0</td><td>48</td><td>board</td><td><code>board_unlocked</code></td><td><code>med_bay_repaired</code></td></tr>
+<tr><td>Restart the Tech Lab</td><td><code>repair_tech_lab</code></td><td>Tech Lab</td><td>6</td><td>2 battle 2 hidden 1 npc 1 plain</td><td>0</td><td>48</td><td>board</td><td><code>board_unlocked</code>, quest <em>ch1_siege</em></td><td><code>tech_lab_repaired</code></td></tr>
+<tr><td>Get Into the Pym Lab</td><td><code>repair_pym_lab</code></td><td>Pym Lab</td><td>4</td><td>1 battle 1 hidden 1 mine 1 npc</td><td>0</td><td>60</td><td>board</td><td><code>board_unlocked</code>, <code>pym_lab_unlocked</code></td><td><code>pym_lab_repaired</code></td></tr>
+</tbody></table></div>
+<p>Part kinds: <strong>plain</strong> (a marker shows it) · <strong>hidden</strong> (inside furniture or a seam, no marker) · <strong>npc</strong> (handed over in conversation) · <strong>battle</strong> (drops from a won fight) · <strong>mine</strong> (rolls out of any ore seam).</p>
+<p>Every part, in order:</p>
+<div class="scroll"><table>
+<thead><tr><th>Repair</th><th>#</th><th>Kind</th><th>Where</th><th></th></tr></thead>
+<tbody>
+<tr><td>Fix the Service Elevator</td><td>0</td><td>npc</td><td>from coulson</td><td></td></tr>
+<tr><td></td><td>1</td><td>plain</td><td>common (30, 6)</td><td></td></tr>
+<tr><td></td><td>2</td><td>hidden</td><td>common (24, 5)</td><td></td></tr>
+<tr><td>Get the Quinjet Airworthy</td><td>0</td><td>plain</td><td>ops (8, 14)</td><td>heavy</td></tr>
+<tr><td></td><td>1</td><td>plain</td><td>training (33, 16)</td><td>heavy</td></tr>
+<tr><td></td><td>2</td><td>hidden</td><td>common (38, 17)</td><td></td></tr>
+<tr><td></td><td>3</td><td>hidden</td><td>ops (17, 8)</td><td>heavy</td></tr>
+<tr><td>Restore the Training Floor</td><td>0</td><td>hidden</td><td>ops (1, 10)</td><td></td></tr>
+<tr><td></td><td>1</td><td>hidden</td><td>training (14, 12)</td><td>heavy</td></tr>
+<tr><td></td><td>2</td><td>plain</td><td>midtown (25, 5)</td><td></td></tr>
+<tr><td>Open the Med Bay</td><td>0</td><td>hidden</td><td>common (21, 5)</td><td></td></tr>
+<tr><td></td><td>1</td><td>plain</td><td>ops (20, 16)</td><td></td></tr>
+<tr><td></td><td>2</td><td>hidden</td><td>med_bay (11, 7)</td><td></td></tr>
+<tr><td></td><td>3</td><td>hidden</td><td>docks (3, 3)</td><td></td></tr>
+<tr><td>Restart the Tech Lab</td><td>0</td><td>plain</td><td>tech_lab (31, 6)</td><td></td></tr>
+<tr><td></td><td>1</td><td>hidden</td><td>tech_lab (10, 8)</td><td></td></tr>
+<tr><td></td><td>2</td><td>hidden</td><td>common (1, 8)</td><td></td></tr>
+<tr><td></td><td>3</td><td>battle</td><td>33% per win</td><td></td></tr>
+<tr><td></td><td>4</td><td>battle</td><td>33% per win</td><td></td></tr>
+<tr><td></td><td>5</td><td>npc</td><td>from jarvis (after 5 found)</td><td></td></tr>
+<tr><td>Get Into the Pym Lab</td><td>0</td><td>mine</td><td>33% per swing, any seam</td><td></td></tr>
+<tr><td></td><td>1</td><td>npc</td><td>from pepper_potts</td><td></td></tr>
+<tr><td></td><td>2</td><td>hidden</td><td>tech_lab (25, 8)</td><td></td></tr>
+<tr><td></td><td>3</td><td>battle</td><td>certain with ant_man</td><td></td></tr>
+</tbody></table></div>
+</section>
+<section id="12-zones-the-field">
+<h2><span class="num">12</span><span class="ttl">Zones &amp; the field</span></h2>
+<div class="scroll"><table>
+<thead><tr><th>Zone</th><th>id</th><th>Danger</th><th>Ambush rate</th><th>Trap chance</th><th>Crates</th><th>Ore seams</th><th>Trees</th></tr></thead>
+<tbody>
+<tr><td>Midtown</td><td><code>midtown</code></td><td>!</td><td>0.5</td><td>7%</td><td>4</td><td>3</td><td>20</td></tr>
+<tr><td>Hudson Docks</td><td><code>docks</code></td><td>!!</td><td>1.0</td><td>14%</td><td>15</td><td>3</td><td>0</td></tr>
+<tr><td>HYDRA District</td><td><code>hydra_district</code></td><td>!!!</td><td>2.0</td><td>21%</td><td>17</td><td>3</td><td>0</td></tr>
+</tbody></table></div>
+<p><code>danger</code> drives the badge, the trap risk and the enemy pool. <code>ambush_rate</code> drives how often you are jumped — a separate knob that currently agrees with danger.</p>
+<h3 id="ambush-probability">Ambush probability</h3>
+<p>One roll per <strong>0.6 seconds of walking</strong> (standing still never rolls). <code>chance = ambush_rate × (0.01 + 0.006 × missing party members)</code>.</p>
+<div class="scroll"><table>
+<thead><tr><th>Party</th><th>Midtown</th><th>Hudson Docks</th><th>HYDRA District</th></tr></thead>
+<tbody>
+<tr><td>4</td><td>0.5% (1 per 120s)</td><td>1.0% (1 per 60s)</td><td>2.0% (1 per 30s)</td></tr>
+<tr><td>3</td><td>0.8% (1 per 75s)</td><td>1.6% (1 per 38s)</td><td>3.2% (1 per 19s)</td></tr>
+<tr><td>2</td><td>1.1% (1 per 55s)</td><td>2.2% (1 per 27s)</td><td>4.4% (1 per 14s)</td></tr>
+<tr><td>1</td><td>1.4% (1 per 43s)</td><td>2.8% (1 per 21s)</td><td>5.6% (1 per 11s)</td></tr>
+</tbody></table></div>
+<p>Capped at <strong>3 field fights per zone per day</strong> — ambushes and sprung traps share the budget. Cleared at sleep.</p>
+<p><strong>Squad size</strong> — an ambush always outnumbers the party:</p>
+<div class="scroll"><table>
+<thead><tr><th>Extra attackers</th><th>Chance</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>50%</td></tr>
+<tr><td>2</td><td>35%</td></tr>
+<tr><td>3</td><td>10%</td></tr>
+<tr><td>4</td><td>5%</td></tr>
+</tbody></table></div>
+<div class="scroll"><table>
+<thead><tr><th>Party size</th><th>Hard cap on the squad</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>4</td></tr>
+<tr><td>2</td><td>6</td></tr>
+<tr><td>3</td><td>8</td></tr>
+<tr><td>4</td><td>8</td></tr>
+</tbody></table></div>
+<p>Absolute maximum 8. Trap squads roll 2..cap with no outnumber guarantee.</p>
+<p><strong>Who turns up</strong>, by danger:</p>
+<div class="scroll"><table>
+<thead><tr><th>Danger</th><th>Pool</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>1× HYDRA Grunt</td></tr>
+<tr><td>2</td><td>2× HYDRA Grunt, 1× HYDRA Enforcer, 1× HYDRA Field Medic</td></tr>
+<tr><td>3</td><td>1× HYDRA Grunt, 2× HYDRA Enforcer, 1× HYDRA Field Medic</td></tr>
+</tbody></table></div>
+<h3 id="loot-mining">Loot &amp; mining</h3>
+<div class="scroll"><table>
+<thead><tr><th>Zone</th><th>Find chance</th><th>Credits</th><th>Item chance</th><th>Possible items</th><th>Expected/day</th></tr></thead>
+<tbody>
+<tr><td>Midtown</td><td>35%</td><td>15–35 cr</td><td>35%</td><td>Vintage Vinyl, Sketchbook, Shawarma Wrap</td><td>~35 cr/day</td></tr>
+<tr><td>Hudson Docks</td><td>30%</td><td>8–20 cr</td><td>35%</td><td>Tech Scrap, Cup of Coffee</td><td>~63 cr/day</td></tr>
+<tr><td>HYDRA District</td><td>40%</td><td>25–60 cr</td><td>40%</td><td>HYDRA Propaganda Leaflet, Rare Alloy</td><td>~289 cr/day</td></tr>
+</tbody></table></div>
+<p><sub>Rolled after the trap check; a trap forfeits the loot.</sub></p>
+<div class="scroll"><table>
+<thead><tr><th>Zone</th><th>Yields</th><th>Dust</th></tr></thead>
+<tbody>
+<tr><td>Midtown</td><td>ISO-8 Crystal 80%</td><td>20%</td></tr>
+<tr><td>Hudson Docks</td><td>ISO-8 Crystal 78%</td><td>22%</td></tr>
+<tr><td>HYDRA District</td><td>ISO-8 Crystal 84%</td><td>16%</td></tr>
+</tbody></table></div>
+<p>One swing per seam per day, 8 EN each.</p>
+</section>
+<section id="13-story">
+<h2><span class="num">13</span><span class="ttl">Story</span></h2>
+<p>Quests unlock strictly in order. A quest is <strong>offered</strong> at the Ops Console and shows nothing in the field until accepted; the deadline starts at accept.</p>
+<div class="scroll"><table>
+<thead><tr><th>#</th><th>Quest</th><th>id</th><th>Ch</th><th>Kind</th><th>Where</th><th>Deadline</th><th>Opposition</th><th>Recruits</th><th>Sets</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Shattered Shield</td><td><code>ch1_shattered_shield</code></td><td>Ch1</td><td>battle</td><td>Hudson Docks</td><td>3</td><td>3× HYDRA Grunt</td><td>—</td><td>—</td></tr>
+<tr><td>2</td><td>Case the Safehouse</td><td><code>ch1_case_safehouse</code></td><td>Ch1</td><td>scout</td><td>Midtown</td><td>—</td><td>3 scout points</td><td>—</td><td>—</td></tr>
+<tr><td>3</td><td>Spoof the Ankle Monitor</td><td><code>ch1_spoof_monitor</code></td><td>Ch1</td><td>scout</td><td>Midtown</td><td>—</td><td>3 scout points</td><td>—</td><td>—</td></tr>
+<tr><td>4</td><td>Break Out Scott Lang</td><td><code>ch1_break_out_lang</code></td><td>Ch1</td><td>battle</td><td>Midtown</td><td>3</td><td>2× HYDRA Grunt, 2× HYDRA Enforcer, 2× HYDRA Field Medic</td><td>ant_man</td><td><code>pym_lab_unlocked</code></td></tr>
+<tr><td>5</td><td>Siege of the Tower</td><td><code>ch1_siege</code></td><td>Ch1</td><td>battle</td><td>HYDRA District</td><td>4</td><td>1× HYDRA Siege Captain, 3× HYDRA Grunt, 2× HYDRA Enforcer</td><td>—</td><td><code>training_upgraded</code>, <code>hulk_arrived</code></td></tr>
+<tr><td>6</td><td>Cell Hunt</td><td><code>ch2_cell_hunt</code></td><td>Ch2</td><td>battle</td><td>Hudson Docks</td><td>3</td><td>2× HYDRA Enforcer, 1× HYDRA Field Medic, 2× HYDRA Grunt</td><td>—</td><td>—</td></tr>
+<tr><td>7</td><td>Crossbones</td><td><code>ch2_crossbones</code></td><td>Ch2</td><td>battle</td><td>HYDRA District</td><td>4</td><td>1× Crossbones, 1× HYDRA Field Medic, 2× HYDRA Enforcer, 1× HYDRA Grunt</td><td>—</td><td><code>ch2_complete</code></td></tr>
+</tbody></table></div>
+<p>A failed mission cools down <strong>2 days</strong>. A <em>fight</em> mission then re-arms itself in the field; anything else has to be re-accepted at Ops.</p>
+<p><strong>Chapter 3–4 gate:</strong> every Ch. 1–2 mission complete <strong>and</strong> the tower fully repaired.</p>
+</section>
+<section id="14-side-arcs">
+<h2><span class="num">14</span><span class="ttl">Side arcs</span></h2>
+<p>Conditional arcs run <em>alongside</em> the story chain, so one can sit dormant without stalling the missions behind it. Requirements are re-checked at the sleep boundary.</p>
+<h3 id="something-strange-in-midtown">Something Strange in Midtown</h3>
+<p><em>Something came down in the Midtown trees.</em></p>
+<div class="scroll"><table>
+<thead><tr><th></th><th></th></tr></thead>
+<tbody>
+<tr><td>Opens when</td><td><code>ch2_complete</code>; Captain America rank 3 in all six</td></tr>
+<tr><td>Where</td><td>Midtown</td></tr>
+<tr><td>Search sites</td><td>5 stands (5 EN each)</td></tr>
+<tr><td>Prize</td><td>Stormbreaker</td></tr>
+<tr><td>Who can lift it</td><td>Captain America — must be on the ACTIVE team</td></tr>
+<tr><td>Recruits</td><td>Thor</td></tr>
+<tr><td>Sets</td><td><code>thor_joined</code></td></tr>
+<tr><td>Sound</td><td>thunder</td></tr>
+</tbody></table></div>
+</section>
+<section id="15-the-assignment-board">
+<h2><span class="num">15</span><span class="ttl">The assignment board</span></h2>
+<p>Every job is <strong>one-shot</strong>. Two rotating jobs per unlocked tier per day. Repairs take a slot. Skill requirements are never advertised — sending the wrong hero gets a refusal in Coulson's voice.</p>
+<p>Tier unlocks by team power (sum of the top-4 roster heroes' effective grid totals): tier 2 at 90, tier 3 at 160</p>
+<p>Dispatch pay multiplier = 1 + 0.01 × (avg sent-hero grid total − 22), clamped 0.8–1.5, snapshotted when the job starts.</p>
+<p>XP budget per tier (vs the passive train assignment at 40 XP/day): tier 1 ×0.5 = 20/day, tier 2 ×1.0 = 40/day, tier 3 ×1.5 = 60/day</p>
+<div class="scroll"><table>
+<thead><tr><th>Tier</th><th>Job</th><th>id</th><th>Crew</th><th>cr</th><th>XP</th><th>Bond</th><th>Requires</th><th>Posting odds</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Calibrate Tower Sensors</td><td><code>calibrate_sensors</code></td><td>1H/2D</td><td>150</td><td>40 → INT</td><td>—</td><td>INT rank 2+; INT boost 4+</td><td>always</td></tr>
+<tr><td>1</td><td>Courier Pepper's Contracts</td><td><code>pepper_contracts</code></td><td>1H/1D</td><td>50</td><td>20 → SPE</td><td>+35 pepper_potts</td><td>—</td><td>always</td></tr>
+<tr><td>1</td><td>Debug a JARVIS Subroutine</td><td><code>debug_jarvis</code></td><td>1H/1D</td><td>65</td><td>20 → INT</td><td>—</td><td>INT rank 2+; INT boost 5+</td><td>always</td></tr>
+<tr><td>1</td><td>Escort a Supply Convoy</td><td><code>escort_convoy</code></td><td>2H/2D</td><td>280</td><td>10 → STR, STA, AGI, DUR</td><td>—</td><td>—</td><td>always</td></tr>
+<tr><td>1</td><td>Inventory the Armory</td><td><code>inventory_armory</code></td><td>1H/1D</td><td>70</td><td>20 → DUR</td><td>—</td><td>—</td><td>always</td></tr>
+<tr><td>1</td><td>Parts Run for Jarvis</td><td><code>jarvis_parts_run</code></td><td>1H/1D</td><td>45</td><td>20 → SPE</td><td>+35 jarvis</td><td>—</td><td>always</td></tr>
+<tr><td>1</td><td>Spar with S.H.I.E.L.D. Rookies</td><td><code>spar_rookies</code></td><td>2H/1D</td><td>130</td><td>7 → STR, AGI, DUR</td><td>—</td><td>STR/DUR/AGI/STA rank 2+; STR/DUR/AGI/STA boost 6+</td><td>always</td></tr>
+<tr><td>1</td><td>Spot Hulk at the Heavy Bags</td><td><code>hulk_smash_therapy</code></td><td>1H/1D</td><td>40</td><td>20 → STR</td><td>+600 hulk</td><td>flag <code>hulk_arrived</code></td><td>5%/25%/80% by hulk bond</td></tr>
+<tr><td>1</td><td>Sweep the Quinjet Hangar</td><td><code>sweep_hangar</code></td><td>1H/1D</td><td>60</td><td>20 → STA</td><td>—</td><td>—</td><td>always</td></tr>
+<tr><td>2</td><td>Decrypt a HYDRA Data Cache</td><td><code>decrypt_cache</code></td><td>1H/2D</td><td>230</td><td>80 → INT</td><td>—</td><td>INT rank 3+; INT rank 2+ or boost 5+; INT rank 1+ or boost 7+</td><td>always</td></tr>
+<tr><td>2</td><td>Guard the Stark Expo Floor</td><td><code>guard_expo</code></td><td>2H/1D</td><td>210</td><td>13 → STR, DUR, STA</td><td>—</td><td>—</td><td>always</td></tr>
+<tr><td>2</td><td>Run a S.H.I.E.L.D. Boot Camp</td><td><code>train_recruits</code></td><td>2H/2D</td><td>380</td><td>20 → STR, STA, AGI, DUR</td><td>—</td><td>STR/DUR/AGI/STA rank 3+; STR/DUR/AGI/STA rank 2+ or boost 5+; STR/DUR/AGI/STA rank 1+ or boost 7+</td><td>always</td></tr>
+<tr><td>2</td><td>S.H.I.E.L.D. Liaison Detail</td><td><code>shield_liaison</code></td><td>1H/2D</td><td>190</td><td>80 → SPE</td><td>+45 coulson</td><td>coulson bond 1+</td><td>always</td></tr>
+<tr><td>3</td><td>Deep Recon: HYDRA Sub Base</td><td><code>deep_recon</code></td><td>2H/2D</td><td>520</td><td>20 → all six</td><td>—</td><td>all six rank 2+</td><td>always</td></tr>
+<tr><td>3</td><td>Escort the U.N. Delegation</td><td><code>escort_delegation</code></td><td>2H/1D</td><td>400</td><td>10 → all six</td><td>+60 coulson</td><td>coulson bond 2+</td><td>always</td></tr>
+<tr><td>3</td><td>Field-Test Stark Prototypes</td><td><code>prototype_test</code></td><td>1H/2D</td><td>340</td><td>120 → INT</td><td>+60 pepper_potts</td><td>pepper_potts bond 2+</td><td>always</td></tr>
+</tbody></table></div>
+<p>Total one-shot board income: <strong>890 (tier 1) + 1,010 (tier 2) + 1,260 (tier 3) = 3,160 cr</strong>, before the crew multiplier. Once cleared, the board is done — missions, ambush drops and zone loot are the only repeatable income.</p>
+</section>
+<section id="16-bonds">
+<h2><span class="num">16</span><span class="ttl">Bonds</span></h2>
+<p><strong>250 points per level</strong>, 10 levels, 2,500 lifetime max.</p>
+<div class="scroll"><table>
+<thead><tr><th>Action</th><th>Points</th></tr></thead>
+<tbody>
+<tr><td>Daily talk (once per character)</td><td>+15</td></tr>
+<tr><td>Same-party mission</td><td>+10</td></tr>
+<tr><td>Loved gift</td><td>+80</td></tr>
+<tr><td>Liked gift</td><td>+45</td></tr>
+<tr><td>Neutral gift</td><td>+20</td></tr>
+<tr><td>Disliked gift</td><td>-20</td></tr>
+<tr><td>Hated gift</td><td>-40</td></tr>
+<tr><td>Birthday</td><td>×8</td></tr>
+<tr><td>Repeating yesterday's gift</td><td>−5 (after the multiplier)</td></tr>
+<tr><td>Personal quest</td><td>+150–250</td></tr>
+</tbody></table></div>
+<p>Gift limits: <strong>1 per receiver per day</strong>, max <strong>2 per rolling 5 days</strong>.</p>
+<div class="scroll"><table>
+<thead><tr><th>Level</th><th>Gate</th></tr></thead>
+<tbody>
+<tr><td>2</td><td>bond scene</td></tr>
+<tr><td>4</td><td>relationship recruit</td></tr>
+<tr><td>6</td><td>synergy passive</td></tr>
+<tr><td>8</td><td>exclusive gear quest</td></tr>
+<tr><td>10</td><td>signature scene + costume</td></tr>
+</tbody></table></div>
+<p><strong>Authored bond scenes</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>id</th><th>Character</th><th>Level</th><th>Title</th></tr></thead>
+<tbody>
+<tr><td><code>coulson_bond_2</code></td><td>Agent Coulson</td><td>2</td><td>Mint Condition</td></tr>
+<tr><td><code>jarvis_bond_2</code></td><td>Edwin Jarvis</td><td>2</td><td>The Tower Keeps Its Own Hours</td></tr>
+<tr><td><code>hulk_bond_2</code></td><td>Hulk</td><td>2</td><td>Quiet Floor</td></tr>
+<tr><td><code>hulk_bond_4</code></td><td>Hulk</td><td>4</td><td>The Quiet Floor</td></tr>
+</tbody></table></div>
+<p>Starters and story recruits give flavour talk only — no points.</p>
+</section>
+<section id="17-calendar">
+<h2><span class="num">17</span><span class="ttl">Calendar</span></h2>
+<p>An Issue is <strong>28 days</strong>, in 4 weeks of 7.</p>
+<div class="scroll"><table>
+<thead><tr><th>Issue</th><th>Name</th><th>Days</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Shattered Shield</td><td>28</td></tr>
+</tbody></table></div>
+<div class="scroll"><table>
+<thead><tr><th>Event</th><th>When</th><th>Effects</th></tr></thead>
+<tbody>
+<tr><td>S.H.I.E.L.D. Supply Drop</td><td>Issue 1, days 12–13</td><td>shop_discount: 0.5, training_xp_bonus: 40</td></tr>
+</tbody></table></div>
+<p><strong>Birthdays</strong> — S.H.I.E.L.D. Autodoc I1D1 · Ant-Man I1D6 · Edwin Jarvis I1D9 · Pepper Potts I1D15 · Hulk I1D18 · Captain America I1D20 · Agent Coulson I1D22 · Hank Pym I1D24 · Thor I2D8 · Iron Man I2D14</p>
+</section>
+<section id="18-the-save-file">
+<h2><span class="num">18</span><span class="ttl">The save file</span></h2>
+<p>One JSON per slot at <code>saves/slot_N.json</code>, 3 independent games, one <code>.bak</code> kept. <strong>The autosave at lights-out is the only save.</strong></p>
+<div class="scroll"><table>
+<thead><tr><th>Key</th><th>Holds</th></tr></thead>
+<tbody>
+<tr><td><code>board_checked_day</code></td><td>int = 0</td></tr>
+<tr><td><code>bonds</code></td><td>dict</td></tr>
+<tr><td><code>completed_tasks</code></td><td>list</td></tr>
+<tr><td><code>credits</code></td><td>int = 0</td></tr>
+<tr><td><code>day</code></td><td>int = 1</td></tr>
+<tr><td><code>dispatches</code></td><td>list</td></tr>
+<tr><td><code>energy</code></td><td>int = 100</td></tr>
+<tr><td><code>fights_today</code></td><td>dict</td></tr>
+<tr><td><code>gear_levels</code></td><td>dict</td></tr>
+<tr><td><code>inventory</code></td><td>dict</td></tr>
+<tr><td><code>issue</code></td><td>int = 1</td></tr>
+<tr><td><code>party</code></td><td>list</td></tr>
+<tr><td><code>path</code></td><td>NoneType = None</td></tr>
+<tr><td><code>pending_scenes</code></td><td>list</td></tr>
+<tr><td><code>quests</code></td><td>dict</td></tr>
+<tr><td><code>repairs</code></td><td>dict</td></tr>
+<tr><td><code>roster</code></td><td>dict</td></tr>
+<tr><td><code>searched_today</code></td><td>list</td></tr>
+<tr><td><code>story_flags</code></td><td>dict</td></tr>
+<tr><td><code>time_minutes</code></td><td>int = 360</td></tr>
+<tr><td><code>unlocks</code></td><td>dict</td></tr>
+<tr><td><code>upgrades</code></td><td>list</td></tr>
+</tbody></table></div>
+<p>Per-hero roster entry: <code>trained_ranks</code>, <code>attribute_xp</code>, <code>perks</code>, <code>perk_choices</code>, <code>gear</code>, <code>ult_charge</code>, <code>energy</code>, <code>hp_fraction</code>, plus transient <code>training</code> / <code>dispatch</code> / <code>assignment</code> / <code>done_training</code> / <code>leveled_up</code> / <code>mastered</code> / <code>enlightened</code>.</p>
+<p>Every key added after M16 is read through <code>.get</code>/<code>.setdefault</code>, so an older save loads and plays. Migrations run at load: pre-M13 dispatch spots, pre-M16 training locks, pre-M29 tower state, pre-M36 perk tiers, story-flag backfill, and the M21 battle-XP bank.</p>
+<hr>
+<p><em>Generated by <code>tools/build_bible.py</code> from 10 characters, 9 enemy entries, 29 items and 161 tuned constants.</em></p>
+</section>
+  </main>
+</div>
+
+<script>
+(function () {
+  var finder = document.getElementById('finder');
+  var sections = Array.prototype.slice.call(
+    document.querySelectorAll('main section'));
+  var links = Array.prototype.slice.call(
+    document.querySelectorAll('nav.rail a'));
+
+  // Filter every table row in the document, and hide sections left empty.
+  finder.addEventListener('input', function () {
+    var q = finder.value.trim().toLowerCase();
+    sections.forEach(function (sec) {
+      if (!q) {
+        sec.classList.remove('hidden');
+        sec.querySelectorAll('tr, .scroll, h3, p, ol').forEach(function (el) {
+          el.classList.remove('hidden');
+        });
+        var n = sec.querySelector('.nohits');
+        if (n) { n.remove(); }
+        return;
+      }
+      var anyRow = false;
+      sec.querySelectorAll('tbody tr').forEach(function (tr) {
+        var hit = tr.textContent.toLowerCase().indexOf(q) !== -1;
+        tr.classList.toggle('hidden', !hit);
+        if (hit) { anyRow = true; }
+      });
+      // prose matches keep the section too
+      var prose = sec.textContent.toLowerCase().indexOf(q) !== -1;
+      sec.classList.toggle('hidden', !anyRow && !prose);
+      sec.querySelectorAll('.scroll').forEach(function (box) {
+        var live = box.querySelectorAll('tbody tr:not(.hidden)').length;
+        box.classList.toggle('hidden', live === 0);
+      });
+    });
+  });
+
+  // Highlight the section you are reading.
+  if ('IntersectionObserver' in window) {
+    var seen = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) { return; }
+        links.forEach(function (a) {
+          a.classList.toggle('on',
+            a.getAttribute('href') === '#' + e.target.id);
+        });
+      });
+    }, { rootMargin: '-15% 0px -75% 0px' });
+    sections.forEach(function (s) { seen.observe(s); });
+  }
+}());
+</script>
