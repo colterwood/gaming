@@ -12,7 +12,7 @@ import pygame
 
 from game import config
 from game.core import calendar as cal
-from game.core import clock, energy, inventory
+from game.core import clock, energy, health, inventory
 from game.core.state_machine import GameState
 from game.hub import (activities, dispatch, field, party as party_mod, passive,
                       repairs, requirements, story, unlocks)
@@ -1613,7 +1613,6 @@ class HubScene:
         if not foods:
             self.log("No rations in the bag - the cafe and street carts sell food.")
             return
-        from game.core import health
         # M18: a ration feeds the WHOLE team, so there's nobody to pick.
         fed = all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
                   for h in self._party(state))
@@ -1636,7 +1635,6 @@ class HubScene:
                            items)
 
     def _eat(self, app, item_id):
-        from game.core import health
         state = app.game_state
         result = activities.eat_food(state, self.content, item_id)
         self.log(result["message"])
@@ -2494,20 +2492,54 @@ class HubScene:
             self._draw_scene(surface)
 
     def _draw_rest(self, surface, state):
-        """The treatment overlay (M30): the clock and the bar are the whole
-        show — you watch the hours go in and the energy come back."""
-        box = pygame.Rect(config.WIDTH // 2 - 110, 96, 220, 92)
+        """The treatment overlay (M30): the clock and the bars are the whole
+        show — you watch the hours go in and the team come back.
+
+        M36: BOTH bars, because the chair mends HP as well as energy now,
+        and a forecast, because the thing the player is actually deciding is
+        what time they get up. Watching a bar crawl without knowing whether
+        that is twenty minutes or three hours is not a decision."""
+        box = pygame.Rect(config.WIDTH // 2 - 120, 90, 240, 112)
         pixelkit.panel(surface, box, fill="ink", border="mint")
         pixelkit.text(surface, "TREATMENT STATION", 15, "mint", bold=True,
-                      center=(box.centerx, box.y + 16), shadow="ink")
+                      center=(box.centerx, box.y + 14), shadow="ink")
         pixelkit.text(surface, clock.format_time(state["time_minutes"]), 20,
-                      "gold", center=(box.centerx, box.y + 40))
+                      "gold", center=(box.centerx, box.y + 36))
+
         team = energy.team_energy(state)
-        widgets.bar(surface, pygame.Rect(box.x + 24, box.y + 54, 172, 12),
-                    team / config.DAILY_ENERGY, "green",
+        hp = health.team_hp_fraction(state)
+        bar = pygame.Rect(box.x + 30, box.y + 52, 164, 11)
+        pixelkit.text(surface, "EN", 11, "green",
+                      midleft=(bar.x - 20, bar.centery))
+        widgets.bar(surface, bar, team / config.DAILY_ENERGY, "green",
                     label=f"{team} / {config.DAILY_ENERGY}")
+        bar = bar.move(0, 15)
+        pixelkit.text(surface, "HP", 11, "red",
+                      midleft=(bar.x - 20, bar.centery))
+        widgets.bar(surface, bar, hp, "red",
+                    label=f"{int(round(hp * 100))}%")
+
+        pixelkit.text(surface, self._treatment_line(state), 11, "steel_light",
+                      center=(box.centerx, box.y + 90), shadow="ink")
         pixelkit.text(surface, "Enter: get up", 12, "steel_light",
-                      center=(box.centerx, box.bottom - 12))
+                      center=(box.centerx, box.bottom - 11))
+
+    def _treatment_line(self, state):
+        """One line saying what the hours in the chair are buying."""
+        f = activities.treatment_forecast(state)
+        if not f["minutes"]:
+            return "Nothing left to mend."
+        if f["past_day_end"]:
+            return "Not before 2 AM - you'll go out in the chair."
+        both = clock.format_time(f["done_at"])
+        if f["energy_minutes"] and f["hp_minutes"] \
+                and f["energy_minutes"] != f["hp_minutes"]:
+            first, label = ((f["energy_at"], "EN")
+                            if f["energy_minutes"] < f["hp_minutes"]
+                            else (f["hp_at"], "HP"))
+            return (f"{label} full {clock.format_time(first)}, "
+                    f"both by {both}")
+        return f"Full by {both}"
 
     def _draw_log(self, surface):
         """The message window, with counts of what sits off it either way
@@ -2604,7 +2636,6 @@ class HubScene:
         running; the moment the S.H.I.E.L.D. Supply Drop banner appeared it
         was drawn straight through the floor name. A measured layout cannot
         collide however long the strings get."""
-        from game.core import health
 
         hud = pygame.Rect(0, 0, config.WIDTH, HUD_H)
         pygame.draw.rect(surface, pixelkit.color("ink"), hud)

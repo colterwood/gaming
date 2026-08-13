@@ -7,6 +7,8 @@ Battles and sleep are not resolved here — the caller reacts to
 {"launch_battle": ...} / {"sleep": True} markers in the result.
 """
 
+import math
+
 from game import config
 from game.core import calendar as cal
 from game.core import clock, energy, inventory
@@ -326,6 +328,42 @@ def rest_tick(state):
     return {"hit_day_end": hit_end, "team_energy": team,
             "team_hp": health.team_hp_fraction(state),
             "full": team >= config.DAILY_ENERGY and mended}
+
+
+def treatment_forecast(state):
+    """When the chair will be finished with the team (M36).
+
+    The price of the Med Bay is hours, so the one number the player is
+    actually deciding on is what time they will get up — and now that the
+    chair mends HP as well as energy, "when" depends on whichever of the two
+    is further behind. Returns minutes-of-day for each and for both, plus
+    whether that lands past the end of the day (2 AM), in which case the
+    team passes out in the chair instead of finishing.
+
+    Both figures track the WORST-OFF party member, because team energy and
+    team HP are both the minimum across the party.
+    """
+    from game.core import health
+
+    def ticks(short, per_tick):
+        return 0 if short <= 0 else int(math.ceil(short / per_tick))
+
+    energy_ticks = ticks(config.DAILY_ENERGY - energy.team_energy(state),
+                         config.MEDBAY_ENERGY_PER_TICK)
+    hp_ticks = ticks(health.FULL - health.team_hp_fraction(state),
+                     config.MEDBAY_HP_PCT_PER_TICK)
+    now = state.get("time_minutes", config.DAY_START_MINUTES)
+    both = max(energy_ticks, hp_ticks)
+    return {
+        "energy_minutes": energy_ticks * config.MEDBAY_TICK_MINUTES,
+        "hp_minutes": hp_ticks * config.MEDBAY_TICK_MINUTES,
+        "minutes": both * config.MEDBAY_TICK_MINUTES,
+        "energy_at": now + energy_ticks * config.MEDBAY_TICK_MINUTES,
+        "hp_at": now + hp_ticks * config.MEDBAY_TICK_MINUTES,
+        "done_at": now + both * config.MEDBAY_TICK_MINUTES,
+        "past_day_end": now + both * config.MEDBAY_TICK_MINUTES
+                        > config.DAY_END_MINUTES,
+    }
 
 
 def eat_food(state, content, item_id):

@@ -875,6 +875,90 @@ def test_the_card_never_asks_you_to_collect_someone_on_the_team(content):
     assert not [r for r in rows if "collect them" in r], rows
 
 
+# --- the Med Bay chair tells you what the hours buy ----------------------
+
+def _in_the_chair(content, en, hp, when=12 * 60 + 30):
+    from game.core import energy as energy_mod
+
+    state = party_state(content)
+    state["time_minutes"] = when
+    for hero_id in state["party"]:
+        energy_mod.set_hero_energy(state, hero_id, en)
+        health.set_hero_hp_fraction(state, hero_id, hp)
+    energy_mod.sync(state)
+    return state
+
+
+def test_the_forecast_counts_whichever_is_further_behind(content):
+    """The chair mends both at MEDBAY_*_PER_TICK a tick, so "when do I get
+    up" is decided by the worse of the two."""
+    state = _in_the_chair(content, en=40, hp=0.30)
+    f = activities.treatment_forecast(state)
+
+    # 60 EN short at 10/tick = 6 ticks; 70% HP short at 10%/tick = 7 ticks
+    assert f["energy_minutes"] == 6 * config.MEDBAY_TICK_MINUTES
+    assert f["hp_minutes"] == 7 * config.MEDBAY_TICK_MINUTES
+    assert f["minutes"] == f["hp_minutes"]
+    assert f["done_at"] == state["time_minutes"] + f["hp_minutes"]
+    assert not f["past_day_end"]
+
+
+def test_the_forecast_is_zero_when_there_is_nothing_to_mend(content):
+    f = activities.treatment_forecast(_in_the_chair(content, en=100, hp=1.0))
+    assert f["minutes"] == 0 and not f["past_day_end"]
+
+
+def test_the_forecast_says_when_it_will_not_finish_before_two_am(content):
+    state = _in_the_chair(content, en=20, hp=0.10, when=25 * 60)
+    assert activities.treatment_forecast(state)["past_day_end"]
+
+
+def test_the_forecast_matches_what_the_chair_actually_does(content):
+    """The estimate has to agree with rest_tick, or it is a lie."""
+    state = _in_the_chair(content, en=40, hp=0.30)
+    predicted = activities.treatment_forecast(state)["done_at"]
+    for _ in range(50):
+        if activities.rest_tick(state)["full"]:
+            break
+    assert state["time_minutes"] == predicted
+
+
+@pytest.mark.parametrize("en,hp,expect", [
+    (40, 0.30, "both by"),          # different, so name the earlier one
+    (40, 1.00, "Full by"),          # only energy
+    (100, 0.30, "Full by"),         # only HP
+    (100, 1.00, "Nothing left"),
+])
+def test_the_chair_line_reads_correctly(content, en, hp, expect):
+    scene = tower.HubScene(content)
+    assert expect in scene._treatment_line(_in_the_chair(content, en, hp))
+
+
+def test_the_chair_shows_both_bars(content):
+    from game.ui import pixelkit
+
+    scene, app = tower.HubScene(content), FakeApp(content)
+    app.game_state = _in_the_chair(content, en=40, hp=0.30)
+    scene.mode = "resting"
+    drawn, original = [], pixelkit.text
+
+    def spy(surface, text, size, colour, **kw):
+        drawn.append(text)
+        return original(surface, text, size, colour, **kw)
+
+    pixelkit.text = spy
+    try:
+        scene._draw_rest(pygame.Surface((config.WIDTH, config.HEIGHT)),
+                         app.game_state)
+    finally:
+        pixelkit.text = original
+
+    assert "EN" in drawn and "HP" in drawn
+    assert any("40 / 100" in t for t in drawn)
+    assert any(t == "30%" for t in drawn)
+    assert any("both by" in t for t in drawn)
+
+
 # --- note 42: the HUD packs itself and cannot collide --------------------
 
 def test_the_event_banner_never_runs_through_the_floor_name(content):

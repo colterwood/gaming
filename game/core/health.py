@@ -31,10 +31,17 @@ def hero_hp_fraction(state, hero_id):
     return entry.setdefault("hp_fraction", FULL)
 
 
+# Fractions are rounded to this many places on the way in. Healing adds a
+# tenth at a time, and 0.3 + 0.1 x 7 is 0.9999999999999999 in binary — which
+# reads as "still hurt", so the Med Bay chair silently wanted one more tick
+# than it had quoted, and saves filled up with 0.30000000000000004.
+_PLACES = 4
+
+
 def set_hero_hp_fraction(state, hero_id, value):
     entry = state.get("roster", {}).get(hero_id)
     if entry is not None:
-        entry["hp_fraction"] = max(0.0, min(FULL, float(value)))
+        entry["hp_fraction"] = round(max(0.0, min(FULL, float(value))), _PLACES)
 
 
 def party_fractions(state):

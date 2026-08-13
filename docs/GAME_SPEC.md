@@ -1340,6 +1340,18 @@ found by playing it:
 - **Menus open on something selectable.** A leading disabled label — a job
   name, a question — used to take the cursor, so the first Enter did
   nothing; arrow keys skip those rows now too.
+- **Collecting a trainee clears "waiting at the mats" however you do it.**
+  The flag was cleared by the rack menu only, so fetching them by walking up
+  to them in the world left the Tasks tab telling you to collect a hero
+  already following you around. `party.add_to_party` / `party.swap` own it
+  now, and the card checks party membership before it says anyone is waiting.
+- **The Med Bay chair shows both bars and a forecast**
+  (`activities.treatment_forecast`): EN and HP, and what time each — and
+  both — will be full, because the hours are the price and watching a bar
+  crawl without knowing whether that is twenty minutes or three hours is not
+  a decision. HP fractions are rounded on store: healing adds a tenth at a
+  time and 0.3 + 0.1 x 7 is 0.9999999999999999, which read as "still hurt"
+  and cost the chair a tick it had not quoted.
 *AC: fit a repair and watch the clock and the purse hold still; turn over a
 planter on day one and still find the Training Floor part in it that
 afternoon; win an ambush on 30% HP and start the next fight on 30%; collapse
