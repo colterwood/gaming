@@ -34,6 +34,7 @@ def new_game_state():
         "dispatches": [],      # board jobs under way (M10)
         "completed_tasks": [], # one-shot board jobs already done (M15)
         "searched_today": [],  # zone crates rummaged today (M10)
+        "fights_today": {},    # zone id -> ambushes/traps sprung today (M36)
         "board_checked_day": 0,  # last day the board was read in person (M20)
     }
 

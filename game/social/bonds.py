@@ -128,7 +128,14 @@ def synergy_active(state, character, synergy):
 
 def bondable(character):
     """Relationship redesign: only bond-recruits (Hulk) and NPCs build bonds.
-    Starters and story recruits get flavor talk, no points."""
+    Starters and story recruits get flavor talk, no points.
+
+    M36: a character may opt out with `"bondable": false` — the Med Bay's
+    autodoc units are staff, not cast. They talk; there is nothing there to
+    have a relationship with, and a robot accruing birthday gift multipliers
+    is a joke the game only gets to make once."""
+    if character.get("bondable") is False:
+        return False
     return character["recruit"]["method"] in ("bond", "npc")
 
 

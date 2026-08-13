@@ -11,12 +11,25 @@ _POOLS = {
 }
 
 
-def ambush_chance(danger, party_size):
-    """Per walk-tick probability. Scales with danger, and up as the party
-    shrinks below PARTY_SIZE_MAX."""
+def ambush_rate(zone):
+    """How dangerous a block is TO WALK THROUGH (M36), which is no longer
+    the same number as how dangerous the people in it are.
+
+    `danger` still drives the enemy pool, the crate/seam trap risk and the
+    `!!!` badge. It used to drive the ambush rate too, which forced the
+    three zones into one ranking — and it was the wrong ranking: Midtown,
+    a public street in daylight, was jumpier than the docks. Zones now
+    carry their own `ambush_rate`, defaulting to `danger` so a zone
+    written without one behaves exactly as before."""
+    return zone.get("ambush_rate", zone["danger"])
+
+
+def ambush_chance(rate, party_size):
+    """Per walk-tick probability. Scales with the zone's ambush rate, and
+    up as the party shrinks below PARTY_SIZE_MAX."""
     missing = max(0, config.PARTY_SIZE_MAX - party_size)
-    return danger * (config.AMBUSH_BASE_CHANCE
-                     + config.AMBUSH_PARTY_BONUS * missing)
+    return rate * (config.AMBUSH_BASE_CHANCE
+                   + config.AMBUSH_PARTY_BONUS * missing)
 
 
 def squad_cap(party_size):
@@ -42,14 +55,18 @@ def ambush_size(party_size, rng):
     return min(party_size + extra, squad_cap(party_size))
 
 
-def roll_ambush(danger, party_size, rng):
-    """Returns a list of enemy ids, or None if no ambush triggers."""
+def roll_ambush(zone, party_size, rng):
+    """Returns a list of enemy ids, or None if no ambush triggers.
+
+    Takes the whole ZONE (M36) because the roll and the squad now read two
+    different numbers off it: `ambush_rate` for how often, `danger` for who
+    turns up."""
     if party_size <= 0:
         return None
-    if rng.random() >= ambush_chance(danger, party_size):
+    if rng.random() >= ambush_chance(ambush_rate(zone), party_size):
         return None
     size = ambush_size(party_size, rng)
-    pool = _POOLS.get(danger, _POOLS[1])
+    pool = _POOLS.get(zone["danger"], _POOLS[1])
     return [pool[rng.randrange(len(pool))] for _ in range(size)]
 
 

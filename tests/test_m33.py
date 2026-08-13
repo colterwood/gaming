@@ -82,13 +82,15 @@ def test_the_rack_offers_it_once_the_six_are_full(content):
     state = save.new_game_state()
     state["roster"] = {"iron_man": entry(maxed=True), "captain_america": entry()}
     state["party"] = ["iron_man", "captain_america"]
+    state["credits"] = 10000                    # M36: the rack bills at the door
     mastery.update_mastery(None, state["roster"]["iron_man"])
 
     result = activities.start_training(state, content, "iron_man",
                                        mastery.ATTRIBUTE)
     assert result["ok"]
     # It is trained like a tenth rank: the longest session in the game.
-    assert result["minutes"] == config.TRAINING_MINUTES_BY_LEVEL[config.TRAINED_MAX]
+    assert result["minutes"] == (config.TRAINING_MINUTES_BY_LEVEL[config.TRAINED_MAX]
+                                 * config.TRAINING_LOCKOUT_MULT)
 
     # A 2,400-minute session spans two days; the clock itself is M16's
     # business, so just run it out here.

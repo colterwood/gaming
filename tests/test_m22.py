@@ -88,9 +88,15 @@ def test_the_player_still_gets_there_under_their_own_steam(content):
     scene, app = HubScene(content), FakeApp(content)
     state = app.game_state
     story.accept(state, story.current_quest(state, content["story"]))
+    # M36: the elevator only moves you between floors - board the jet in
+    # its bay on the Ops floor to actually leave the building.
     put_player_at(scene, 17, 2)                     # the elevator
     scene.handle_key(app, pygame.K_RETURN)
-    choose(scene, app, "Quinjet: Hudson Docks")
+    choose(scene, app, "Ops Floor")
+    assert scene.floor == "ops"
+    put_player_at(scene, 28, 12)                    # beside the Quinjet bay
+    scene.handle_key(app, pygame.K_RETURN)
+    choose(scene, app, "Hudson Docks")
     assert scene.area == "docks"
     assert state["time_minutes"] == (config.DAY_START_MINUTES
                                      + config.TRAVEL_MINUTES)

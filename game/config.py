@@ -71,6 +71,24 @@ TICK_GAME_MINUTES = 10              # cosmetic tick: 10 in-game minutes...
 TICK_REAL_SECONDS = 7               # ...per 7 real seconds
 DAILY_ENERGY = 100
 PASS_OUT_NEXT_DAY_ENERGY = 80
+# M36: collapsing INSIDE the tower costs nothing the next morning — you are
+# already home and in a bed. The 80-energy penalty is for going down in the
+# field, where the night is spent wherever the team fell.
+PASS_OUT_SHELTERED_ENERGY = DAILY_ENERGY
+# ...but a collapse always costs money, wherever it happens: med fees,
+# dropped kit, and whoever went through the team's pockets.
+PASS_OUT_CREDIT_PCT = 0.10
+PASS_OUT_CREDIT_MAX = 5000
+
+# --- Carried HP (M36) ---
+# HP no longer resets between fights. It lives on the roster entry as a
+# FRACTION of max (so gear or a rank-up that raises max HP raises the
+# absolute pool with it) and is restored by these:
+SLEEP_HP_FRACTION = 1.0             # a night in a bed is a full heal
+PASS_OUT_HP_FRACTION = 0.8          # ...collapsing is not
+DEFEAT_HP_FRACTION = 0.10           # a wipe leaves the team on 10%, a FLOOR
+KO_REVIVE_HP_FRACTION = 0.10        # a hero who ended a WON fight at 0 comes round
+MEDBAY_HP_PCT_PER_TICK = 0.10       # the chair mends HP at the same rate as EN
 
 # Training energy scales with the level being trained (M9). Minutes come
 # from TRAINING_MINUTES_BY_LEVEL (M16) and are a LOCKOUT, not a clock jump
@@ -146,6 +164,12 @@ AMBUSH_SIZE_TABLE = ((0.50, 1), (0.85, 2), (0.95, 3), (1.00, 4))
 # there. This binds for booby-trap squads too — those used to ignore party
 # size completely, so a lone hero could open a crate onto eight HYDRA.
 AMBUSH_MAX_BY_PARTY = {1: 4, 2: 6, 3: 8, 4: 8}
+# M36: how many fights one block will throw at the team in a day, ambushes
+# and sprung trap squads together. Without this, walking laps in the HYDRA
+# District with a single hero is the fastest XP in the game — a fight every
+# ~7 seconds of walking, no energy cost, full XP to the one hero standing
+# there. Cleared at sleep, counted per zone.
+AMBUSH_DAILY_CAP = 3
 
 ATROPHY_GRACE_DAYS = 2              # same-spot days before decay starts
 ATROPHY_XP_PER_DAY = 20             # XP drained per unworked attribute
@@ -167,7 +191,10 @@ SEARCH_MINUTES = 15                 # rummaging a crate/dumpster
 SEARCH_TRAP_CHANCE = 0.07           # per search, scaled by zone danger
 
 # --- Scout quests (M13): field work per scout point ---
-SCOUT_ENERGY = 5
+# M36: a scout point is standing somewhere and paying attention. It costs
+# the clock and nothing else — the energy price made casing a block feel
+# like heavy labour, which is not what the action is.
+SCOUT_ENERGY = 0
 SCOUT_MINUTES = 20
 
 # --- Story unlocks (M17): combing a search site in a side arc ---
@@ -179,14 +206,35 @@ UNLOCK_SEARCH_MINUTES = 20
 # a craft action. Repairs are the player's own energy and clock, which is
 # why they sit outside the M25 board XP budget (that prices a hero's days).
 # A HEAVY part is the ONLY thing in the whole repair system that costs
-# energy (M35). Searching costs minutes, fitting the parts costs an hour,
-# and neither costs the team anything — so a job's energy price is exactly
-# 5 x however many heavy pieces it has: elevator 0, Quinjet 15, training
-# floor 5, and the three rooms 0.
+# energy (M35). M36: FITTING the parts is now free of both — the price of a
+# repair is the hunt, not the screwdriver, and standing in front of the
+# finished thing being told it costs another hour read as a toll booth.
+# So a job's whole price is 5 EN x however many heavy pieces it has:
+# elevator 0, Quinjet 15, training floor 5, and the three rooms 0.
 REPAIR_PART_ENERGY = 5
 REPAIR_PART_MINUTES = 20
-REPAIR_MINUTES = 60
 FURNITURE_SEARCH_MINUTES = 5
+# M36: furniture, planters and street trees are searchable at ALL times,
+# not only while a repair hunt is on. Almost all of it is empty — that is
+# the point of letting the player paw at everything.
+FURNITURE_SEARCH_CREDIT_CHANCE = 0.10
+FURNITURE_SEARCH_CREDITS = (3, 12)
+FURNITURE_SEARCH_ITEM_CHANCE = 0.03
+
+# --- Room opening hours (M36) ---
+# [open, close) per FLOOR key, in minutes since midnight of the day the day
+# began, so the 6:00-26:00 day is 360..1560 and an hour after midnight is
+# (24 + h) * 60. A room that is shut still exists; only CLOSED_FLOORS_LOCK_OUT
+# floors refuse to let you in at all.
+ROOM_HOURS = {
+    "training": (DAY_START_MINUTES, 23 * 60),   # mats close at 11 PM
+    "med_bay": (DAY_START_MINUTES, 22 * 60),    # ward closes at 10 PM
+    "tech_lab": (9 * 60, 18 * 60),              # the bench is staffed 9-6
+    "pym_lab": (9 * 60, 18 * 60),               # same shift
+}
+# The training floor is the one room that locks its door — everywhere else
+# you can walk in and find the station dark.
+CLOSED_FLOORS_LOCK_OUT = ("training",)
 
 # --- Med Bay (M30) ---
 # Sit in the chair and the clock runs while you mend: 10% of the daily
@@ -281,6 +329,24 @@ TRAINING_XP_BY_LEVEL = {1: 25, 2: 35, 3: 50, 4: 80, 5: 135,
                         6: 225, 7: 400, 8: 700, 9: 1200}
 TRAINING_MINUTES_BY_LEVEL = {1: 50, 2: 70, 3: 100, 4: 160, 5: 270,
                              6: 450, 7: 800, 8: 1400, 9: 2400}
+# M36: the rack charges at the door — a credit for every XP the BASIC
+# facility pays. Because the price keys off the BASE table and not the
+# multiplied yield, the x2 upgraded rack is also half price per XP and a
+# training event is a third. One attribute 1->5 is 1,510 cr at x1.
+TRAINING_CREDITS_BY_LEVEL = {1: 25, 2: 35, 3: 50, 4: 80, 5: 135,
+                             6: 225, 7: 400, 8: 700, 9: 1200}
+# M36: multiplies the lockout table above. MEASURED, and worth knowing
+# before touching it. Sessions per day are the lesser of what ENERGY allows
+# and what the 1,200-minute day allows. Energy allows 4/3/3/2/2/2/1/1/1 by
+# level (100 EN against 15 + 5 x level, and start_training refuses a session
+# that would ZERO the trainee, so it is not a plain division). The clock
+# allowed 24/17/12/7/4/2/1/0/0 and now allows 12/8/6/3/2/1/0/0/0 — so energy
+# is the binding constraint through level 5 and this multiplier changes
+# NOTHING at ranks 1-5. It first bites at level 6 (2 sessions a day -> 1)
+# and is a pure tax above that: ~105 in-game days to rank 10 becomes ~180.
+# A long-haul lever. If the early game is what needs slowing, the credit
+# price above is what to turn, or TRAINING_ENERGY_BASE.
+TRAINING_LOCKOUT_MULT = 2
 # Facility multipliers on the session yield (was flat 40/80/120).
 TRAINING_XP_MULT_BASIC = 1
 TRAINING_XP_MULT_UPGRADED = 2       # after the Ch.1 boss
@@ -288,7 +354,12 @@ TRAINING_XP_MULT_EVENT = 3          # during a training event
 # Battle XP per enemy defeated, keyed by the enemy's level.
 ENEMY_XP_BY_LEVEL = {1: 12, 2: 24, 3: 36, 4: 54, 5: 72,
                      6: 90, 7: 114, 8: 138, 9: 162, 10: 192}
-PERK_CHOICE_RANKS = (3, 6)
+# M36: perk tiers, as the RANK SHOWN ON THE CARD (1..RANK_MAX) — not the
+# trained rank underneath it, which is what these used to be and which made
+# the "rank 3 perk!" modal fire at a hero the card called rank 4. The first
+# perk moves from an almost-immediate 3 out to 5; the second becomes a
+# capstone at the top of the ladder.
+PERK_CHOICE_RANKS = (5, 10)
 # M33: the rung above rank 10. Once ALL SIX attributes are maxed, a hero
 # can start Enlightenment — the next doubling after 9 -> 10 (25,600), and
 # the only place XP can still go once the six are full.

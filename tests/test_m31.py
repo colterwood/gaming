@@ -28,6 +28,9 @@ def lab(content):
     scene, app = HubScene(content), FakeApp(content)
     scene._switch_floor("tech_lab")
     app.game_state["credits"] = 2000
+    # M36: the labs keep 9-6. The day starts at 6 AM, so a fixture that
+    # wants a working bench has to be standing there during the shift.
+    app.game_state["time_minutes"] = 10 * 60
     return scene, app
 
 

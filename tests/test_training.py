@@ -36,6 +36,7 @@ def game_state(content):
     for hid in ("iron_man", "captain_america"):
         state["roster"][hid] = entry()
     state["party"] = ["iron_man", "captain_america"]
+    state["credits"] = 100000      # M36: the rack bills at the door
     return state
 
 
@@ -94,30 +95,41 @@ def test_rank_tops_out_at_ten_and_xp_then_banks(content):
 
 # --- Perk tiers at trained ranks 3 and 6 ---
 
-def test_perk_pending_at_3_and_6(content):
+def test_perk_pending_at_card_ranks_5_and_10(content):
+    """M36: perk tiers are the rank PRINTED ON THE CARD, not the trained
+    rank underneath — the old (3, 6) fired the "rank 3 perk!" modal at a
+    hero the card called rank 4. Tiers are now 5 and RANK_MAX."""
+    assert config.PERK_CHOICE_RANKS == (5, config.RANK_MAX)
     im = content["characters"]["iron_man"]              # agility boost 3
     e = entry()
     to = lambda a, b: sum(attrs.xp_for_rank(n) for n in range(a, b))
-    attrs.add_training_xp(im["boosts"], e, "agility", to(1, 4))  # trained 1..3
-    assert attrs.pending_perk_tier(e, "agility") == 3
-    result = attrs.choose_perk(e, "agility", 3, "precision", content["perks"])
-    assert result["ok"]
+
+    attrs.add_training_xp(im["boosts"], e, "agility", to(1, 4))  # card rank 4
+    assert attrs.rank(e, "agility") == 4
+    assert attrs.pending_perk_tier(e, "agility") is None         # not yet
+
+    attrs.add_training_xp(im["boosts"], e, "agility", to(4, 5))  # card rank 5
+    assert attrs.pending_perk_tier(e, "agility") == 5
+    assert attrs.choose_perk(e, "agility", 5, "precision",
+                             content["perks"])["ok"]
     assert attrs.pending_perk_tier(e, "agility") is None
-    attrs.add_training_xp(im["boosts"], e, "agility", to(4, 7))  # trained 4..6
-    assert e["trained_ranks"]["agility"] == 6
-    assert attrs.pending_perk_tier(e, "agility") == 6            # tier 6 reachable
-    attrs.choose_perk(e, "agility", 6, "killer_instinct", content["perks"])
+
+    attrs.add_training_xp(im["boosts"], e, "agility", to(5, 10))  # card rank 10
+    assert attrs.rank(e, "agility") == config.RANK_MAX
+    assert attrs.pending_perk_tier(e, "agility") == config.RANK_MAX
+    attrs.choose_perk(e, "agility", config.RANK_MAX, "killer_instinct",
+                      content["perks"])
     assert attrs.pending_perk_tier(e, "agility") is None
 
 
 def test_perk_choice_validation(content):
     e = entry()
-    e["trained_ranks"]["strength"] = 3
-    bad = attrs.choose_perk(e, "strength", 3, "blur", content["perks"])
+    e["trained_ranks"]["strength"] = 4                  # card rank 5
+    bad = attrs.choose_perk(e, "strength", 5, "blur", content["perks"])
     assert not bad["ok"]
-    good = attrs.choose_perk(e, "strength", 3, "haymaker", content["perks"])
+    good = attrs.choose_perk(e, "strength", 5, "haymaker", content["perks"])
     assert good["ok"]
-    again = attrs.choose_perk(e, "strength", 3, "power_through", content["perks"])
+    again = attrs.choose_perk(e, "strength", 5, "power_through", content["perks"])
     assert not again["ok"]                              # tier already chosen
 
 
@@ -149,7 +161,8 @@ def test_training_lockout_grants_xp_on_completion(content):
     # M12: training is a lockout — EN up front, XP when the clock runs out.
     state = game_state(content)
     result = activities.start_training(state, content, "captain_america", "strength")
-    assert result["ok"] and result["minutes"] == 50             # M16: level 1 = 50 min
+    # M16 level 1 = 50 min, doubled by the M36 lockout multiplier.
+    assert result["ok"] and result["minutes"] == 50 * config.TRAINING_LOCKOUT_MULT
     cap = state["roster"]["captain_america"]
     assert cap["energy"] == 80                          # trainee pays 20 EN now
     assert state["roster"]["iron_man"]["energy"] == 100  # teammates untouched
@@ -157,21 +170,25 @@ def test_training_lockout_grants_xp_on_completion(content):
     assert cap["attribute_xp"] == {}                    # nothing granted yet
     # too early: nothing completes
     assert activities.finish_due_training(state, content) == []
-    state["time_minutes"] += 50
+    state["time_minutes"] += 50 * config.TRAINING_LOCKOUT_MULT
     messages = activities.finish_due_training(state, content)
     assert len(messages) == 1 and "Strength" in messages[0]
     assert cap["attribute_xp"]["strength"] == config.TRAINING_XP_BY_LEVEL[1]
     assert "training" not in cap
-    assert state["party"] == ["iron_man", "captain_america"]    # auto-rejoin
+    # M36: no auto-rejoin - they are standing on the mats waiting to be
+    # collected in person.
+    assert state["party"] == ["iron_man"]
+    assert any("Waiting at the mats" in m for m in messages)
 
 
 def test_training_costs_scale_with_rank(content):
     # M16: EN still linear, minutes from the table — level 8/9 sessions run
     # longer than a single 1200-minute day.
-    assert activities.training_cost(1) == (20, 50)
-    assert activities.training_cost(2) == (25, 70)
-    assert activities.training_cost(7) == (50, 800)
-    assert activities.training_cost(9) == (60, 2400)
+    mult = config.TRAINING_LOCKOUT_MULT
+    assert activities.training_cost(1) == (20, 50 * mult)
+    assert activities.training_cost(2) == (25, 70 * mult)
+    assert activities.training_cost(7) == (50, 800 * mult)
+    assert activities.training_cost(9) == (60, 2400 * mult)
 
 
 def test_a_session_grants_its_own_yield_and_nothing_else(content):
@@ -198,11 +215,24 @@ def test_training_maxed_attribute_refused_without_cost(content):
     assert state["party"] == ["iron_man", "captain_america"]
 
 
-def test_training_last_party_member_refused(content):
+def test_training_the_last_party_member_asks_before_it_allows(content):
+    """M36: emptying the team is the player's call, not a refusal. The
+    logic layer still says no by default so nothing does it by accident,
+    but it flags that the caller should ask."""
     state = game_state(content)
     state["party"] = ["captain_america"]
-    result = activities.start_training(state, content, "captain_america", "strength")
-    assert not result["ok"] and "stay on the team" in result["message"]
+
+    result = activities.start_training(state, content, "captain_america",
+                                       "strength")
+    assert not result["ok"] and result["needs_solo_confirm"]
+    assert "training" not in state["roster"]["captain_america"]
+
+    result = activities.start_training(state, content, "captain_america",
+                                       "strength", solo_ok=True)
+    assert result["ok"]
+    assert state["party"] == []
+    # ...and an empty team is not a collapsed one.
+    assert not activities.should_pass_out(state)
 
 
 def test_training_is_party_only(content):
@@ -228,9 +258,9 @@ def test_training_completed_in_zone_waits_at_tower(content):
     # not teleport the hero into the field.
     state = game_state(content)
     activities.start_training(state, content, "captain_america", "strength")
-    state["time_minutes"] += 50
+    state["time_minutes"] += 50 * config.TRAINING_LOCKOUT_MULT
     messages = activities.finish_due_training(state, content, rejoin=False)
-    assert any("Waiting at the tower" in m for m in messages)
+    assert any("Waiting at the mats" in m for m in messages)
     assert state["party"] == ["iron_man"]               # benched, not fielded
     assert "training" not in state["roster"]["captain_america"]
     assert (state["roster"]["captain_america"]["attribute_xp"]["strength"]
@@ -318,8 +348,29 @@ def test_mastery_detection(content):
 
 def test_stale_perk_ids_are_sanitized_and_skipped(content):
     e = entry()
-    e["perk_choices"] = {"strength:3": "haymaker", "speed:3": "removed_perk"}
+    e["perk_choices"] = {"strength:5": "haymaker", "speed:5": "removed_perk"}
     fx = attrs.perk_effects(e, content["perks"])       # unknown id skipped
     assert fx == {"basic_damage_pct": 10}
     attrs.sanitize_perk_choices(e, content["perks"])
-    assert e["perk_choices"] == {"strength:3": "haymaker"}
+    assert e["perk_choices"] == {"strength:5": "haymaker"}
+
+
+def test_a_pre_m36_perk_choice_moves_to_the_tier_that_now_owns_it(content):
+    """The tiers moved from trained ranks (3, 6) to card ranks (5, 10). An
+    untouched old key would match no live tier, so the hero would keep the
+    perk AND be offered the same list again — and perk_effects sums by
+    value, so taking it twice would count it twice."""
+    e = entry()
+    e["perk_choices"] = {"strength:3": "haymaker", "agility:6": "untouchable"}
+    e["trained_ranks"] = {"strength": 9, "agility": 9}      # card rank 10
+
+    attrs.sanitize_perk_choices(e, content["perks"])
+
+    assert e["perk_choices"] == {"strength:5": "haymaker",
+                                 "agility:10": "untouchable"}
+    assert attrs.perk_effects(e, content["perks"]) == {
+        "basic_damage_pct": 10, "dodge_bonus": 6}
+    # Each hero keeps exactly the one tier they had already spent, and the
+    # other is offered: strength's capstone, agility's first tier.
+    assert attrs.pending_perk_tier(e, "strength") == config.RANK_MAX
+    assert attrs.pending_perk_tier(e, "agility") == 5

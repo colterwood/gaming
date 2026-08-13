@@ -22,11 +22,26 @@ def _spend(state, energy_cost, minutes):
 
 def training_cost(level):
     """EN and lockout minutes for one rack session (M9 energy scaling, M16
-    minute table). `level` is the level being trained FROM, 1..TRAINED_MAX;
-    a high-level session legitimately runs longer than a single day."""
+    minute table, M36 lockout multiplier). `level` is the level being
+    trained FROM, 1..TRAINED_MAX; a high-level session legitimately runs
+    longer than a single day."""
     level = max(1, min(config.TRAINED_MAX, level))
     en = config.TRAINING_ENERGY_BASE + config.TRAINING_ENERGY_PER_RANK * level
-    return en, config.TRAINING_MINUTES_BY_LEVEL[level]
+    return en, (config.TRAINING_MINUTES_BY_LEVEL[level]
+                * config.TRAINING_LOCKOUT_MULT)
+
+
+def training_credits(level):
+    """What one rack session costs at the door (M36) — a credit for every
+    XP the BASIC facility pays, so the x2 upgraded rack is also half price
+    per XP and a training event is a third.
+
+    The credit price is the lever that actually bites early. Sessions per
+    day are energy-bound below level 6, so the lockout multiplier does
+    nothing at ranks 2-6; the door charge is paid every session at every
+    level."""
+    level = max(1, min(config.TRAINED_MAX, level))
+    return config.TRAINING_CREDITS_BY_LEVEL[level]
 
 
 def training_session(state):
@@ -38,7 +53,7 @@ def training_session(state):
     return result
 
 
-def start_training(state, content, hero_id, attribute):
+def start_training(state, content, hero_id, attribute, solo_ok=False):
     """M12: training is a lockout, not a clock jump. The trainee pays the
     EN up front, leaves the party, and is unavailable until they have put
     in the session's hours (M16: measured in WAKING minutes, so a
@@ -67,8 +82,12 @@ def start_training(state, content, hero_id, attribute):
     if hero_id not in party:                # M12: rack is party-only, even via
         return {"ok": False,                # the perk-chooser fall-through
                 "message": f"{character['name']} isn't on the team."}
-    if len(party) <= 1:
-        return {"ok": False, "message": "Someone has to stay on the team."}
+    if len(party) <= 1 and not solo_ok:
+        # M36: this is no longer a refusal, it's a question. The caller asks
+        # whether to promote a benched hero to leader or to just stand there
+        # and watch, then calls back with solo_ok=True.
+        return {"ok": False, "needs_solo_confirm": True,
+                "message": "That would leave nobody on the team."}
     # The capstone is trained like a tenth rank: the hardest session there
     # is, over and over, 51,200 XP deep.
     level = config.RANK_MAX if capstone else attrs.rank(entry, attribute)
@@ -77,6 +96,14 @@ def start_training(state, content, hero_id, attribute):
     # (they'd rejoin at 0 and instantly pass the team out).
     if energy.hero_energy(state, hero_id) <= en_cost:
         return {"ok": False, "message": f"{character['name']} is too exhausted."}
+    # M36: the rack bills at the door. Checked before anything is spent, the
+    # same discipline as buy_item.
+    price = training_credits(level)
+    if state.get("credits", 0) < price:
+        return {"ok": False,
+                "message": (f"The rack wants {price} cr - you have "
+                            f"{state.get('credits', 0)}.")}
+    state["credits"] = state.get("credits", 0) - price
     energy.spend_hero(state, hero_id, en_cost)
     xp = attrs.session_xp(state, content["calendar"], level)
     if hero_id in party:
@@ -89,17 +116,24 @@ def start_training(state, content, hero_id, attribute):
                          "ends_abs": clock.absolute_minutes(state) + minutes,
                          "xp": xp}
     energy.sync(state)
-    return {"ok": True, "minutes": minutes,
+    return {"ok": True, "minutes": minutes, "credits": price,
             "message": (f"{character['name']} hits the mats: "
                         f"{attribute.title()}, "
-                        f"{clock.format_duration(minutes)}.")}
+                        f"{clock.format_duration(minutes)}, {price} cr.")}
 
 
-def finish_training(state, content, hero_id, rejoin=True):
-    """Complete a training lockout: grant the XP, rejoin the party if there
-    is room. rejoin=False when the team is away in a zone — the hero waits
-    benched at the tower instead of teleporting into the field. Returns the
-    result dict (with perk_pending when a choice waits)."""
+def finish_training(state, content, hero_id, rejoin=False):
+    """Complete a training lockout and grant the XP.
+
+    M36: the hero does NOT rejoin the party. They finish the session and
+    stay standing at the mats, and the player walks up to the training
+    floor and puts them back on the team in person — the same way a
+    dispatched hero is recalled (M13) and a Pym bench upgrade is collected
+    (M32). The rack used to teleport them onto the team from anywhere in
+    the world, which made the training floor a vending machine.
+
+    `rejoin` is kept for callers that genuinely want the old behaviour;
+    nothing in the game passes it any more."""
     from game.progression import attributes as attrs
     from game.progression import mastery
 
@@ -131,8 +165,11 @@ def finish_training(state, content, hero_id, rejoin=True):
     if rejoin and hero_id not in party and len(party) < config.PARTY_SIZE_MAX:
         party.append(hero_id)
         message += "  Back on the team."
-    elif not rejoin:
-        message += "  Waiting at the tower."
+    elif hero_id not in party:
+        # M36: they are standing on the training floor until fetched. The
+        # flag is what puts "Put them back on the team" on the rack menu.
+        entry["done_training"] = True
+        message += "  Waiting at the mats."
     energy.sync(state)
     return {"ok": True, "message": message, **gain}
 
@@ -154,7 +191,7 @@ def training_remaining(state, lock):
     return max(0, lock["ends_abs"] - clock.absolute_minutes(state))
 
 
-def finish_due_training(state, content, force=False, rejoin=True):
+def finish_due_training(state, content, force=False, rejoin=False):
     """Complete every training lockout whose hours are served. M16: a
     session spans as many days as its length demands — sleeping banks the
     rest of that day's waking hours rather than short-circuiting it. Pass
@@ -180,13 +217,17 @@ def launch_mission(state, mission_id="hydra_patrol"):
     """M11: engaging is never blocked by low EN — the team drains toward 0
     and fights with the M9 initiative penalty rather than being refused.
 
-    M18: but a team that COLLAPSES on the approach (drained to 0, or the
-    three hours run past 2 AM) never makes contact. No battle, and the
-    mission stays exactly as it was — it has to be run again after a
-    night's sleep."""
+    M18: but a team that COLLAPSES on the approach never makes contact. No
+    battle, and the mission stays exactly as it was.
+
+    M36: that rule is now about ENERGY only. Running past 2 AM on the way
+    in used to cancel the fight and roll the day over, so a mission started
+    at 11 PM simply evaporated. The clock no longer refuses anyone: engage
+    at 1:55 AM, fight the fight, and pass out on the other side of it —
+    the hub's own pass-out check picks the team up when the battle ends."""
     energy.drain(state, config.MISSION_ENERGY)
     hit_end = clock.advance(state, config.MISSION_MINUTES)
-    if should_pass_out(state):
+    if bool(energy.party(state)) and energy.is_exhausted(state):
         return {"ok": True, "hit_day_end": hit_end, "passed_out": True,
                 "message": ("The team never reaches the target - they're "
                             "spent. The mission will have to keep.")}
@@ -239,11 +280,13 @@ def assignment_tasks_today(state, assignments, tier=1):
 
 def can_rest(state):
     """(ok, reason) for sitting down in the Med Bay (M30)."""
+    from game.core import health
     members = energy.party(state)
     if not members:
         return False, "Nobody here to treat."
-    if all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
-           for h in members):
+    if (all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
+            for h in members)
+            and not health.party_needs_treatment(state)):
         return False, "The team is already at full strength."
     return True, ""
 
@@ -256,14 +299,21 @@ def rest_tick(state):
     The Med Bay is the one place the day's energy cap can be bought back,
     and it is bought with the only other thing there is — hours. Benched
     heroes aren't treated; they wake up full anyway."""
+    from game.core import health
     hit_end = clock.advance(state, config.MEDBAY_TICK_MINUTES)
     for hero_id in energy.party(state):
         energy.set_hero_energy(
             state, hero_id,
             energy.hero_energy(state, hero_id) + config.MEDBAY_ENERGY_PER_TICK)
+    # M36: it is a MED bay. Now that HP is carried between fights, the chair
+    # is the only way to buy it back without losing the day — same price in
+    # hours, same rate.
+    health.heal_party(state, config.MEDBAY_HP_PCT_PER_TICK)
     team = energy.sync(state)
+    mended = not health.party_needs_treatment(state)
     return {"hit_day_end": hit_end, "team_energy": team,
-            "full": team >= config.DAILY_ENERGY}
+            "team_hp": health.team_hp_fraction(state),
+            "full": team >= config.DAILY_ENERGY and mended}
 
 
 def eat_food(state, content, item_id):
@@ -271,27 +321,42 @@ def eat_food(state, content, item_id):
     party member gets the item's EN, capped at the daily max — team energy
     is the minimum across the party, so feeding one hero moved nothing.
     Costs a few minutes, no energy. Anywhere — tower or field."""
+    from game.core import health
     item = content["items"].get(item_id, {})
     restore = item.get("energy", 0)
-    if not restore:
+    # M36: a med kit mends the team out of combat too, now that HP is
+    # carried. Its in-battle `heal` is absolute HP; out here the same number
+    # is read as a percentage of each hero's maximum, because out of combat
+    # there is no one body to measure it against.
+    mend = item.get("heal", 0) / 100.0 if item.get("heal") else 0.0
+    if not restore and not mend:
         return {"ok": False, "message": "That's not edible."}
     if state["inventory"].get(item_id, 0) <= 0:
         return {"ok": False, "message": f"No {item['name']} left."}
     members = energy.party(state)
     if not members:
         return {"ok": False, "message": "Nobody on the team to eat it."}
-    if all(energy.hero_energy(state, h) >= config.DAILY_ENERGY for h in members):
-        return {"ok": False, "message": "The team is already at full energy."}
+    tired = any(energy.hero_energy(state, h) < config.DAILY_ENERGY
+                for h in members)
+    hurt = health.party_needs_treatment(state)
+    if not (restore and tired) and not (mend and hurt):
+        return {"ok": False, "message": "The team is already at full strength."}
     inventory.remove(state, item_id, 1)
     before = energy.team_energy(state)
     for hero_id in members:
         energy.set_hero_energy(state, hero_id,
                                energy.hero_energy(state, hero_id) + restore)
+    if mend:
+        health.heal_party(state, mend)
     after = energy.sync(state)
     hit_end = clock.advance(state, config.EAT_MINUTES)
+    told = []
+    if restore:
+        told.append(f"+{restore} EN each - team EN {before} to {after}")
+    if mend:
+        told.append(f"+{int(mend * 100)}% HP each")
     return {"ok": True, "hit_day_end": hit_end, "gained": after - before,
-            "message": (f"The team shares the {item['name']}: +{restore} EN "
-                        f"each - team EN {before} to {after}.")}
+            "message": f"The team shares the {item['name']}: {'; '.join(told)}."}
 
 
 def search_spot_key(zone_id, tx, ty):
@@ -304,6 +369,28 @@ def spot_searched(state, zone_id, tx, ty):
 
 def mark_spot_searched(state, zone_id, tx, ty):
     state.setdefault("searched_today", []).append(search_spot_key(zone_id, tx, ty))
+
+
+# --- how much of a fight one block has left in it today (M36) -------------
+# Ambushes and sprung trap squads are the same fight: no energy, full XP to
+# everyone who swings. Uncapped, walking laps of the HYDRA District with a
+# single hero was the fastest XP in the game by a factor of five — a fight
+# every seven seconds of walking, and a solo hero collects the whole purse
+# instead of a quarter of it. Counted per zone, cleared at sleep.
+
+def fights_today(state, zone_id):
+    return state.get("fights_today", {}).get(zone_id, 0)
+
+
+def zone_is_quiet(state, zone_id):
+    """True once this block has thrown everything it has at the team today."""
+    return fights_today(state, zone_id) >= config.AMBUSH_DAILY_CAP
+
+
+def record_fight(state, zone_id):
+    fights = state.setdefault("fights_today", {})
+    fights[zone_id] = fights.get(zone_id, 0) + 1
+    return fights[zone_id]
 
 
 def shop_discount(state, calendar_data):
@@ -337,11 +424,28 @@ def buy_item(state, item, discount=1.0):
 
 
 def should_pass_out(state):
-    """0 energy or 2 AM forces sleep with the §6.1 pass-out penalty."""
-    return energy.is_exhausted(state) or clock.is_past_end(state)
+    """0 energy or 2 AM forces sleep with the §6.1 pass-out penalty.
+
+    M36: an EMPTY team is not an exhausted one. `team_energy` is the minimum
+    across the party and floors at 0 with nobody in it, so the frame a solo
+    trainee walked onto the mats the hub read it as a collapse and put the
+    player to bed — they never saw a minute of the session they had just
+    been asked to confirm. The 2 AM branch is deliberately untouched:
+    watching someone train all night still ends the same way."""
+    return ((bool(energy.party(state)) and energy.is_exhausted(state))
+            or clock.is_past_end(state))
 
 
-def go_to_sleep(state, passed_out=False):
-    cal.sleep(state, passed_out=passed_out)
-    return {"ok": True, "sleep": True,
-            "message": "You wake up groggy..." if passed_out else "A new day begins."}
+def go_to_sleep(state, passed_out=False, sheltered=False):
+    """End the day. `sheltered` (M36) means the team went down indoors, at
+    the tower — no energy penalty in the morning, because they were already
+    home. The purse and the bruises are charged either way."""
+    lost = cal.passing_out_costs(state) if passed_out else 0
+    cal.sleep(state, passed_out=passed_out, sheltered=sheltered)
+    if not passed_out:
+        return {"ok": True, "sleep": True, "message": "A new day begins."}
+    where = ("Jarvis got everyone to a bed." if sheltered
+             else "Waking up where you dropped is its own punishment.")
+    cost = f" It cost you {lost} cr." if lost else ""
+    return {"ok": True, "sleep": True, "lost_credits": lost,
+            "message": f"You wake up groggy... {where}{cost}"}

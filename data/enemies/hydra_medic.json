@@ -31,5 +31,18 @@
   ],
   "ai": "support",
   "level": 3,
-  "credit_reward": 20
+  "credit_reward": 20,
+  "levels": {
+    "1": {
+      "power_grid": {
+        "strength": 1,
+        "speed": 1,
+        "agility": 1,
+        "stamina": 1,
+        "durability": 1,
+        "intelligence": 1
+      },
+      "credit_reward": 7
+    }
+  }
 }

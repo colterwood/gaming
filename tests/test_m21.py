@@ -109,6 +109,7 @@ def test_the_training_rack_no_longer_double_dips(content):
     state = save.new_game_state()
     state["roster"] = {"iron_man": entry(), "captain_america": entry()}
     state["party"] = ["iron_man", "captain_america"]
+    state["credits"] = 10000                                 # M36: the rack bills
     state["roster"]["captain_america"]["unspent_xp"] = 500   # a legacy bank
     activities.start_training(state, content, "captain_america", "strength")
     lock = state["roster"]["captain_america"]["training"]

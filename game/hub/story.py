@@ -98,11 +98,29 @@ def check_deadlines(state, story_data):
     if entry["status"] == "active" and left is not None and left < 0:
         messages.append(fail_mission(state, quest))
     elif entry["status"] == "failed" and today >= entry.get("retry_day", 0):
-        entry["status"] = "offered"
-        entry.pop("activated_day", None)
         entry.pop("scouted", None)      # a re-offered scout restarts clean,
-        messages.append(f"New intel: {quest['name']} is back on the board.")
-    return messages                     # same as a failed battle quest
+        if reactivates_itself(quest):   # same as a failed battle quest
+            # M36: HYDRA came back on their own. A fight that timed out
+            # doesn't need re-briefing at a console — the squad is simply
+            # standing in the zone again, deadline running from today.
+            entry["status"] = "active"
+            entry["activated_day"] = today
+            messages.append(f"{quest['name']}: they're back. Same place.")
+        else:
+            entry["status"] = "offered"
+            entry.pop("activated_day", None)
+            messages.append(f"New intel: {quest['name']} is back on the board.")
+    return messages
+
+
+def reactivates_itself(quest):
+    """Whether a cooled-down mission puts itself back in the field (M36).
+
+    Fight missions do: the enemy reappears when the timer is up and the
+    player walks back out to them. Anything else — a scout, a briefing, a
+    quest that explicitly sets `"reaccept": true` — has to be taken at the
+    Ops Console again, because there is something to be told."""
+    return quest.get("kind") == "battle" and not quest.get("reaccept")
 
 
 def story_complete(state, story_data):
@@ -144,11 +162,12 @@ def do_scout(state, quest, index, story_data=None):
     done = scouted(state, quest)
     if index in done or not 0 <= index < len(quest["scout_points"]):
         return {"ok": False, "message": "Nothing left to do here."}
-    if not energy.can_afford(state, config.SCOUT_ENERGY):
+    if config.SCOUT_ENERGY and not energy.can_afford(state, config.SCOUT_ENERGY):
         return {"ok": False, "message": "Too exhausted — sleep to recover."}
     energy.spend(state, config.SCOUT_ENERGY)
     hit_end = clock.advance(state, config.SCOUT_MINUTES)
-    if energy.is_exhausted(state) or clock.is_past_end(state):
+    from game.hub import activities          # M36: one definition of collapse,
+    if activities.should_pass_out(state):    # so an empty team isn't one
         # M18: collapsing ON the job loses the job. The point isn't
         # credited and the night's work goes with it — previously the
         # last point still landed and could even COMPLETE the quest on

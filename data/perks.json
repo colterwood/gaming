@@ -1,86 +1,230 @@
 {
   "strength": {
-    "3": [
-      {"id": "haymaker", "name": "Haymaker", "effect": {"basic_damage_pct": 10},
-       "blurb": "+10% basic damage"},
-      {"id": "power_through", "name": "Power Through", "effect": {"max_hp_pct": 5},
-       "blurb": "+5% max HP"}
+    "5": [
+      {
+        "id": "haymaker",
+        "name": "Haymaker",
+        "effect": {
+          "basic_damage_pct": 10
+        },
+        "blurb": "+10% basic damage"
+      },
+      {
+        "id": "power_through",
+        "name": "Power Through",
+        "effect": {
+          "max_hp_pct": 5
+        },
+        "blurb": "+5% max HP"
+      }
     ],
-    "6": [
-      {"id": "wrecking_ball", "name": "Wrecking Ball", "effect": {"special_damage_pct": 10},
-       "blurb": "+10% special damage"},
-      {"id": "unstoppable", "name": "Unstoppable", "effect": {"basic_damage_pct": 15},
-       "blurb": "+15% basic damage"}
+    "10": [
+      {
+        "id": "wrecking_ball",
+        "name": "Wrecking Ball",
+        "effect": {
+          "special_damage_pct": 10
+        },
+        "blurb": "+10% special damage"
+      },
+      {
+        "id": "unstoppable",
+        "name": "Unstoppable",
+        "effect": {
+          "basic_damage_pct": 15
+        },
+        "blurb": "+15% basic damage"
+      }
     ]
   },
   "speed": {
-    "3": [
-      {"id": "quickdraw", "name": "Quickdraw", "effect": {"ult_turn_charge_bonus": 5},
-       "blurb": "+5 ult charge per turn"},
-      {"id": "fleet_footed", "name": "Fleet Footed", "effect": {"dodge_bonus": 3},
-       "blurb": "+3% dodge"}
+    "5": [
+      {
+        "id": "quickdraw",
+        "name": "Quickdraw",
+        "effect": {
+          "ult_turn_charge_bonus": 5
+        },
+        "blurb": "+5 ult charge per turn"
+      },
+      {
+        "id": "fleet_footed",
+        "name": "Fleet Footed",
+        "effect": {
+          "dodge_bonus": 3
+        },
+        "blurb": "+3% dodge"
+      }
     ],
-    "6": [
-      {"id": "blur", "name": "Blur", "effect": {"dodge_bonus": 5},
-       "blurb": "+5% dodge"},
-      {"id": "momentum", "name": "Momentum", "effect": {"crit_bonus": 4},
-       "blurb": "+4% crit"}
+    "10": [
+      {
+        "id": "blur",
+        "name": "Blur",
+        "effect": {
+          "dodge_bonus": 5
+        },
+        "blurb": "+5% dodge"
+      },
+      {
+        "id": "momentum",
+        "name": "Momentum",
+        "effect": {
+          "crit_bonus": 4
+        },
+        "blurb": "+4% crit"
+      }
     ]
   },
   "agility": {
-    "3": [
-      {"id": "precision", "name": "Precision", "effect": {"crit_bonus": 4},
-       "blurb": "+4% crit"},
-      {"id": "evasive", "name": "Evasive", "effect": {"dodge_bonus": 3},
-       "blurb": "+3% dodge"}
+    "5": [
+      {
+        "id": "precision",
+        "name": "Precision",
+        "effect": {
+          "crit_bonus": 4
+        },
+        "blurb": "+4% crit"
+      },
+      {
+        "id": "evasive",
+        "name": "Evasive",
+        "effect": {
+          "dodge_bonus": 3
+        },
+        "blurb": "+3% dodge"
+      }
     ],
-    "6": [
-      {"id": "killer_instinct", "name": "Killer Instinct", "effect": {"crit_bonus": 6},
-       "blurb": "+6% crit"},
-      {"id": "untouchable", "name": "Untouchable", "effect": {"dodge_bonus": 6},
-       "blurb": "+6% dodge"}
+    "10": [
+      {
+        "id": "killer_instinct",
+        "name": "Killer Instinct",
+        "effect": {
+          "crit_bonus": 6
+        },
+        "blurb": "+6% crit"
+      },
+      {
+        "id": "untouchable",
+        "name": "Untouchable",
+        "effect": {
+          "dodge_bonus": 6
+        },
+        "blurb": "+6% dodge"
+      }
     ]
   },
   "stamina": {
-    "3": [
-      {"id": "conditioning", "name": "Conditioning", "effect": {"max_hp_pct": 10},
-       "blurb": "+10% max HP"},
-      {"id": "second_wind", "name": "Second Wind", "effect": {"battle_energy_flat": 5},
-       "blurb": "+5 battle energy"}
+    "5": [
+      {
+        "id": "conditioning",
+        "name": "Conditioning",
+        "effect": {
+          "max_hp_pct": 10
+        },
+        "blurb": "+10% max HP"
+      },
+      {
+        "id": "second_wind",
+        "name": "Second Wind",
+        "effect": {
+          "battle_energy_flat": 5
+        },
+        "blurb": "+5 battle energy"
+      }
     ],
-    "6": [
-      {"id": "iron_lungs", "name": "Iron Lungs", "effect": {"battle_energy_flat": 10},
-       "blurb": "+10 battle energy"},
-      {"id": "juggernaut", "name": "Juggernaut", "effect": {"max_hp_pct": 15},
-       "blurb": "+15% max HP"}
+    "10": [
+      {
+        "id": "iron_lungs",
+        "name": "Iron Lungs",
+        "effect": {
+          "battle_energy_flat": 10
+        },
+        "blurb": "+10 battle energy"
+      },
+      {
+        "id": "juggernaut",
+        "name": "Juggernaut",
+        "effect": {
+          "max_hp_pct": 15
+        },
+        "blurb": "+15% max HP"
+      }
     ]
   },
   "durability": {
-    "3": [
-      {"id": "thick_skin", "name": "Thick Skin", "effect": {"max_hp_pct": 8},
-       "blurb": "+8% max HP"},
-      {"id": "shrug_it_off", "name": "Shrug It Off", "effect": {"dodge_bonus": 2},
-       "blurb": "+2% dodge"}
+    "5": [
+      {
+        "id": "thick_skin",
+        "name": "Thick Skin",
+        "effect": {
+          "max_hp_pct": 8
+        },
+        "blurb": "+8% max HP"
+      },
+      {
+        "id": "shrug_it_off",
+        "name": "Shrug It Off",
+        "effect": {
+          "dodge_bonus": 2
+        },
+        "blurb": "+2% dodge"
+      }
     ],
-    "6": [
-      {"id": "fortress", "name": "Fortress", "effect": {"max_hp_pct": 12},
-       "blurb": "+12% max HP"},
-      {"id": "retaliation", "name": "Retaliation", "effect": {"crit_bonus": 4},
-       "blurb": "+4% crit"}
+    "10": [
+      {
+        "id": "fortress",
+        "name": "Fortress",
+        "effect": {
+          "max_hp_pct": 12
+        },
+        "blurb": "+12% max HP"
+      },
+      {
+        "id": "retaliation",
+        "name": "Retaliation",
+        "effect": {
+          "crit_bonus": 4
+        },
+        "blurb": "+4% crit"
+      }
     ]
   },
   "intelligence": {
-    "3": [
-      {"id": "tactician", "name": "Tactician", "effect": {"special_damage_pct": 8},
-       "blurb": "+8% special damage"},
-      {"id": "efficient", "name": "Efficient", "effect": {"battle_energy_flat": 5},
-       "blurb": "+5 battle energy"}
+    "5": [
+      {
+        "id": "tactician",
+        "name": "Tactician",
+        "effect": {
+          "special_damage_pct": 8
+        },
+        "blurb": "+8% special damage"
+      },
+      {
+        "id": "efficient",
+        "name": "Efficient",
+        "effect": {
+          "battle_energy_flat": 5
+        },
+        "blurb": "+5 battle energy"
+      }
     ],
-    "6": [
-      {"id": "mastermind", "name": "Mastermind", "effect": {"special_damage_pct": 12},
-       "blurb": "+12% special damage"},
-      {"id": "overcharge", "name": "Overcharge", "effect": {"ult_turn_charge_bonus": 10},
-       "blurb": "+10 ult charge per turn"}
+    "10": [
+      {
+        "id": "mastermind",
+        "name": "Mastermind",
+        "effect": {
+          "special_damage_pct": 12
+        },
+        "blurb": "+12% special damage"
+      },
+      {
+        "id": "overcharge",
+        "name": "Overcharge",
+        "effect": {
+          "ult_turn_charge_bonus": 10
+        },
+        "blurb": "+10 ult charge per turn"
+      }
     ]
   }
 }

@@ -47,6 +47,7 @@ class FakeApp:
                     "perk_choices": {}, "gear": {}, "ult_charge": 0,
                     "energy": 100}
         self.game_state["party"] = sorted(self.game_state["roster"], reverse=True)
+        self.game_state["credits"] = 10000  # M36: the rack bills at the door
         story.init(self.game_state, content["story"])
         self.machine = FakeMachine()
         self.slept = []
@@ -162,9 +163,9 @@ def test_mission_flow_accept_fly_and_engage(content):
     assert any("Quinjet when you're ready" in l for l in labels)
     # so getting there is the player's own trip to the elevator
     scene.reset_modes()
-    put_player_at(scene, 17, 2)                         # below the elevator
+    put_player_at(scene, 28, 12)                        # the Quinjet in its bay
     scene.handle_key(app, pygame.K_RETURN)
-    choose(scene, app, "Quinjet: Hudson Docks")
+    choose(scene, app, "Hudson Docks")
     assert scene.area == "docks"
     # walk to the target squad and engage
     zone = content["zones"]["docks"]
@@ -272,7 +273,7 @@ def test_rations_menu_feeds_the_whole_team(content):
     energy.sync(state)
     scene.handle_key(app, pygame.K_i)
     assert scene.mode == "submenu"
-    assert scene.submenu["title"].startswith("Rations")
+    assert scene.submenu["title"].startswith("Supplies")
     choose(scene, app, "Shawarma Wrap")         # starter ration
     assert state["roster"]["iron_man"]["energy"] == 75
     assert state["roster"]["captain_america"]["energy"] == 95
@@ -336,8 +337,9 @@ def test_crate_search_marks_spot_and_pays(content):
     put_player_at(scene, 2, 3)                  # beside the crate at (3, 3)
     hit = scene._nearest_interaction(state)
     assert hit[0] == "crate" and hit[1] == (3, 3)
+    purse = state["credits"]
     scene.handle_key(app, pygame.K_RETURN)
-    assert 8 <= state["credits"] <= 20          # docks loot table
+    assert 8 <= state["credits"] - purse <= 20  # docks loot table
     assert state["time_minutes"] == 360 + config.SEARCH_MINUTES
     # (3,3) is spent for the day; the prompt moves on to the next crate
     hit = scene._nearest_interaction(state)
@@ -475,17 +477,27 @@ def test_rack_is_party_only_and_locks_the_trainee(content):
     choose(scene, app, "Calibrate Tower Sensors")
     rows = [i for i in scene.submenu["items"] if "Captain America" in i[0]]
     assert rows and rows[0][1] is True and "[training]" in rows[0][0]
-    # the clock passing the session end brings them back mid-play
-    state["time_minutes"] += 50
+    # the clock passing the session end settles it mid-play
+    state["time_minutes"] += 50 * config.TRAINING_LOCKOUT_MULT
     scene.reset_modes()
     scene._move = lambda dt, a: None                    # headless: no key poll
     scene.update(0.016, app)
     assert "training" not in cap
+    # M36: no auto-rejoin, in the tower or anywhere else. They are standing
+    # on the mats, and the player walks up to the rack and collects them.
+    assert state["party"] == ["iron_man"]
+    assert cap["done_training"] is True
+    scene.floor = "training"
+    assert "captain_america" in [c for c, _, _ in
+                                 scene._characters_here(state)]
+    put_player_at(scene, 35, 7)                         # beside the rack
+    scene.handle_key(app, pygame.K_RETURN)
+    choose(scene, app, "Put Captain America back on the team")
     assert state["party"] == ["iron_man", "captain_america"]
-    # but a session ending in the FIELD leaves them benched at the tower
-    result = activities.start_training(state, content, "captain_america",
-                                       "strength")
-    assert result["ok"]
+    assert "done_training" not in cap
+    # and a session ending in the FIELD still doesn't teleport anyone
+    assert activities.start_training(state, content, "captain_america",
+                                     "strength")["ok"]
     scene.area = "docks"
     state["time_minutes"] += 200
     scene.update(0.016, app)
@@ -509,6 +521,12 @@ def test_scout_quest_worked_on_foot(content):
         hit = scene._nearest_interaction(state)
         assert hit[0] == "scout" and hit[2] == "Scout"
         scene.handle_key(app, pygame.K_RETURN)
+        # M36: working a point says something in the leader's voice -
+        # authored copy for that spot, or their own line about finding
+        # nothing. Dismiss it before walking to the next marker.
+        assert scene.mode == "scene", f"no line at scout point {i}"
+        scene.handle_key(app, pygame.K_RETURN)
+        assert scene.mode == "normal"
     assert state["quests"][quest["id"]]["status"] == "done"
     assert scene._scout_targets(state) == []            # all worked
     assert any("complete" in m for m in scene.messages)

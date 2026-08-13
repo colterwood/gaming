@@ -15,13 +15,20 @@ from game.core import calendar as cal
 from game.core import clock, energy, inventory
 from game.core.state_machine import GameState
 from game.hub import (activities, dispatch, field, party as party_mod, passive,
-                      repairs, story, unlocks)
+                      repairs, requirements, story, unlocks)
 from game.progression import gear
 from game.social import bonds, dialogue, events
 from game.ui import audio, pixelkit, sprites, widgets
 
 TILE = 16
 HUD_H = 20
+# M36: the HUD packs itself from both edges instead of using fixed centres,
+# so a long calendar-event banner can never be drawn through the floor name.
+HUD_PAD = 6                 # margin at each end of the strip
+HUD_GAP = 8                 # minimum gap between two elements
+HUD_BAR_W = 62              # the team energy and team HP bars
+HUD_TEXT_SIZE = 13
+HUD_EVENT_SIZE = 12         # one size down so the banner never crowds the row
 MAP_W = config.MAP_TILES_W
 MAP_H = config.MAP_TILES_H
 
@@ -46,6 +53,11 @@ STATION_LABELS = {"elevator": "Elevator", "shop": "Tower Shop",
                   "medbay": "Treatment Station", "techlab": "Tech Bench",
                   "pymlab": "Pym Bench"}
 ZONE_STATION_KINDS = {"helipad", "shop"}    # what works in the field (M10)
+# M36: which floor's opening hours each station keeps. Anything absent here
+# runs whenever the player does — the shop, the board, the ops console, the
+# elevator and the bed have no shift.
+STATION_FLOOR = {"training": "training", "medbay": "med_bay",
+                 "techlab": "tech_lab", "pymlab": "pym_lab"}
 # M35: furniture worth turning over while a repair is in hand. Nothing is
 # marked — the hunt is walking the floor and searching things. Mats are
 # searched as one field (you roll them back), everything else tile by tile.
@@ -217,6 +229,45 @@ FLOORS = {
 # The three original rooms come back with the elevator; the new ones are
 # behind their own repair, and the Pym Lab behind Scott Lang's door code.
 FLOOR_ORDER = ("common", "ops", "training", "med_bay", "tech_lab", "pym_lab")
+BED_FLOOR = "common"        # M36: where you wake up, however the night went
+
+
+def room_open(state, floor):
+    """Whether a room's own station is working right now (M36).
+
+    Rooms used to run 6 AM to 2 AM like the player does, which made the
+    tower one undifferentiated surface with no reason to plan a day around
+    it. Hours are half-open [open, close) in minutes since midnight of the
+    day the day started, so the 6:00-26:00 span is 360..1560 and a closing
+    time after midnight is written (24 + h) * 60."""
+    hours = config.ROOM_HOURS.get(floor)
+    if not hours:
+        return True
+    opens, closes = hours
+    return opens <= state.get("time_minutes", opens) < closes
+
+
+def room_hours_label(floor):
+    """(opens, closes) as clock strings, for menus and refusals."""
+    opens, closes = config.ROOM_HOURS[floor]
+    return clock.format_time(opens), clock.format_time(closes)
+
+
+def mastery_attribute():
+    from game.progression import mastery
+    return mastery.ATTRIBUTE
+
+
+def attrs_rank_for_training(content, state, hero_id):
+    """The cheapest level this hero could train right now — what the rack
+    row quotes as "from N cr", since the real price depends on which of the
+    six they pick."""
+    from game.progression import attributes as attrs
+    entry = state["roster"][hero_id]
+    boosts = content["characters"][hero_id].get("boosts", {})
+    levels = [attrs.rank(entry, a) for a in config.ATTRIBUTES
+              if attrs.can_train(boosts, entry, a)]
+    return min(levels) if levels else config.RANK_MAX
 FLOOR_REQUIRES = {
     "ops": ("elevator_repaired", "The elevator doesn't go up yet."),
     "training": ("elevator_repaired", "The elevator doesn't go up yet."),
@@ -276,6 +327,7 @@ class HubScene:
         #        resting | keypad
         self.mode = "normal"
         self.submenu = None
+        self.solo_ok = False        # M36: consent to empty the team (note 34)
         self.train_hero_id = None
         self.perk_ctx = None
         self.scene = None
@@ -312,6 +364,7 @@ class HubScene:
         self.mode = "normal"
         self.submenu = None
         self.submenu_index = 0
+        self.solo_ok = False        # M36: consent to empty the team, per session
         self.train_hero_id = None
         self.perk_ctx = None
         self.scene = None
@@ -325,6 +378,37 @@ class HubScene:
             self.area = "tower"
             self.floor = "common"
         self._place_at_spawn()
+
+    def wake_up(self):
+        """Start the day standing beside your own bed (M36).
+
+        Waking used to drop the player at the floor's elevator spawn, or
+        wherever `return_to_tower` happened to put them — which after a
+        collapse in the HYDRA District meant materialising at the lift with
+        no sense of having gone to bed at all. However the night ended,
+        morning is the same tile."""
+        self.reset_modes()
+        self.area = "tower"
+        self.floor = BED_FLOOR
+        tx, ty = self._bedside()
+        self.px = tx * TILE + TILE // 2
+        self.py = HUD_H + ty * TILE + TILE // 2
+        self.trail = []
+
+    def _bedside(self):
+        """A walkable tile next to the bed, or the floor's spawn if the map
+        is ever authored without one."""
+        rows = FLOORS[BED_FLOOR]["map"]
+        for ty, row in enumerate(rows):
+            for tx, ch in enumerate(row):
+                if STATION_KINDS.get(ch) != "bed":
+                    continue
+                for dx, dy in ((1, 0), (0, 1), (-1, 0), (0, -1)):
+                    nx, ny = tx + dx, ty + dy
+                    if (0 <= ny < len(rows) and 0 <= nx < len(rows[ny])
+                            and rows[ny][nx] in WALKABLE):
+                        return nx, ny
+        return FLOORS[BED_FLOOR]["spawn"]
 
     def _place_at_spawn(self):
         if self.area == "tower":
@@ -396,6 +480,17 @@ class HubScene:
             put("coulson", 33, 10)
         elif self.floor == "ops":
             put("pepper_potts", 12, 5)
+        # M36: the rebuilt rooms have somebody in them. A bench with a voice
+        # is a place; a bench without one is a menu you walk to. Each shows
+        # up only once their room actually works, so lighting a lab is also
+        # meeting whoever runs it.
+        elif self.floor == "tech_lab" and flags.get("tech_lab_repaired"):
+            put("jarvis", 8, 5)         # the tower's own voice, at the bench
+        elif self.floor == "pym_lab" and flags.get("pym_lab_repaired"):
+            put("hank_pym", 11, 6)
+        elif self.floor == "med_bay" and flags.get("med_bay_repaired"):
+            put("medbay_unit", 4, 5)
+            put("medbay_unit", 8, 5)   # two of them, identical by design
         if flags.get("hulk_arrived") and "hulk" not in roster \
                 and self.floor == "training":
             put("hulk", 8, 12)
@@ -405,8 +500,9 @@ class HubScene:
                 continue
             if roster[hero_id].get("dispatch"):     # placed at the site above
                 continue
-            if roster[hero_id].get("training"):     # on the mats (M12)
-                kind = "train"
+            if roster[hero_id].get("training") or                     roster[hero_id].get("done_training"):
+                kind = "train"      # on the mats (M12), or done and waiting
+                                    # there to be collected (M36)
             else:
                 assignment = roster[hero_id].get("assignment")
                 kind = assignment["kind"] if assignment else None
@@ -520,21 +616,48 @@ class HubScene:
         return found
 
     def _furniture_here(self, state):
-        """Searchable furniture on this screen (M35) — only while a hunt for
-        hidden parts is on, and only what hasn't been turned over today."""
-        if self.area != "tower" or not repairs.searching_for_parts(
-                self.content, state):
-            return []
+        """Searchable furniture and greenery on this screen.
+
+        M35 made these live only while a repair hunt with hidden pieces was
+        in hand, which taught the player that a couch is scenery 95% of the
+        time and then quietly expected them to start turning couches over.
+        M36: everything is searchable ALWAYS, indoors and out — the tower's
+        furniture and the city's trees alike. Almost all of it is empty;
+        that is what makes the occasional handful of credits worth the five
+        minutes, and it means the habit already exists by the time a repair
+        needs it."""
+        # A stand of trees a live side arc still wants combed is that arc's
+        # business, not an ordinary rummage — otherwise the two prompts sit
+        # on the same tile and the generic one wins on a distance tie.
+        spoken_for = self._arc_tiles(state)
         found = []
         for ty, row in enumerate(self._map()):
             for tx, ch in enumerate(row):
-                if ch not in SEARCHABLE_FURNITURE:
+                if ch not in SEARCHABLE_FURNITURE or (tx, ty) in spoken_for:
                     continue
-                if activities.spot_searched(state, self.floor, tx, ty):
+                if activities.spot_searched(state, self._here_key(), tx, ty):
                     continue
-                found.append((tx, ty, SEARCHABLE_FURNITURE[ch],
+                found.append((tx, ty, self._furniture_name(ch),
                               tx * TILE + TILE // 2, HUD_H + ty * TILE + TILE // 2))
         return found
+
+    def _arc_tiles(self, state):
+        """Every tile claimed by a side arc that is still hunting here."""
+        claimed = set()
+        if self.area == "tower":
+            return claimed
+        for arc in unlocks.active_arcs(self.content, state, self.area):
+            for index in unlocks.searchable(state, arc):
+                claimed.update(tuple(t) for t in
+                               arc["search_groves"][index]["tiles"])
+        return claimed
+
+    def _furniture_name(self, ch):
+        """What the thing is called here — a planter indoors is a tree on
+        the street, and the prompt should say which."""
+        if self.area != "tower" and ch in ZONE_TILE_OVERRIDES:
+            return ZONE_TILE_OVERRIDES[ch]
+        return SEARCHABLE_FURNITURE[ch]
 
     def _search_group(self, tx, ty):
         """Every tile one search covers. A mat field is rolled back in one
@@ -639,15 +762,21 @@ class HubScene:
             # M30: the Med Bay is the one menu the clock DOES run behind,
             # because the passing hours are what you're paying.
             self._rest_update(dt, app)
-        for msg in activities.finish_due_training(
-                state, self.content, rejoin=(self.area == "tower")):
-            self.log(msg)                           # sessions ending (M12);
-                                                    # no teleporting into zones
+        for msg in activities.finish_due_training(state, self.content):
+            self.log(msg)           # sessions ending (M12). M36: never a
+                                    # rejoin - they wait on the mats to be
+                                    # collected, wherever the player is
         if activities.should_pass_out(state):
             self.log("The team passes out...")
             app.go_to_sleep(passed_out=True)
 
     def _move(self, dt, app):
+        # M36: with the whole team on the mats there is nobody to walk as -
+        # _draw_entities already draws nothing at (px, py). Freezing here
+        # also closes the ambush roll, which would otherwise fire on an
+        # invisible party of zero.
+        if not self._party(app.game_state):
+            return
         keys = pygame.key.get_pressed()
         dx = (keys[pygame.K_RIGHT] - keys[pygame.K_LEFT]) * 90 * dt
         dy = (keys[pygame.K_DOWN] - keys[pygame.K_UP]) * 90 * dt
@@ -672,15 +801,35 @@ class HubScene:
         zone = self._zone()
         if not zone:
             return
+        state = app.game_state
+        # M36: a block only has so many patrols in it. Checked BEFORE the
+        # accumulator so a quiet zone costs no RNG at all.
+        if activities.zone_is_quiet(state, zone["id"]):
+            return
         self.ambush_accum += dt
         if self.ambush_accum < config.AMBUSH_TICK_SECONDS:
             return
         self.ambush_accum = 0.0
-        squad = field.roll_ambush(zone["danger"], len(self._party(app.game_state)),
-                                  self.rng)
+        squad = field.roll_ambush(zone, len(self._party(state)), self.rng)
         if squad:
-            self.log(f"AMBUSH! A HYDRA squad of {len(squad)} jumps the team!")
-            app.start_battle(enemy_ids=squad, ambush=True)
+            self._spring_squad(app, zone, squad,
+                               f"AMBUSH! A HYDRA squad of {len(squad)} "
+                               f"jumps the team!")
+
+    def _spring_squad(self, app, zone, squad, message):
+        """Start a field fight and count it against the zone's day (M36).
+        Ambushes and sprung trap squads are the same fight — no energy, full
+        XP — so they share one budget, or capping only one just moves the
+        farm onto the other."""
+        if not squad or activities.zone_is_quiet(app.game_state, zone["id"]):
+            return False            # nothing left in this block today
+        self.log(message)
+        left = config.AMBUSH_DAILY_CAP - activities.record_fight(
+            app.game_state, zone["id"])
+        if left <= 0:
+            self.log(f"That was the last of them in {zone['name']} today.")
+        app.start_battle(enemy_ids=squad, ambush=True)
+        return True
 
     # ----------------------------------------------------------------- input
 
@@ -788,10 +937,13 @@ class HubScene:
     def floor_locked(self, state, floor):
         """(locked, why) for a tower floor — M29 gates every floor above the
         common one behind the elevator repair, and the Pym Lab behind the
-        code Scott Lang hands over."""
+        code Scott Lang hands over. M36 adds the clock: the training floor
+        locks its door at 11 PM."""
         flag, why = FLOOR_REQUIRES.get(floor, (None, ""))
         if flag and not state.get("story_flags", {}).get(flag):
             return True, why
+        if floor in config.CLOSED_FLOORS_LOCK_OUT and not room_open(state, floor):
+            return True, f"closed until {room_hours_label(floor)[0]}"
         return False, ""
 
     def _open_elevator(self, app):
@@ -816,15 +968,16 @@ class HubScene:
             elif not self._floor_working(state, floor):
                 label += "  [needs repair]"
             items.append((label, locked or here,
-                          (lambda a, fl=floor: self._switch_floor(fl))))
+                          (lambda a, fl=floor: self._switch_floor(fl, a))))
+        # M36: the elevator is an elevator. It used to list every zone in
+        # the city as a destination, so the Quinjet sitting in its bay on
+        # the Ops floor was scenery — you never had to go near it to fly.
+        # Floors here; the jet is boarded where the jet is.
         if state.get("story_flags", {}).get("quinjet_repaired"):
-            for zone in sorted(self.content["zones"].values(),
-                               key=lambda z: z["danger"]):
-                danger = "!" * zone["danger"]
-                items.append((f"Quinjet: {zone['name']}  [{danger}]", False,
-                              (lambda a, zid=zone["id"]: self._travel(a, zid))))
+            items.append(("(the Quinjet is in its bay on the Ops floor)",
+                          True, None))
         else:
-            items.append(("Quinjet: grounded", True, None))
+            items.append(("(the Quinjet is grounded)", True, None))
         self._open_submenu("Elevator", items)
 
     def _floor_working(self, state, floor):
@@ -851,12 +1004,31 @@ class HubScene:
         items.append(("Stay here", False, None))
         self._open_submenu("Quinjet: fly to...", items)
 
-    def _switch_floor(self, floor):
+    def _switch_floor(self, floor, app=None):
         self.area = "tower"
         self.floor = floor
         self._place_at_spawn()
         self.reset_modes()
-        self.log(f"{FLOORS[floor]['name']}.")
+        # M36: no "Common Floor." in the log — the HUD names the floor you
+        # are standing on, top right, all the time. Saying it again in the
+        # message window spends one of three visible lines on it and pushes
+        # something the player actually needs to read off the bottom.
+        if app is not None:
+            self._greet_on_arrival(app)
+
+    def _greet_on_arrival(self, app):
+        """Somebody with a problem raises it the moment you walk in (M36).
+
+        M34 put the tower's repairs in people's mouths, but you still had to
+        go and ask: Pepper stood on the Ops floor with a grounded Quinjet and
+        said nothing until spoken to. If the person on this floor is waiting
+        to tell you something, they say it as you step off the lift."""
+        state = app.game_state
+        for char_id, _, _ in self._characters_here(state):
+            if repairs.triggered_by(self.content, state, char_id) is None:
+                continue
+            self._repair_conversation(app, char_id)
+            return
 
     def _travel(self, app, destination):
         clock.advance(app.game_state, config.TRAVEL_MINUTES)
@@ -898,7 +1070,23 @@ class HubScene:
         result = story.do_scout(state, quest, index, self.content["story"])
         self.log(result["message"])
         self.reset_modes()
+        # M36: a scout point used to be twenty silent minutes and five
+        # energy. It is free now, and it SAYS something - authored copy for
+        # this specific spot if the quest has any (the three ankle-monitor
+        # relays each get their own), otherwise the leader's own line about
+        # finding nothing worth finding.
+        if result["ok"] and not result.get("hit_day_end"):
+            line = self._scout_line(state, quest, index)
+            leader = self._leader(state)
+            if line and leader:
+                self._show_line(leader, line)
         self._after_action(app)
+
+    def _scout_line(self, state, quest, index):
+        authored = quest.get("point_lines") or []
+        if index < len(authored):
+            return authored[index]
+        return self._flavor_line(state, "scouting")
 
     # ------------------------------------------------- tower repairs (M29)
 
@@ -909,25 +1097,57 @@ class HubScene:
             return
         self._take_part(app, job, index)
 
+    # M36: what an empty search says, by what you searched. A planter has
+    # nothing in it but a planter; saying so in the couch's words ("dust and
+    # somebody's old ID badge") is the kind of small wrongness that adds up.
+    EMPTY_SEARCH = {
+        "plant": "Soil, a few tired worms, and no sign of anything else.",
+        "tree": "Bark, roots and startled pigeons. Nothing worth carrying.",
+        "mats": "You roll the mats back. Underneath: floor.",
+        None: "Nothing but dust and somebody's old ID badge.",
+    }
+
     def _search_furniture(self, app, tx, ty):
         """Turn something over (M35). Costs minutes, never energy — the
         hunt is attention, not attrition. Most of it is empty."""
         state = app.game_state
+        area = self._here_key()
+        kind = self._furniture_name(self._map()[ty][tx])
         tiles = self._search_group(tx, ty)
         for x, y in tiles:
-            activities.mark_spot_searched(state, self.floor, x, y)
+            activities.mark_spot_searched(state, area, x, y)
         clock.advance(state, config.FURNITURE_SEARCH_MINUTES)
         job = index = None
         for x, y in tiles:
-            job, index = repairs.hidden_at(self.content, state, self.floor,
-                                           x, y)
+            job, index = repairs.hidden_at(self.content, state, area, x, y)
             if job is not None:
                 break
-        if job is None:
-            self.log("Nothing but dust and somebody's old ID badge.")
-            self._after_action(app)
+        if job is not None:
+            self._claim_hidden(app, job, index)
             return
-        self._claim_hidden(app, job, index)
+        self.log(self._furniture_loot(app, kind))
+        self._after_action(app)
+
+    def _furniture_loot(self, app, kind):
+        """Roll what was down the back of it (M36) and return the line to
+        log. Overwhelmingly nothing — the odds are set so that searching is
+        a habit worth having rather than an income."""
+        state = app.game_state
+        if self.rng.random() < config.FURNITURE_SEARCH_CREDIT_CHANCE:
+            lo, hi = config.FURNITURE_SEARCH_CREDITS
+            found = self.rng.randint(lo, hi)
+            state["credits"] = state.get("credits", 0) + found
+            return f"Loose change down the back of it: +{found} cr."
+        if self.rng.random() < config.FURNITURE_SEARCH_ITEM_CHANCE:
+            pool = sorted(i["id"] for i in self.content["items"].values()
+                          if i.get("kind") in ("gift", "consumable"))
+            if pool:
+                item_id = pool[self.rng.randrange(len(pool))]
+                name = self.content["items"][item_id]["name"]
+                if inventory.add(state, item_id, 1)["ok"]:
+                    return f"Somebody left a {name} in there."
+                return f"There's a {name} in there, and nowhere to put it."
+        return self.EMPTY_SEARCH.get(kind, self.EMPTY_SEARCH[None])
 
     def _claim_hidden(self, app, job, index):
         """Wrestle a found piece out of wherever it was stashed."""
@@ -970,6 +1190,11 @@ class HubScene:
         if job and not repairs.flag_set(state, job):
             self._open_repair_menu(app, job)
             return
+        # M36: the room is open, the bench may not be. The Quinjet keeps no
+        # hours — grounding the team overnight in a zone they flew to would
+        # be a trap, not a schedule.
+        if kind != "quinjet" and not self._station_open(app, kind):
+            return
         if kind == "quinjet":
             self._open_helipad(app)
         elif kind == "medbay":
@@ -981,6 +1206,30 @@ class HubScene:
         else:
             self.log(f"{STATION_LABELS[kind]}: nothing installed here yet.")
             self.reset_modes()
+
+    # M36: what each station says when you try it outside its hours. In
+    # someone's voice where the room has someone in it.
+    CLOSED_STATION = {
+        "medbay": ("The ward lights are down to standby. The units are on "
+                   "their charge cycle until {opens}."),
+        "techlab": ("The fabricators are cold and the bench is locked out. "
+                    "Back at {opens}."),
+        "pymlab": ("The Pym bench is powered down for the night. It runs "
+                   "{opens} to {closes}."),
+        "training": "The mats are rolled up. The floor opens again at {opens}.",
+    }
+
+    def _station_open(self, app, kind):
+        """True if this station is working now; otherwise log why and close
+        the menu. The floor is still walkable — only the work stops."""
+        floor = STATION_FLOOR.get(kind)
+        if floor is None or room_open(app.game_state, floor):
+            return True
+        opens, closes = room_hours_label(floor)
+        self.log(self.CLOSED_STATION.get(kind, "Closed until {opens}.")
+                 .format(opens=opens, closes=closes))
+        self.reset_modes()
+        return False
 
     # ------------------------------------------------- locked board (M34)
 
@@ -1166,9 +1415,10 @@ class HubScene:
             total = len(job["parts"])
             items.append((f"  Parts: {total - left}/{total}", True, None))
             if repairs.can_repair(state, job):
-                items.append((f"{job['repair_label']}  "
-                              f"({clock.format_duration(config.REPAIR_MINUTES)})",
-                              False, (lambda a, j=job: self._do_repair(a, j))))
+                # M36: fitting is free of both clock and energy, so there
+                # is no cost to quote here any more.
+                items.append((job["repair_label"], False,
+                              (lambda a, j=job: self._do_repair(a, j))))
             else:
                 items.append(("  Still missing pieces - they're around the "
                               "tower.", True, None))
@@ -1215,9 +1465,11 @@ class HubScene:
         if result["trap"]:
             squad = field.trap_squad(zone["danger"],
                                      len(self._party(state)), self.rng)
-            self.log(f"Booby-trapped! A HYDRA squad of {len(squad)} springs out!")
-            app.start_battle(enemy_ids=squad, ambush=True)
-            return
+            if self._spring_squad(
+                    app, zone, squad,
+                    f"Booby-trapped! A HYDRA squad of {len(squad)} "
+                    f"springs out!"):
+                return
         found = []
         left_behind = None
         if result["credits"]:
@@ -1255,9 +1507,14 @@ class HubScene:
         if result["trap"]:
             squad = field.trap_squad(zone["danger"],
                                      len(self._party(state)), self.rng)
-            self.log(f"The seam was watched! {len(squad)} HYDRA close in!")
-            app.start_battle(enemy_ids=squad, ambush=True)
-            return
+            if self._spring_squad(
+                    app, zone, squad,
+                    f"The seam was watched! {len(squad)} HYDRA close in!"):
+                return
+        # M36: a part that lives in "some ore seam somewhere" rolls here,
+        # against whatever the player actually cracked open.
+        for message in repairs.mine_drop(self.content, state, self.rng):
+            self.log(message)
         if not result["item"]:
             self.log("The seam gives up nothing but dust.")
         else:
@@ -1329,8 +1586,12 @@ class HubScene:
     # -------------------------------------------------------- rations (M10)
 
     def _rations(self, state):
+        """What the bag holds that can be used on the spot — food for
+        energy, and (M36) med kits for the HP the team is now carrying
+        between fights."""
         return [(iid, n) for iid, n in sorted(state["inventory"].items())
-                if n > 0 and self.content["items"].get(iid, {}).get("energy")]
+                if n > 0 and (self.content["items"].get(iid, {}).get("energy")
+                              or self.content["items"].get(iid, {}).get("heal"))]
 
     def _open_rations(self, app):
         state = app.game_state
@@ -1338,29 +1599,40 @@ class HubScene:
         if not foods:
             self.log("No rations in the bag - the cafe and street carts sell food.")
             return
+        from game.core import health
         # M18: a ration feeds the WHOLE team, so there's nobody to pick.
-        full = all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
-                   for h in self._party(state))
+        fed = all(energy.hero_energy(state, h) >= config.DAILY_ENERGY
+                  for h in self._party(state))
+        hurt = health.party_needs_treatment(state)
         items = []
         for iid, n in foods:
             item = self.content["items"][iid]
-            items.append((f"{item['name']} x{n}  (+{item['energy']} EN team)"
-                          + ("  [team full]" if full else ""), full,
-                          (lambda a, i=iid: self._eat(a, i))))
+            gains = []
+            if item.get("energy"):
+                gains.append(f"+{item['energy']} EN")
+            if item.get("heal"):        # M36: med kits work out of combat now
+                gains.append(f"+{item['heal']}% HP")
+            useless = (fed or not item.get("energy")) and \
+                      (not hurt or not item.get("heal"))
+            items.append((f"{item['name']} x{n}  ({', '.join(gains)} team)"
+                          + ("  [no use right now]" if useless else ""),
+                          useless, (lambda a, i=iid: self._eat(a, i))))
         items.append(("Never mind", False, None))
-        self._open_submenu(f"Rations - team EN {energy.team_energy(state)}",
+        self._open_submenu(f"Supplies - team EN {energy.team_energy(state)}",
                            items)
 
     def _eat(self, app, item_id):
+        from game.core import health
         state = app.game_state
         result = activities.eat_food(state, self.content, item_id)
         self.log(result["message"])
         self.reset_modes()
         # M18: one ration does the whole team, so only stay in the menu if
-        # there is both something left to eat and someone still short.
-        hungry = any(energy.hero_energy(state, h) < config.DAILY_ENERGY
-                     for h in self._party(state))
-        if result["ok"] and hungry and self._rations(state):
+        # there is both something left to use and someone still short.
+        needed = (any(energy.hero_energy(state, h) < config.DAILY_ENERGY
+                      for h in self._party(state))
+                  or health.party_needs_treatment(state))
+        if result["ok"] and needed and self._rations(state):
             self._open_rations(app)
         self._after_action(app)
 
@@ -1695,8 +1967,14 @@ class HubScene:
 
     def _accept_repair(self, app, job):
         result = repairs.accept(self.content, app.game_state, job)
-        self.log(requirements.coulson_says(result["message"])
-                 if result.get("busy") else result["message"])
+        if result.get("busy"):
+            # M36: this line used to call requirements.coulson_says() with
+            # `requirements` never imported at module scope — taking a second
+            # repair while one was in hand raised NameError and dropped the
+            # player out of the game. It is Coulson talking, so he says it.
+            self._say_coulson(result["message"])
+        else:
+            self.log(result["message"])
         if result["ok"]:
             where = FLOORS[job["floor"]]["name"]
             self.log(f"{len(job['parts'])} parts to find. It gets fitted on "
@@ -1796,9 +2074,30 @@ class HubScene:
             self._open_dispatch_picker(app, task, picked)
             return
         ok, message = dispatch.send(self.content, app.game_state, task, picked)
-        self.log(message)
         energy.sync(app.game_state)
-        self.reset_modes()
+        if ok:
+            self.log(message)
+            self.reset_modes()
+            return
+        # M36: a refusal is Coulson turning you down to your face, not a
+        # grey line in the corner of the screen. Skill requirements are
+        # deliberately never advertised (M15), so the refusal IS the
+        # feedback — it has to be somewhere the player is looking.
+        self._say_coulson(message)
+
+    COULSON_PREFIX = "COULSON: "
+
+    def _say_coulson(self, line):
+        """Coulson, in a dialogue box. Falls back to the log if he is not in
+        the cast for some reason — a refusal must never be swallowed."""
+        if "coulson" not in self.content["characters"]:
+            self.log(requirements.coulson_says(line))
+            return
+        # dispatch.send tags its refusals for the message log; inside a box
+        # with his name on the header the prefix is saying it twice.
+        if line.startswith(self.COULSON_PREFIX):
+            line = line[len(self.COULSON_PREFIX):]
+        self._show_line("coulson", line)
 
     def _recall_dispatch(self, app, task_id):
         ok, message = dispatch.recall(self.content, app.game_state, task_id)
@@ -1910,28 +2209,53 @@ class HubScene:
         if job and not repairs.flag_set(state, job):
             self._open_repair_menu(app, job)     # torn mats, cracked frame
             return
+        if not self._station_open(app, "training"):
+            return
         if self._open_pending_perk(state, None):
             return
         party = self._party(state)
         items = []
         for hid in party:
             en = energy.hero_energy(state, hid)
-            last = len(party) <= 1
-            label = f"Train {self.content['characters'][hid]['name']} (EN {en})"
-            if last:
-                label += "  [team would be empty]"
-            items.append((label, last,
+            # M36: the rack bills at the door, so the price of THIS hero's
+            # next session belongs on the row you are choosing from.
+            price = activities.training_credits(
+                attrs_rank_for_training(self.content, state, hid))
+            label = (f"Train {self.content['characters'][hid]['name']} "
+                     f"(EN {en}, from {price} cr)")
+            items.append((label, False,
                           (lambda a, h=hid: self._pick_train_hero(a, h))))
         for hid in sorted(state.get("roster", {})):
-            lock = state["roster"][hid].get("training")
+            entry = state["roster"][hid]
+            lock = entry.get("training")
+            name = self.content["characters"][hid]["name"]
             if lock:
                 left = activities.training_remaining(state, lock)
-                items.append((f"{self.content['characters'][hid]['name']} - "
-                              f"{lock['attribute'].title()}, "
+                items.append((f"{name} - {lock['attribute'].title()}, "
                               f"{clock.format_duration(left)} to go",
                               True, None))
+            elif entry.get("done_training") and hid not in party:
+                # M36: a finished session leaves the hero standing here
+                # rather than teleporting them onto the team. Collect them.
+                items.append((f"Put {name} back on the team", False,
+                              (lambda a, h=hid: self._collect_trainee(a, h))))
         items.append(("Close", False, None))
         self._open_submenu("Training Rack (team only)", items)
+
+    def _collect_trainee(self, app, hero_id):
+        """Take a hero off the mats and back onto the team, in person."""
+        state = app.game_state
+        name = self.content["characters"][hero_id]["name"]
+        if len(self._party(state)) >= config.PARTY_SIZE_MAX:
+            self.log(f"No room on the team for {name} - bench someone first.")
+            self.reset_modes()
+            return
+        ok, message = party_mod.add_to_party(self.content, state, hero_id)
+        if ok:
+            state["roster"][hero_id].pop("done_training", None)
+        self.log(message)
+        energy.sync(state)
+        self.reset_modes()
 
     def _pick_train_hero(self, app, hero_id):
         self.train_hero_id = hero_id
@@ -1988,8 +2312,10 @@ class HubScene:
                 en_cost, minutes = activities.training_cost(config.RANK_MAX)
                 gain = attrs.session_xp(state, self.content["calendar"],
                                         config.RANK_MAX)
+                price = activities.training_credits(config.RANK_MAX)
                 labels.append(f"ENLIGHTENMENT  {done}/{needed}xp  (+{gain}xp, "
-                              f"{en_cost}EN, {clock.format_duration(minutes)})")
+                              f"{en_cost}EN, {price}cr, "
+                              f"{clock.format_duration(minutes)})")
                 continue
             # M15: rank is the trainable level (1..RANK_MAX); the innate
             # boost lifts the COMBAT value above it, so show both.
@@ -2003,8 +2329,10 @@ class HubScene:
                 cost = attrs.xp_for_rank(rank)
                 gain = attrs.session_xp(state, self.content["calendar"], rank)
                 en_cost, minutes = activities.training_cost(rank)
+                price = activities.training_credits(rank)
                 labels.append(f"{head}  {banked}/{cost}xp  (+{gain}xp, "
-                              f"{en_cost}EN, {clock.format_duration(minutes)})")
+                              f"{en_cost}EN, {price}cr, "
+                              f"{clock.format_duration(minutes)})")
         return labels
 
     def _train_attr_key(self, app, key):
@@ -2019,11 +2347,79 @@ class HubScene:
             self.submenu_index = (self.submenu_index + 1) % len(rows)
         elif key == pygame.K_RETURN:
             attribute = rows[self.submenu_index % len(rows)]
-            result = activities.start_training(state, self.content,
-                                               self.train_hero_id, attribute)
+            hero_id = self.train_hero_id
+            result = activities.start_training(state, self.content, hero_id,
+                                               attribute, solo_ok=self.solo_ok)
+            if result.get("needs_solo_confirm"):
+                # M36: emptying the team is a decision, not an error. Ask.
+                self._open_solo_prompt(app, hero_id, attribute)
+                return
             self.log(result["message"])
             if result["ok"]:
+                if not self._party(state):
+                    name = self.content["characters"][hero_id]["name"]
+                    self.log(f"Watching {name} workout, hey? Creepy!")
+                self.solo_ok = False
                 self.reset_modes()      # they're off the team, on the mats
+
+    # ------------------------------------------- training with nobody left
+
+    def _open_solo_prompt(self, app, hero_id, attribute):
+        """Nobody would be left standing. Offer a benched hero the lead
+        first, because that is almost always what the player meant."""
+        state = app.game_state
+        name = self.content["characters"][hero_id]["name"]
+        items = [(f"{name} is the only one on the team.", True, None)]
+        for other in self._benched_candidates(state):
+            other_name = self.content["characters"][other]["name"]
+            items.append((f"Put {other_name} on point", False,
+                          (lambda a, o=other, at=attribute:
+                           self._promote_and_train(a, o, at))))
+        items.append(("No - I'll just watch", False,
+                      (lambda a, at=attribute: self._confirm_watch(a, at))))
+        items.append(("Never mind", False, None))
+        self._open_submenu("Nobody left on the team", items)
+
+    def _benched_candidates(self, state):
+        """Roster heroes who could take the lead: off the team, not away,
+        not themselves on the mats."""
+        party = self._party(state)
+        return [h for h in sorted(state.get("roster", {}))
+                if h not in party
+                and not state["roster"][h].get("dispatch")
+                and not state["roster"][h].get("training")]
+
+    def _promote_and_train(self, app, other_id, attribute):
+        ok, message = party_mod.add_to_party(self.content, app.game_state,
+                                             other_id)
+        self.log(message)
+        if not ok:
+            self.reset_modes()
+            return
+        app.game_state["roster"][other_id].pop("done_training", None)
+        energy.sync(app.game_state)
+        self._resume_training(attribute)
+
+    def _confirm_watch(self, app, attribute):
+        name = self.content["characters"][self.train_hero_id]["name"]
+        self._open_submenu(
+            "Nobody left on the team",
+            [(f"Nobody will be on the team while {name} trains.", True, None),
+             ("No, forget it", False, None),
+             ("Yes - I'll watch", False,
+              (lambda a, at=attribute: self._begin_solo_training(a, at)))])
+
+    def _begin_solo_training(self, app, attribute):
+        self.solo_ok = True
+        self._resume_training(attribute)
+
+    def _resume_training(self, attribute):
+        """Drop back onto the attribute list with the choice remembered, so
+        the player doesn't have to re-pick what they already picked."""
+        rows = list(config.ATTRIBUTES) + [mastery_attribute()]
+        self.submenu = None
+        self.submenu_index = rows.index(attribute) if attribute in rows else 0
+        self.mode = "train_attr"
 
     def _perk_choice_key(self, app, key):
         from game.progression import attributes as attrs
@@ -2140,17 +2536,13 @@ class HubScene:
                     surface.blit(self._search_shade, (tx * TILE, HUD_H + ty * TILE))
 
     def _worked_grove_tiles(self, state):
-        """Tiles of stands already combed out, dimmed like a rummaged crate.
-        The one still holding the item stays lit even after it's found."""
-        spent = set()
-        for arc in unlocks.active_arcs(self.content, state, self.area):
-            live = set(unlocks.searchable(state, arc))
-            for index in unlocks.searched(state, arc):
-                if index in live:
-                    continue
-                spent.update(tuple(t) for t in
-                             arc["search_groves"][index]["tiles"])
-        return spent
+        """Stands already combed out.
+
+        M36: returns nothing. Dimming the trees you had already searched
+        drew the player a map of their own progress, so coming back the
+        next day with the right hero meant walking to the one stand that
+        was still lit. Trees look like trees; the notebook is the player's."""
+        return set()
 
     def _draw_entities(self, surface, state):
         entities = [(cid, x, y, False, 0)
@@ -2167,15 +2559,11 @@ class HubScene:
             points = [(x, y - 6), (x + 5, y), (x, y + 6), (x - 5, y)]
             pygame.draw.polygon(surface, pixelkit.color("orange"), points)
             pygame.draw.polygon(surface, pixelkit.color("ink"), points, width=1)
-        for arc, index, _, tiles in self._grove_targets(state):
-            # Only the FOUND stand gets a marker — the hunt itself is on foot.
-            if unlocks.status(state, arc) != "found":
-                continue
-            x = sum(t[0] for t in tiles) // len(tiles)
-            y = sum(t[1] for t in tiles) // len(tiles)
-            points = [(x, y - 7), (x + 6, y), (x, y + 7), (x - 6, y)]
-            pygame.draw.polygon(surface, pixelkit.color("sky"), points)
-            pygame.draw.polygon(surface, pixelkit.color("white"), points, width=1)
+        # M36: no marker on the stand that turned out to hold something.
+        # Finding Stormbreaker without anyone who can lift it used to pin a
+        # blue diamond to the map and relabel the prompt "Take Stormbreaker",
+        # which named the prize and did the remembering for you. The whole
+        # arc is a hunt; the second trip is part of it.
         party = self._party(state)
         bob = int(self.walk_bob) % 2
         for i, hero_id in enumerate(party):
@@ -2193,30 +2581,70 @@ class HubScene:
                                 pygame.Rect(int(x) - 5, int(y) + 4, 10, 3))
 
     def _draw_hud(self, surface, state):
+        """The status strip.
+
+        M36: laid out by MEASURING each element and packing left-to-right
+        and right-to-left from the edges, instead of the old fixed pixel
+        centres. Those were tuned against "Common Floor" with no event
+        running; the moment the S.H.I.E.L.D. Supply Drop banner appeared it
+        was drawn straight through the floor name. A measured layout cannot
+        collide however long the strings get."""
+        from game.core import health
+
         hud = pygame.Rect(0, 0, config.WIDTH, HUD_H)
         pygame.draw.rect(surface, pixelkit.color("ink"), hud)
         pygame.draw.line(surface, pixelkit.color("gold"), (0, HUD_H - 1),
                          (config.WIDTH, HUD_H - 1))
-        pixelkit.text(surface, f"Issue {state['issue']} Day {state['day']}", 13,
-                      "white", topleft=(6, 5))
-        pixelkit.text(surface, clock.format_time(state["time_minutes"]), 13,
-                      "gold", center=(config.WIDTH // 2 - 70, 10))
-        team_en = energy.team_energy(state)
-        widgets.bar(surface, pygame.Rect(config.WIDTH // 2 - 10, 5, 100, 10),
-                    team_en / config.DAILY_ENERGY, "green",
-                    label=f"{team_en}")
-        pixelkit.text(surface, f"{state['credits']} cr", 13, "gold",
-                      topright=(config.WIDTH - 6, 5))
-        zone = self._zone()
-        if zone:
-            pixelkit.text(surface, f"{zone['name']} [{'!' * zone['danger']}]", 13,
-                          "red", topright=(config.WIDTH - 70, 5))
+
+        # --- left to right: date, clock, then the two team bars
+        x = HUD_PAD
+        x = self._hud_text(surface, f"Issue {state['issue']} Day {state['day']}",
+                           "white", x) + HUD_GAP
+        x = self._hud_text(surface, clock.format_time(state["time_minutes"]),
+                           "gold", x) + HUD_GAP
+        # M36: with nobody on the team both bars floor at zero, which reads
+        # as "you are about to collapse" — the exact opposite of the truth
+        # while you stand watching your last hero train. Say so instead.
+        if not energy.party(state):
+            x = self._hud_text(surface, "no team", "grey", x) + HUD_GAP
+            left_edge = x
         else:
-            pixelkit.text(surface, FLOORS[self.floor]["name"], 13, "steel_light",
-                          topright=(config.WIDTH - 70, 5))
+            team_en = energy.team_energy(state)
+            widgets.bar(surface, pygame.Rect(x, 5, HUD_BAR_W, 10),
+                        team_en / config.DAILY_ENERGY, "green",
+                        label=f"{team_en}")
+            x += HUD_BAR_W + 4
+            hp = health.team_hp_fraction(state)
+            widgets.bar(surface, pygame.Rect(x, 5, HUD_BAR_W, 10), hp, "red",
+                        label=f"{int(round(hp * 100))}%")
+            left_edge = x + HUD_BAR_W + HUD_GAP
+
+        # --- right to left: purse, where you are, what's on today
+        right = config.WIDTH - HUD_PAD
+        right = self._hud_text(surface, f"{state['credits']} cr", "gold",
+                               right, rtl=True) - HUD_GAP
+        zone = self._zone()
+        where, colour = ((f"{zone['name']} [{'!' * zone['danger']}]", "red")
+                         if zone else (FLOORS[self.floor]["name"], "steel_light"))
+        right = self._hud_text(surface, where, colour, right, rtl=True) - HUD_GAP
         for ev in cal.active_events(state, self.content["calendar"]):
-            pixelkit.text(surface, ev["name"], 12, "red",
-                          center=(config.WIDTH // 2 + 170, 10), shadow="ink")
+            if right - pixelkit.font(HUD_EVENT_SIZE).size(ev["name"])[0] < left_edge:
+                break                   # no room today; the banner waits
+            right = self._hud_text(surface, ev["name"], "red", right, rtl=True,
+                                   size=HUD_EVENT_SIZE) - HUD_GAP
+
+    @staticmethod
+    def _hud_text(surface, text, colour, x, rtl=False, size=HUD_TEXT_SIZE):
+        """Draw one HUD element and return the edge the next one starts
+        from — the right edge going left-to-right, the left edge going
+        right-to-left."""
+        width = pixelkit.font(size).size(text)[0]
+        if rtl:
+            pixelkit.text(surface, text, size, colour, topright=(x, 5),
+                          shadow="ink")
+            return x - width
+        pixelkit.text(surface, text, size, colour, topleft=(x, 5), shadow="ink")
+        return x + width
 
     def _draw_prompt(self, surface, state):
         if self.mode != "normal":
@@ -2269,16 +2697,42 @@ class HubScene:
         surface.blit(shade, (0, 0))
         box = pygame.Rect(80, config.HEIGHT - 120, config.WIDTH - 160, 90)
         pixelkit.panel(surface, box, fill="ink", border="gold")
-        char_id = self.scene.get("character")
+        char_id, title = self._scene_speaker(self.scene_line)
         if char_id:
             big = pygame.transform.scale(sprites.portrait(char_id), (48, 48))
             surface.blit(big, (box.x + 8, box.y - 52))  # fully above the box
-        pixelkit.text(surface, self.scene["title"], 16, "gold", bold=True,
-                      topleft=(box.x + 62, box.y - 24), shadow="maroon")
+        pixelkit.text(surface, title, 16, "gold", bold=True,
+                      topleft=(box.x + (62 if char_id else 12), box.y - 24),
+                      shadow="maroon")
         line = self.scene["lines"][min(self.scene_line, len(self.scene["lines"]) - 1)]
         self._wrap_text(surface, line, box)
         pixelkit.text(surface, "Enter: continue", 11, "grey",
                       topright=(box.right - 8, box.bottom - 14))
+
+    def _scene_speaker(self, index):
+        """(character id or None, header text) for one line of a cutscene.
+
+        M36: a scene may carry `speakers`, one entry per line, naming who is
+        on screen — null for the narrator. Thor's arrival opens on four
+        sentences of prose about a man standing on the common floor; with a
+        single scene-level `character` his portrait sat over all of it, so
+        the narrator appeared to be Thor describing himself in the third
+        person. Without `speakers` the old behaviour is exactly preserved."""
+        scene = self.scene or {}
+        speakers = scene.get("speakers")
+        if speakers:
+            char_id = speakers[min(index, len(speakers) - 1)]
+        else:
+            char_id = scene.get("character")
+        if not char_id:
+            # Narration. `narration_title` lets a scene name the place while
+            # keeping its authored speaker header for the talking lines.
+            return None, scene.get("narration_title") or scene.get("title", "")
+        if char_id == scene.get("character") and scene.get("title"):
+            return char_id, scene["title"]      # the authored header wins
+        character = self.content["characters"].get(char_id)
+        return char_id, (character["name"] if character
+                         else scene.get("title", ""))
 
     def _wrap_text(self, surface, line, box):
         words = line.split()

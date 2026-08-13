@@ -34,6 +34,7 @@ def two_hero_state(**cap_levels):
     state["roster"]["iron_man"] = entry()
     state["roster"]["captain_america"] = entry(**cap_levels)
     state["party"] = ["iron_man", "captain_america"]
+    state["credits"] = 100000      # M36: the rack bills at the door
     return state
 
 
@@ -67,20 +68,26 @@ def test_absolute_minutes_never_goes_backwards_across_a_month():
 # --- a long session really does span days ---
 
 def test_level_eight_session_survives_a_sleep(content):
-    # 1400 waking minutes > the 1200-minute day: the hero must still be on
-    # the mats the next morning.
+    # A level-8 session is longer than the 1200-minute day, so the hero
+    # must still be on the mats the next morning. M36 doubles the table, so
+    # it now runs 2800 minutes and spans THREE days rather than two.
     state = two_hero_state(strength=8)
     result = activities.start_training(state, content, "captain_america",
                                        "strength")
-    assert result["ok"] and result["minutes"] == 1400
+    session = (config.TRAINING_MINUTES_BY_LEVEL[8]
+               * config.TRAINING_LOCKOUT_MULT)
+    assert result["ok"] and result["minutes"] == session
     cap = state["roster"]["captain_america"]
-    assert activities.training_remaining(state, cap["training"]) == 1400
-    cal.sleep(state)
-    assert activities.finish_due_training(state, content) == []
-    assert "training" in cap                            # still training
-    assert "captain_america" not in state["party"]
-    assert activities.training_remaining(state, cap["training"]) == 200
-    cal.sleep(state)
+    assert activities.training_remaining(state, cap["training"]) == session
+    left = session
+    while left > 0:
+        cal.sleep(state)
+        left = max(0, left - clock.DAY_MINUTES)
+        assert activities.training_remaining(state, cap["training"]) == left
+        if left:
+            assert activities.finish_due_training(state, content) == []
+            assert "training" in cap                    # still training
+            assert "captain_america" not in state["party"]
     messages = activities.finish_due_training(state, content)
     assert len(messages) == 1
     assert "training" not in cap
@@ -93,12 +100,16 @@ def test_session_spanning_the_issue_boundary(content):
     state["issue"], state["day"] = 1, 28
     activities.start_training(state, content, "captain_america", "strength")
     lock = state["roster"]["captain_america"]["training"]
-    assert activities.training_remaining(state, lock) == 1400
+    assert activities.training_remaining(state, lock) == (
+        config.TRAINING_MINUTES_BY_LEVEL[8] * config.TRAINING_LOCKOUT_MULT)
     cal.sleep(state)                                     # -> issue 2, day 1
     assert (state["issue"], state["day"]) == (2, 1)
+    session = (config.TRAINING_MINUTES_BY_LEVEL[8]
+               * config.TRAINING_LOCKOUT_MULT)
     left = activities.training_remaining(state, lock)
-    assert left == 200, "the issue rollover must not restart the counter"
-    cal.sleep(state)
+    assert left == session - clock.DAY_MINUTES,         "the issue rollover must not restart the counter"
+    while activities.training_remaining(state, lock) > 0:
+        cal.sleep(state)
     assert activities.finish_due_training(state, content)
     assert "training" not in state["roster"]["captain_america"]
 
@@ -117,11 +128,12 @@ def test_app_sleep_does_not_force_complete_a_long_session(content):
                               "captain_america", "strength")
     cap = app.game_state["roster"]["captain_america"]
     app.go_to_sleep()
-    assert "training" in cap, "a 1400-minute session must outlast one night"
+    assert "training" in cap, "a level-8 session must outlast one night"
     assert "captain_america" not in app.game_state["party"]
-    app.machine.transition(GameState.HUB)
-    app.go_to_sleep()
-    assert "training" not in cap                         # settles on night two
+    for _ in range(config.TRAINING_LOCKOUT_MULT):
+        app.machine.transition(GameState.HUB)
+        app.go_to_sleep()
+    assert "training" not in cap                         # settles a night later
     assert cap["attribute_xp"]["strength"] == config.TRAINING_XP_BY_LEVEL[8]
 
 
@@ -132,7 +144,8 @@ def test_session_cost_and_yield_follow_the_level(content):
     result = activities.start_training(state, content, "captain_america",
                                        "strength")
     en, minutes = activities.training_cost(5)
-    assert result["minutes"] == minutes == config.TRAINING_MINUTES_BY_LEVEL[5]
+    assert result["minutes"] == minutes == (
+        config.TRAINING_MINUTES_BY_LEVEL[5] * config.TRAINING_LOCKOUT_MULT)
     assert state["roster"]["captain_america"]["energy"] == 100 - en
     activities.finish_due_training(state, content, force=True)
     # the yield is the LEVEL-5 figure, not the level-1 one
@@ -154,8 +167,10 @@ def test_ko_participants_earn_half_xp(content):
     app.battle_quest = None
     app.battle_ambush = True
     standing = SimpleNamespace(id="iron_man", alive=True, ult_charge=0,
+                               hp=70, max_hp=100,                # M36
                                data={"id": "iron_man"})
     fallen = SimpleNamespace(id="captain_america", alive=False, ult_charge=0,
+                             hp=0, max_hp=100,
                              data={"id": "captain_america"})
     engine = SimpleNamespace(outcome="win", heroes=[standing, fallen],
                              rewards=lambda: {"credits": 10, "xp": 100})

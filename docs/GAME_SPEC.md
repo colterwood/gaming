@@ -201,12 +201,13 @@ being played and `App.SAVE_SLOT` follows it (M28).
 | Battle defeat | +3 h clock, party capped at 10 EN, dragged to the tower; the day does NOT end (M12) |
 | Combat mission | 40 energy, +3 h clock; never refused for low EN (M11) — the team drains toward 0 and fights with the M9 initiative penalty |
 | Craft action | 15 energy, +60 min |
-| Scout point (M13, replaces hub small tasks) | 5 energy, +20 min per point |
+| Scout point (M13, replaces hub small tasks) | **0 energy** (M36), +20 min per point |
 | Search a side-arc site (M17) | 5 energy, +20 min per stand searched |
 | Talk / gift | 0 energy, +20 min |
 | Eat a ration (M10; M18) | 0 energy, +10 min; restores the item's `energy` EN to EVERY active party member, each capped at 100 |
 | Search a zone crate (M10) | 0 energy, +15 min; daily-respawning loot, trap risk scales with danger |
-| Pass out (0 energy or 2 AM) | next day starts at 80 energy |
+| Pass out (0 energy or 2 AM) | next day starts at 80 energy — **full energy if it happened inside the tower** (M36). Either way: 80% HP, and 10% of the purse capped at 5,000 |
+| Training session, at the door (M36) | `TRAINING_CREDITS_BY_LEVEL` — a credit per XP the basic rack pays |
 
 ### 6.2 Bonds
 
@@ -301,14 +302,21 @@ being played and `App.SAVE_SLOT` follows it (M28).
 
   The facility multiplies the yield: ×1 basic, ×2 upgraded (after the
   Ch. 1 boss), ×3 during a training event. Training costs energy and a
-  lockout — it never costs XP (M12).
+  lockout — it never costs XP (M12). M36 adds a CREDIT price at the door
+  and doubles the lockout (`TRAINING_LOCKOUT_MULT`). Sessions per day are
+  ENERGY-bound through level 5, so the lockout multiplier changes nothing at
+  ranks 1-5, first bites at level 6, and is a pure tax above that; the
+  credit price is what bites early.
 - **Lockouts are measured in WAKING minutes and may span days** (M16). A
   day holds 1,200 usable minutes (6:00–26:00), so a level-8 session runs
   1d 3h and a level-9 session exactly 2 days. `clock.absolute_minutes`
   counts elapsed waking time; sleeping banks the rest of that day rather
   than short-circuiting the session.
-- Perk choice at trained ranks 3 and 6: two options per attribute, flat effects
-  in POC. Define perk tables in `data/perks.json`.
+- Perk choice at **card ranks 5 and 10** (`PERK_CHOICE_RANKS`, M36 — the
+  rank printed on the card, not the trained rank underneath, which is what
+  the old (3, 6) meant and why the modal announced a "rank 3 perk!" to a
+  hero the card called rank 4): two options per attribute, flat effects in
+  POC. Define perk tables in `data/perks.json`, keyed by card rank.
 - Mastery (all six at rank 10) is a stub in POC: detect it, show the foil
   treatment, log Mastery XP, no perk shop yet.
 
@@ -1207,6 +1215,112 @@ A part is now one of four things (`repairs.part_kind`):
 *AC: hear Jarvis name three parts, find one marker and turn over couches
 until the second turns up; carry a nacelle strut and hear about it; win
 fights until a Stark toolhead falls out of one.*
+
+**M36 — The twelve-day pass** *(added post-POC)*. Play feedback from a full
+Chapters 1–2 run: the tower rebuilt, Hulk, Thor and Ant-Man recruited, every
+Ops mission cleared. Forty-odd notes, most of them small, plus four systems
+that turned out to be wrong underneath.
+
+- **A repair costs the hunt and nothing else.** Fitting the parts no longer
+  costs the clock (was `REPAIR_MINUTES` 60) or energy, and no repair pays
+  credits — 830 cr across six jobs, for work on the player's own building,
+  on top of a board paying 3,160. A job's whole price is now
+  `REPAIR_PART_ENERGY` × its heavy pieces. The one-off XP stays.
+- **Everything is searchable, always.** M35 made furniture live only during
+  a hunt for hidden parts, which taught the player that a couch is scenery
+  and then expected them to start turning couches over. Tower furniture and
+  city trees are searchable at all times for
+  `FURNITURE_SEARCH_CREDIT_CHANCE` / `FURNITURE_SEARCH_ITEM_CHANCE` — almost
+  always nothing, and a planter says so in different words from a couch.
+- **A searched spot reopens for a new job** (`repairs.reopen_hidden_spots`).
+  Rummaging the Ops planter during the elevator hunt made the Training Floor
+  part inside it unreachable until the next day, silently; the Pym Lab and
+  Tech Lab hunts collided the same way over a Tech Lab table.
+- **HP is carried between fights** (`game/core/health.py`), stored per hero
+  as a FRACTION of max so a rank-up or a piece of gear raises the pool
+  rather than capping it. Sleep is a full heal, the Med Bay chair mends at
+  `MEDBAY_HP_PCT_PER_TICK`, a med kit works out of combat, a collapse leaves
+  `PASS_OUT_HP_FRACTION` (80%) and a wipe FLOORS the team at
+  `DEFEAT_HP_FRACTION` (10%) — a floor, never a raise, the M12 energy rule
+  applied to HP.
+- **Collapsing indoors is not the same as collapsing in the HYDRA District.**
+  `cal.sleep(sheltered=)`: no morning penalty at the tower. Either way it
+  costs `PASS_OUT_CREDIT_PCT` of the purse, capped at `PASS_OUT_CREDIT_MAX`.
+  Waking always puts the player beside their own bed (`HubScene.wake_up`).
+- **The clock never cancels a fight.** M18's approach-collapse rule is about
+  ENERGY only now: engage at 1:55 AM, fight, and pass out afterwards.
+- **The Unibeam reached further the more enemies you had killed.** The
+  `adjacent` spread indexed the LIVING enemy line, so a corpse between two
+  bodies conducted the beam. It reads the line as drawn; a body in the way
+  blocks the sweep.
+- **Per-encounter enemy levels** (`"levels"` in an enemy JSON, referenced as
+  `hydra_grunt@1`). The variant keeps the base id and sprite, so a level-1
+  and a level-2 grunt read as "HYDRA Grunt 1 / 2" in one line. The Ant-Man
+  breakout fields six (2 grunts, 2 enforcers, 2 medics, levels 1/2/1/2/1/1);
+  Cell Hunt grew from three bodies to five.
+- **Ambush rate is decoupled from danger** (`ambush_rate` per zone, default
+  `danger`). Danger still drives the enemy pool, trap risk and the badge —
+  but it forced one ranking on both, and Midtown, a public street, was
+  jumpier than the docks. Now midtown 0.5 / docks 1.0 / HYDRA 2.0, and
+  `AMBUSH_DAILY_CAP` (3) bounds ambushes AND sprung trap squads per zone per
+  day. Uncapped, walking laps of the HYDRA District with a single hero was
+  the fastest XP in the game — a fight every ~7 seconds of walking, no
+  energy, full XP to the one hero standing there.
+- **Rooms keep hours** (`ROOM_HOURS`): training 6:00–23:00, Med Bay
+  6:00–22:00, Tech Lab and Pym Lab 9:00–18:00. Only the training floor locks
+  its door (`CLOSED_FLOORS_LOCK_OUT`) — elsewhere you walk in and find a
+  dark bench, which is information.
+- **The rebuilt rooms have people in them**: Jarvis at the Tech Bench, Hank
+  Pym (a new NPC) at the Pym Lab, two S.H.I.E.L.D. autodoc units in the ward.
+  A character may set `"bondable": false` — the units are staff, not cast.
+  *(M32's "the Pym Lab is Clint's forge" was an authoring error; it is
+  Hank's.)*
+- **The rack bills at the door** (`TRAINING_CREDITS_BY_LEVEL`): a credit for
+  every XP the BASIC facility pays, so the ×2 rack is also half price per XP.
+  `TRAINING_LOCKOUT_MULT` (2) doubles the §6.3 lockout — but note that
+  sessions/day are ENERGY-bound through level 5, so it changes nothing at
+  ranks 1–5, first bites at level 6, and is a pure tax above that (~105
+  in-game days to rank 10 → ~180). The credit price is what bites early.
+- **A finished trainee waits at the mats** and is collected in person, like
+  an M13 dispatch recall or an M32 bench collection. The rack used to
+  teleport them onto the team from anywhere in the world.
+- **Training with one hero left is a question, not a refusal**
+  (`start_training(solo_ok=)`): promote a benched hero, or confirm and watch.
+  An EMPTY party is no longer read as a collapse (`should_pass_out`), and
+  the walker freezes because there is nobody to walk as.
+- **Perk tiers are the rank on the card** — `PERK_CHOICE_RANKS` (5, 10),
+  compared against `attrs.rank`, not the trained rank underneath. The old
+  (3, 6) announced a "rank 3 perk!" to a hero whose card read rank 4.
+  `migrate_perk_tiers` moves an old save's choice onto the tier that now
+  owns it, so nothing is granted twice.
+- **A failed FIGHT mission re-arms itself** (`story.reactivates_itself`):
+  the squad is standing there again on a fresh deadline, no trip back to
+  Ops. Scouts, and anything marked `"reaccept": true`, still need briefing.
+- **A scene may name a speaker per line** (`speakers`, plus an optional
+  `narration_title`). Thor's arrival opens on four sentences of prose about
+  a man on the common floor; a single scene-level `character` put his
+  portrait over all of it, so the narrator appeared to be Thor describing
+  himself in the third person.
+- **The Stormbreaker hunt stops holding your hand**: the thunder no longer
+  says to check the trees, finding it without a lifter leaves no map marker
+  and no "Take Stormbreaker" label, searched stands are not dimmed, and
+  every stand stays live so the second trip is not a homing beacon.
+- **Salvage shows on the victory panel** (`BattleScene.on_resolve`), not in
+  the hub log two screens later. **Coulson refuses in a dialogue box** — and
+  the line that did it crashed (`requirements` was never imported in
+  tower.py). **The Tasks tab shows progress** on repairs, the story quest,
+  the rack and the Pym bench. **The elevator only moves between floors** —
+  the Quinjet is boarded in its bay. **Scouting is free** and says something
+  in the leader's voice. **The HUD packs itself from both edges**, so the
+  S.H.I.E.L.D. Supply Drop banner can no longer be drawn through the floor
+  name. **Pepper raises the Quinjet as you step off the lift.**
+*AC: fit a repair and watch the clock and the purse hold still; turn over a
+planter on day one and still find the Training Floor part in it that
+afternoon; win an ambush on 30% HP and start the next fight on 30%; collapse
+on the common floor and wake up full, beside the bed, 10% poorer; walk into
+the Tech Lab at 7 PM and find Jarvis and a cold bench; train your last hero
+and get asked twice before the game lets you; take a Unibeam to a line with
+a hole in it and hit one body.*
 
 **Ch. 3–4** *(decided, not yet built)*.
 - **Gate**: every Ch. 1–2 mission complete AND the tower repaired.

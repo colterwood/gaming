@@ -161,18 +161,25 @@ def test_the_repair_is_refused_until_every_part_is_in_hand(fresh):
     assert not state["story_flags"].get("elevator_repaired")
 
 
-def test_fixing_the_elevator_opens_the_tower_and_pays(fresh):
+def test_fixing_the_elevator_opens_the_tower_and_costs_nothing_to_fit(fresh):
     _, app = fresh
     state = app.game_state
     elevator = job(app.content, "repair_elevator")
     repairs.accept(app.content, state, elevator)
     work_every_part(state, app.content, "repair_elevator")
     credits_before = state["credits"]
+    clock_before = state["time_minutes"]
+    energy_before = state["energy"]
     result = repairs.repair(app.content, state, elevator)
 
     assert result["ok"]
     assert state["story_flags"]["elevator_repaired"] is True
-    assert state["credits"] == credits_before + elevator["credits"]
+    # M36: fitting is free of both the clock and energy - the price of a
+    # repair is the hunt - and the tower pays NO credits for work on itself.
+    assert state["time_minutes"] == clock_before
+    assert state["energy"] == energy_before
+    assert state["credits"] == credits_before
+    assert all(j["credits"] == 0 for j in app.content["repairs"])
     assert repairs.is_done(state, elevator)
     # M34: no speech on completion. Pepper has her say when the player
     # walks onto the Ops floor and talks to her, not before.
@@ -240,15 +247,26 @@ def test_missions_come_back_once_the_jet_flies(fresh):
     assert any("ACCEPT MISSION" in l for l in labels)
 
 
-def test_the_elevator_will_not_fly_a_grounded_quinjet(fresh):
+def test_the_elevator_does_not_fly_the_quinjet_at_all(fresh):
+    """M36: the elevator lists floors. It used to offer every zone in the
+    city as a destination, which made the jet sitting in its bay scenery -
+    you never had to walk to it."""
     scene, app = fresh
-    app.game_state["story_flags"]["elevator_repaired"] = True
+    state = app.game_state
+    state["story_flags"]["elevator_repaired"] = True
     put_player_at(scene, 17, 2)
     scene.handle_key(app, pygame.K_RETURN)
     rows = scene.submenu["items"]
-    grounded = [r for r in rows if r[0] == "Quinjet: grounded"]
-    assert grounded and grounded[0][1] is True      # disabled
-    assert not any(r[0].startswith("Quinjet: The Docks") for r in rows)
+    assert not any(r[1] is False and "Quinjet" in r[0] for r in rows)
+    assert any("grounded" in r[0] and r[1] is True for r in rows)
+
+    state["story_flags"]["quinjet_repaired"] = True
+    scene.reset_modes()
+    put_player_at(scene, 17, 2)
+    scene.handle_key(app, pygame.K_RETURN)
+    rows = scene.submenu["items"]
+    assert not any(r[1] is False and "Quinjet" in r[0] for r in rows)
+    assert any("in its bay on the Ops floor" in r[0] for r in rows)
 
 
 def test_the_rack_offers_repairs_not_training_while_it_is_wrecked(fresh):
@@ -347,7 +365,7 @@ def test_every_part_lies_on_a_tile_you_can_stand_next_to(content):
 
     for job in content["repairs"]:
         for part in job["parts"]:
-            if part.get("from") or part.get("battle"):
+            if part.get("from") or part.get("battle") or part.get("mine"):
                 continue                    # not lying about anywhere
             area, x, y = part["area"], part["x"], part["y"]
             if area not in FLOORS:

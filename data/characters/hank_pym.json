@@ -1,0 +1,14 @@
+{
+  "id": "hank_pym",
+  "name": "Hank Pym",
+  "path": "avengers",
+  "rarity": "rare",
+  "gifts": {
+    "loved": ["iso8", "sketchbook"],
+    "liked": ["tech_scrap", "double_espresso"],
+    "disliked": ["bug_spray"],
+    "hated": ["hydra_propaganda"]
+  },
+  "birthday": {"issue": 1, "day": 24},
+  "recruit": {"chapter": 1, "method": "npc"}
+}

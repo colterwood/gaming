@@ -98,15 +98,21 @@ def test_scout_completion_activates_next_quest_entry(content):
             assert state["quests"][nxt["id"]]["status"] == "offered"
 
 
-def test_scout_blocked_without_energy(content):
+def test_scout_costs_the_clock_and_no_energy(content):
+    """M36: casing a block is attention, not attrition. A tired team can
+    still stand on a corner and watch — SCOUT_ENERGY is 0, so a scout point
+    takes only its twenty minutes."""
     state = fresh_run(content)
     quest = next(q for q in content["story"] if q["kind"] == "scout")
     story.accept(state, quest)
     for entry in state["roster"].values():
         entry["energy"] = 2
-    assert not story.do_scout(state, quest, 0)["ok"]
-    assert state["roster"]["iron_man"]["energy"] == 2
-    assert story.scouted(state, quest) == []            # nothing marked
+    before = state["time_minutes"]
+
+    assert story.do_scout(state, quest, 0)["ok"]
+    assert state["roster"]["iron_man"]["energy"] == 2       # untouched
+    assert state["time_minutes"] == before + config.SCOUT_MINUTES
+    assert story.scouted(state, quest) == [0]
 
 
 def test_battle_quest_recruits_and_flags(content):
@@ -152,10 +158,12 @@ def test_mission_deadline_expires_and_cools_down(content):
     assert story.is_locked(state, quest)
     state["day"] += 1                                  # cooldown over
     messages = story.check_deadlines(state, content["story"])
-    assert any("back on the board" in m for m in messages)
     assert not story.is_locked(state, quest)
-    assert story.days_left(state, quest) is None       # re-offered: re-accept
-    story.accept(state, quest)
+    # M36: a FIGHT mission re-arms itself - HYDRA is simply standing there
+    # again, on a fresh deadline, with no trip back to the Ops console.
+    assert quest["kind"] == "battle"
+    assert any("they're back" in m for m in messages)
+    assert story.is_accepted(state, quest)
     assert story.days_left(state, quest) == 3          # fresh deadline
 
 

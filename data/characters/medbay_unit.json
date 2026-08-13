@@ -1,0 +1,21 @@
+{
+  "id": "medbay_unit",
+  "name": "S.H.I.E.L.D. Autodoc",
+  "path": "avengers",
+  "rarity": "common",
+  "gifts": {
+    "loved": [],
+    "liked": [],
+    "disliked": [],
+    "hated": []
+  },
+  "birthday": {
+    "issue": 1,
+    "day": 1
+  },
+  "recruit": {
+    "chapter": 1,
+    "method": "npc"
+  },
+  "bondable": false
+}

@@ -53,5 +53,35 @@
     "default": [
       "The seam gives way and yields {material}."
     ]
+  },
+  "scouting": {
+    "iron_man": [
+      "\"Nothing. No heat, no comms chatter, no interesting smells. Logged as boring.\"",
+      "\"Scanned it twice. If HYDRA came through here they did it politely.\"",
+      "\"Marked. If anything moves on this corner, I'll know before it does.\""
+    ],
+    "captain_america": [
+      "\"Clear.\" He stands there a moment longer anyway, the way he does.",
+      "\"Good sightlines, bad cover. Worth remembering which.\"",
+      "\"Nobody's watching this street. That's usually when somebody is.\""
+    ],
+    "ant_man": [
+      "\"Went in small, came out bored. Which is the good outcome! Mostly.\"",
+      "\"Nothing here but a very committed ant colony. I said hi.\"",
+      "\"No hostiles. There is a guy in that window who really should get curtains.\""
+    ],
+    "thor": [
+      "\"No foe here. A pity.\" He sounds like he means the pity part.",
+      "\"This place holds nothing but pigeons and the smell of frying meat. Midgard.\"",
+      "\"I have looked. There is nothing to strike. Where next?\""
+    ],
+    "hulk": [
+      "\"Nothing here.\" Hulk sounds faintly disappointed about it.",
+      "Hulk looks. Hulk looks again, closer. \"Still nothing.\"",
+      "\"No bad guys. Hulk checked under things.\""
+    ],
+    "default": [
+      "Nothing out of place, and no sign anyone's been watching back."
+    ]
   }
 }

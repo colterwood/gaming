@@ -28,6 +28,9 @@ def lab(content):
     scene, app = HubScene(content), FakeApp(content)
     scene._switch_floor("pym_lab")
     app.game_state["credits"] = 5000
+    # M36: the labs keep 9-6. The day starts at 6 AM, so a fixture that
+    # wants a working bench has to be standing there during the shift.
+    app.game_state["time_minutes"] = 10 * 60
     return scene, app
 
 
@@ -75,10 +78,11 @@ def test_no_recipe_asks_for_a_metal_the_world_cannot_give(content):
 
 
 def test_the_mining_table_is_rolled_cumulatively(content):
-    zone = content["zones"]["hydra_district"]        # iso8 at 0.75
+    zone = content["zones"]["hydra_district"]
+    rate = zone["mining"]["iso8"]                    # M36: 0.84, dust 16%
     assert field.mine_node(zone, Rolls([1.0, 0.10]))["item"] == "iso8"
-    assert field.mine_node(zone, Rolls([1.0, 0.74]))["item"] == "iso8"
-    assert field.mine_node(zone, Rolls([1.0, 0.80]))["item"] is None
+    assert field.mine_node(zone, Rolls([1.0, rate - 0.01]))["item"] == "iso8"
+    assert field.mine_node(zone, Rolls([1.0, rate + 0.01]))["item"] is None
 
 
 def test_a_watched_seam_springs_a_squad(content):

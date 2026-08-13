@@ -158,7 +158,7 @@ def test_only_the_worthy_can_pick_it_up(content, arc):
     result = unlocks.search(content, state, arc, hidden)
     assert result["found"] and result["lifted"] is False
     assert result["message"] == ("None of your heroes are mighty enough to "
-                                 "get this found item.")
+                                 "lift this found item.")
     assert "stormbreaker" not in state["inventory"]
     assert unlocks.status(state, arc) == "found"
     # the refusal closes the discovery cutscene, not just the message log
@@ -167,8 +167,12 @@ def test_only_the_worthy_can_pick_it_up(content, arc):
     assert scene["lines"][-1] == arc["lift_refusal"]
     assert arc["found_scene"]["lines"][-1] != arc["lift_refusal"]   # not stuck
     assert unlocks.pop_scene(state) is None      # nothing lifted, nothing else
-    # the stand stays the only thing worth walking to, and retrying is free
-    assert unlocks.searchable(state, arc) == [hidden]
+    # M36: EVERY stand stays live, not just the one holding it. Narrowing to
+    # the single stand made the second trip a homing beacon - walk the line
+    # and only the tree with the axe in it answers. Retrying is still free.
+    assert unlocks.searchable(state, arc) == list(
+        range(len(arc["search_groves"])))
+    assert hidden in unlocks.searchable(state, arc)
     before = state["energy"]
     assert not unlocks.search(content, state, arc, hidden)["ok"]
     assert state["energy"] == before

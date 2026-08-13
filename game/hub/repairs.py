@@ -137,7 +137,36 @@ def accept(content, state, job):
                 "message": (f"One thing at a time - finish {busy['name']} "
                             f"first.")}
     state["repairs"][job["id"]] = {"status": "active", "found": []}
+    reopen_hidden_spots(state, job)
     return {"ok": True, "message": f"Repair accepted: {job['name']}."}
+
+
+def hidden_spot_keys(job):
+    """search-spot keys for every hidden piece this job stashes."""
+    from game.hub import activities
+    return [activities.search_spot_key(part["area"], part["x"], part["y"])
+            for part in job.get("parts", [])
+            if part_kind(part) == "hidden"
+            and part.get("area") and "x" in part and "y" in part]
+
+
+def reopen_hidden_spots(state, job):
+    """Un-rummage the tiles this job hides pieces in.
+
+    M36 bug fix. Furniture dims for the DAY once searched, and a hidden
+    part is only findable while its job is in hand. Take the elevator job
+    on Day 1, turn over the Ops planter looking for its parts, then accept
+    the Training Floor job — whose part is in that same planter — and the
+    planter is greyed out until tomorrow, with nothing to tell you why.
+    The Pym Lab and Tech Lab hunts collide the same way over a Tech Lab
+    table. Accepting a job therefore makes its own hiding places worth
+    looking in again, whatever happened earlier today."""
+    searched = state.get("searched_today")
+    if not searched:
+        return
+    for key in hidden_spot_keys(job):
+        while key in searched:
+            searched.remove(key)
 
 
 # ------------------------------------------------------------ the work
@@ -150,12 +179,46 @@ def part_kind(part):
                you get it by searching the thing, like anything else there
       npc    — in someone's pocket, handed over when you speak to them
       battle — falls out of a fight you win
+      mine   — comes out of ANY ore seam, on a roll per swing (M36)
     """
     if part.get("from"):
         return "npc"
     if part.get("battle"):
         return "battle"
+    if part.get("mine"):
+        return "mine"
     return "hidden" if part.get("hidden") else "plain"
+
+
+def mine_drop(content, state, rng):
+    """A piece prised out of whatever seam the player happened to crack
+    (M36). Returns log messages.
+
+    This is the one place the M35 rule "every spot is fixed" is deliberately
+    broken. Pinning the Pym regulator to one named seam in the docks meant
+    the hunt was a walk to a known tile; as a roll against every seam it is
+    a reason to keep mining, and mining is the system that wants the
+    traffic. One piece per swing, however lucky."""
+    messages = []
+    for job in content["repairs"]:
+        if not is_active(state, job):
+            continue
+        done = found(state, job)
+        for index, part in enumerate(job["parts"]):
+            spec = part.get("mine")
+            if not spec or index in done:
+                continue
+            if rng.random() >= spec.get("chance", 1.0):
+                continue
+            entry_of(state, job)["found"].append(index)
+            left = parts_left(state, job)
+            messages.append(
+                f"{spec.get('message', 'Salvage in the rock')} - "
+                f"{job['name']}: "
+                + (f"{left} piece(s) still missing." if left
+                   else "that's the last piece."))
+            return messages
+    return messages
 
 
 def parts_on(state, job, area):
@@ -277,8 +340,8 @@ def work_part(state, job, index):
     if index in entry["found"] or not 0 <= index < len(job["parts"]):
         return {"ok": False, "message": "Nothing here."}
     part = job["parts"][index]
-    if part.get("from") or part.get("battle"):
-        # In somebody's pocket, or still out there in a fight somewhere.
+    if part.get("from") or part.get("battle") or part.get("mine"):
+        # In somebody's pocket, or still out there in a fight or a rock face.
         return {"ok": False, "message": "That one isn't lying around."}
     heavy = bool(part.get("heavy"))
     if heavy and not energy.can_afford(state, config.REPAIR_PART_ENERGY):
@@ -286,7 +349,8 @@ def work_part(state, job, index):
     if heavy:
         energy.spend(state, config.REPAIR_PART_ENERGY)
     hit_end = clock.advance(state, config.REPAIR_PART_MINUTES)
-    if energy.is_exhausted(state) or clock.is_past_end(state):
+    from game.hub import activities         # M36: one definition of collapse,
+    if activities.should_pass_out(state):   # so an empty team isn't one
         # M18's rule: collapsing ON the job loses the work. Parts already
         # carried home stay carried — only this trip is lost.
         return {"ok": True, "hit_day_end": True,
@@ -307,25 +371,30 @@ def repair(content, state, job):
     """Fit the parts and bring the thing back to life. Sets the job's
     story flag, which is what actually opens the room.
 
-    Fitting costs an HOUR and no energy (M35): a job's energy price is the
-    heavy pieces it made you carry and nothing else, so a repair with none
-    — the elevator, the three rooms — costs the team nothing at all."""
+    M36: fitting costs NOTHING — no energy, no clock. The price of a repair
+    is the hunt that got you here; being charged another hour while standing
+    in front of the finished thing read as a toll booth. A job's whole cost
+    is REPAIR_PART_ENERGY x its heavy pieces, so the elevator and the three
+    rooms are free outright.
+
+    It also pays NO CREDITS. The tower is the player's own building — the
+    six jobs were handing over 830 cr for work nobody commissioned, on top
+    of a board that pays 3,160, which is most of why the purse was full
+    with nothing to spend it on. The XP stays: the team really did learn
+    something."""
     if not is_active(state, job):
         return {"ok": False, "message": "Take the job at the board first."}
     if not can_repair(state, job):
         left = parts_left(state, job)
         return {"ok": False,
                 "message": f"Still {left} piece(s) short."}
-    hit_end = clock.advance(state, config.REPAIR_MINUTES)
     state["repairs"][job["id"]] = {"status": "done",
                                    "found": list(range(len(job["parts"])))}
     state.setdefault("story_flags", {})[job["flag"]] = True
     for flag, value in job.get("flags", {}).items():
         state["story_flags"][flag] = value      # e.g. the board coming back
-    state["credits"] = state.get("credits", 0) + job.get("credits", 0)
+    hit_end = False
     messages = [job["done_message"]]
-    if job.get("credits"):
-        messages.append(f"+{job['credits']} cr for the work.")
     xp = job.get("xp", 0)
     if xp:
         # Paid like battle XP: split across the six, to everyone who was

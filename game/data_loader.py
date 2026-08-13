@@ -4,6 +4,7 @@ Hand-rolled validation (no external schema dependency, per spec §2): every
 error names the file and the offending field.
 """
 
+import copy
 import json
 import os
 
@@ -155,6 +156,67 @@ def _validate_enemy(enemy, where):
         raise DataError(f"{where}: level must be "
                         f"1..{max(config.ENEMY_XP_BY_LEVEL)}, got {level}")
     _require(enemy, "credit_reward", int, where)
+    _validate_enemy_levels(enemy, where)
+
+
+# M36: an encounter can ask for a rank-and-file enemy at a level other than
+# the one its file ships at — "two grunts, one green and one not". The
+# alternatives were a JSON file per tier (which costs a sprite each, because
+# sprites.portrait keys off the id) or a level column in every encounter
+# list (which puts balance numbers in the quest data). A `levels` block keeps
+# one file, one sprite, one id per KIND of enemy.
+ENEMY_VARIANT_SEP = "@"
+ENEMY_LEVEL_OVERRIDES = ("power_grid", "credit_reward", "abilities", "ai", "name")
+
+
+def _validate_enemy_levels(enemy, where):
+    levels = enemy.get("levels")
+    if levels is None:
+        return
+    if not isinstance(levels, dict):
+        raise DataError(f"{where}: levels must be an object")
+    if ENEMY_VARIANT_SEP in enemy["id"]:
+        raise DataError(f"{where}: an enemy id may not contain "
+                        f"'{ENEMY_VARIANT_SEP}' — it separates id from level")
+    for tier, overrides in levels.items():
+        tw = f"{where} levels.{tier}"
+        if not (tier.isascii() and tier.isdigit() and str(int(tier)) == tier):
+            raise DataError(f"{tw}: level keys must be plain integers")
+        if int(tier) not in config.ENEMY_XP_BY_LEVEL:
+            raise DataError(f"{tw}: level must be "
+                            f"1..{max(config.ENEMY_XP_BY_LEVEL)}")
+        if int(tier) == enemy["level"]:
+            raise DataError(f"{tw}: that is the file's own level — use the "
+                            f"bare id")
+        if not isinstance(overrides, dict):
+            raise DataError(f"{tw}: must be an object of overrides")
+        unknown = set(overrides) - set(ENEMY_LEVEL_OVERRIDES)
+        if unknown:
+            raise DataError(f"{tw}: may only override "
+                            f"{list(ENEMY_LEVEL_OVERRIDES)}, got "
+                            f"{sorted(unknown)}")
+        if "power_grid" in overrides:
+            _validate_power_grid(overrides["power_grid"], tw)
+        if "abilities" in overrides:
+            _validate_abilities(overrides["abilities"], tw)
+
+
+def _expand_enemy_levels(enemies):
+    """Register `hydra_grunt@1` alongside `hydra_grunt`.
+
+    A variant KEEPS the base `id` and `name`: sprites.portrait looks up
+    data["id"], and entities.make_enemy_group numbers duplicates by it, so a
+    level-1 and a level-2 grunt read as "HYDRA Grunt 1" and "HYDRA Grunt 2"
+    in one line rather than as two unrelated strangers."""
+    expanded = dict(enemies)
+    for base in enemies.values():
+        for tier, overrides in (base.get("levels") or {}).items():
+            variant = copy.deepcopy(base)   # deep: overrides may edit lists
+            variant.pop("levels", None)
+            variant.update(copy.deepcopy(overrides))
+            variant["level"] = int(tier)
+            expanded[f"{base['id']}{ENEMY_VARIANT_SEP}{tier}"] = variant
+    return expanded
 
 
 ITEM_KINDS = ("gift", "consumable", "weapon", "armor", "accessory", "artifact", "material")
@@ -222,7 +284,8 @@ def load_characters(data_dir=None):
 
 
 def load_enemies(data_dir=None):
-    return _load_dir("enemies", _validate_enemy, data_dir or DATA_DIR)
+    return _expand_enemy_levels(
+        _load_dir("enemies", _validate_enemy, data_dir or DATA_DIR))
 
 
 def load_items(data_dir=None):
@@ -470,9 +533,23 @@ def _validate_scene(scene, where):
     lines = _require(scene, "lines", list, where)
     if not lines or not all(isinstance(l, str) and l for l in lines):
         raise DataError(f"{where}: lines must be a non-empty list of strings")
-    for key in ("character", "sound"):
+    for key in ("character", "sound", "narration_title"):
         if key in scene and not isinstance(scene[key], str):
             raise DataError(f"{where}: {key} must be a string")
+    # M36: who is ON SCREEN for each line, null for the narrator. A scene
+    # that opens on narration and then hands over to someone used to show
+    # that person's portrait from the first word, so the narrator's prose
+    # read as their dialogue.
+    speakers = scene.get("speakers")
+    if speakers is None:
+        return
+    if not isinstance(speakers, list) or len(speakers) != len(lines):
+        raise DataError(f"{where}: speakers must be a list the same length "
+                        f"as lines ({len(lines)})")
+    for speaker in speakers:
+        if speaker is not None and not isinstance(speaker, str):
+            raise DataError(f"{where}: each speaker must be a character id "
+                            f"or null")
 
 
 def _validate_template(text, where, **sample):
@@ -613,6 +690,16 @@ def load_repairs(data_dir=None):
                     raise DataError(f"{jw}: a battle part needs a chance or "
                                     f"a `with` hero, or it can never drop")
                 continue
+            if "mine" in part:                  # M36: out of any ore seam
+                spec = _require(part, "mine", dict, f"{jw} part")
+                unknown = set(spec) - {"chance", "message"}
+                if unknown:
+                    raise DataError(f"{jw}: unknown mine keys "
+                                    f"{sorted(unknown)}")
+                chance = _require(spec, "chance", (int, float), f"{jw} mine")
+                if isinstance(chance, bool) or not 0.0 < chance <= 1.0:
+                    raise DataError(f"{jw}: mine.chance must be 0..1")
+                continue
             for key in ("hidden", "heavy"):     # M35: no marker / costs EN
                 if key in part and not isinstance(part[key], bool):
                     raise DataError(f"{jw}: {key} must be true/false")
@@ -653,7 +740,8 @@ def load_repairs(data_dir=None):
     return jobs
 
 
-FLAVOR_POOLS = {"part_lift": (), "mining": ("material",)}
+FLAVOR_POOLS = {"part_lift": (), "mining": ("material",),
+                "scouting": ()}          # M36: working a scout point
 
 
 def load_flavor(data_dir=None):
@@ -904,6 +992,11 @@ def load_all(data_dir=None):
                 wanted = part["battle"].get("with")
                 if wanted and wanted not in characters:
                     raise DataError(f"{jw}: battle.with '{wanted}' not found")
+                continue
+            if "mine" in part:                  # any seam, no fixed tile
+                if not mineable:
+                    raise DataError(f"{jw}: a mine part needs at least one "
+                                    f"zone with an ore seam to come out of")
                 continue
             area = part["area"]
             if area in TOWER_FLOORS:

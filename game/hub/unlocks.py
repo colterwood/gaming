@@ -159,15 +159,22 @@ def grove_name(arc, index):
 
 
 def searchable(state, arc):
-    """Grove indices still worth walking up to: everything unsearched while
-    hunting, and only the one holding the item once it has been found."""
+    """Grove indices still worth walking up to.
+
+    M36: once the thing has been FOUND but not lifted, every stand stays
+    live — not just the one holding it. Narrowing to the single stand
+    turned "come back with someone who can lift it" into a homing beacon:
+    walk the line, and the only tree that answers is the one with the axe
+    in it. Remembering where you left it is the player's job."""
     entry = entry_of(state, arc) or {}
-    if entry.get("status") == "found":
-        return [entry["hidden"]]
-    if entry.get("status") != "searching":
+    status = entry.get("status")
+    if status not in ("searching", "found"):
         return []
-    return [i for i in range(len(arc["search_groves"]))
+    live = [i for i in range(len(arc["search_groves"]))
             if i not in entry.get("searched", [])]
+    if status == "found" and entry["hidden"] not in live:
+        live.append(entry["hidden"])
+    return sorted(live)
 
 
 def action_label(state, arc, index):
@@ -184,12 +191,10 @@ def search(content, state, arc, index):
     entry = entry_of(state, arc)
     if entry is None or entry["status"] not in ACTIVE:
         return {"ok": False, "message": "There's nothing to find here."}
-    if entry["status"] == "found":
-        if index != entry["hidden"]:
-            return {"ok": False, "message": "Nothing else out here matters."}
-        return _lift(content, state, arc)           # a second attempt is free
     if not 0 <= index < len(arc["search_groves"]):
         return {"ok": False, "message": "There's nothing to find here."}
+    if entry["status"] == "found" and index == entry["hidden"]:
+        return _lift(content, state, arc)           # a second attempt is free
     if index in entry["searched"]:
         return {"ok": False, "message": "Already searched."}
     if not energy.can_afford(state, config.UNLOCK_SEARCH_ENERGY):

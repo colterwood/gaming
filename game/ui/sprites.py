@@ -208,6 +208,11 @@ _VARIANTS = {
     "jarvis": ("_human", {"h": "grey", "x": "shadow", "v": "white"}),
     "pepper_potts": ("_human", {"h": "orange", "x": "steel_light", "v": "white"}),
     "coulson": ("_human", {"h": "wood_dark", "x": "steel_dark", "v": "white"}),
+    # M36: the operators of the rebuilt rooms. Hank is grey-haired in a lab
+    # coat; the Med Bay units are white and mint, so they read as equipment
+    # rather than people at a glance.
+    "hank_pym": ("_human", {"h": "steel_light", "x": "white", "v": "sky"}),
+    "medbay_unit": ("_human", {"h": "steel", "x": "white", "v": "mint"}),
     "player": ("_human", {"h": "brown", "x": "navy", "v": "gold"}),
 }
 
@@ -522,6 +527,8 @@ _STAND_VARIANTS = {
     "jarvis": {"h": "grey", "x": "shadow", "v": "white"},
     "pepper_potts": {"h": "orange", "x": "steel_light", "v": "white"},
     "coulson": {"h": "wood_dark", "x": "steel_dark", "v": "white"},
+    "hank_pym": {"h": "steel_light", "x": "white", "v": "sky"},      # M36
+    "medbay_unit": {"h": "steel", "x": "white", "v": "mint"},
 }
 
 _standing_cache = {}

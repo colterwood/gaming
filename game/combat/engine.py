@@ -192,13 +192,19 @@ class BattleEngine:
         spread = ability.get("spread")
         if not spread:
             return [primary]
+        if spread == "adjacent":
+            # The line AS DRAWN, not the living one. Filtering the dead out
+            # first closed the ranks, so a Unibeam at slot 1 with slot 2
+            # already down splashed slot 3 — two panels away on screen, and
+            # the more enemies the player had killed the further the beam
+            # reached. A body in the way blocks the sweep now.
+            line = self._opponents_of(actor)
+            index = line.index(primary) if primary in line else 0
+            return [primary] + [line[i] for i in (index - 1, index + 1)
+                                if 0 <= i < len(line) and line[i].alive
+                                and line[i] is not primary]
         line = self.living(self._opponents_of(actor))
         others = [c for c in line if c is not primary]
-        if spread == "adjacent":
-            index = line.index(primary) if primary in line else 0
-            picked = [line[i] for i in (index - 1, index + 1)
-                      if 0 <= i < len(line) and line[i] is not primary]
-            return [primary] + picked
         if spread == "random_range":
             low = ability.get("extra_min", 1)
             high = ability.get("extra_max", low)

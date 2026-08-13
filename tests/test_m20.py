@@ -37,7 +37,8 @@ def test_no_squad_of_any_kind_exceeds_the_cap():
         for _ in range(500):
             assert len(field.trap_squad(3, party_size, rng)) <= cap
             assert field.ambush_size(party_size, rng) <= cap
-            rolled = field.roll_ambush(3, party_size, rng)
+            rolled = field.roll_ambush({"danger": 3, "ambush_rate": 3},
+                                       party_size, rng)
             assert rolled is None or len(rolled) <= cap
 
 

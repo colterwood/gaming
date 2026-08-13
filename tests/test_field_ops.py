@@ -10,6 +10,10 @@ from game.combat import formulas
 from game.core import save
 from game.hub import field, party, passive
 
+# M36: roll_ambush takes the whole zone — `ambush_rate` decides how often,
+# `danger` decides who turns up. This stands in for the worst block there is.
+ZONE3 = {"id": "test_zone", "danger": 3, "ambush_rate": 3}
+
 
 @pytest.fixture(scope="module")
 def content():
@@ -42,7 +46,7 @@ def test_ambush_only_when_outnumbered():
     rng = random.Random(7)
     for party_size in (1, 2, 3, 4):
         for _ in range(300):
-            squad = field.roll_ambush(3, party_size, rng)
+            squad = field.roll_ambush(ZONE3, party_size, rng)
             if squad is not None:
                 assert len(squad) > party_size
                 assert len(squad) <= config.AMBUSH_MAX_SIZE
@@ -51,7 +55,7 @@ def test_ambush_only_when_outnumbered():
 def test_full_party_can_still_be_ambushed_by_bigger_squads():
     rng = random.Random(3)
     sizes = {len(s) for _ in range(3000)
-             if (s := field.roll_ambush(3, 4, rng)) is not None}
+             if (s := field.roll_ambush(ZONE3, 4, rng)) is not None}
     assert sizes and all(5 <= n <= 8 for n in sizes)
 
 

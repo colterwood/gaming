@@ -30,5 +30,18 @@
   ],
   "ai": "aggressive",
   "level": 2,
-  "credit_reward": 15
+  "credit_reward": 15,
+  "levels": {
+    "1": {
+      "power_grid": {
+        "strength": 1,
+        "speed": 1,
+        "agility": 1,
+        "stamina": 1,
+        "durability": 1,
+        "intelligence": 1
+      },
+      "credit_reward": 8
+    }
+  }
 }

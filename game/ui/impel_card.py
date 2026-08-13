@@ -251,6 +251,67 @@ class ImpelCardScene:
             pixelkit.text(surface, "v", 11, GREY,
                           bottomright=(panel.right - 6, panel.bottom - 1))
 
+    def _progress_rows(self, state):
+        """Everything the player has going, with how far along it is (M36).
+
+        The Tasks tab listed what was POSTED and what was accepted, but not
+        how close any of it was to finishing — so "how many Pym parts do I
+        still need" and "how long until Shang-Chi is off the mats" were
+        questions you answered by walking to the thing and looking at it.
+        Repairs, the story quest, the rack, the Pym bench: one line each.
+        """
+        from game.core import clock as clock_mod
+        from game.hub import activities as act
+        from game.hub import repairs as repairs_mod
+        from game.hub import story as story_mod
+        from game.progression import gear as gear_mod
+
+        rows = []
+        for job in repairs_mod.active(self.content, state):
+            total = len(job["parts"])
+            have = len(repairs_mod.found(state, job))
+            tail = "ready to fit" if have >= total else f"{have}/{total} parts"
+            rows.append((f"[~] {job['name']} - {tail}", False))
+
+        quest = story_mod.current_quest(state, self.content["story"])
+        if quest is not None and story_mod.is_accepted(state, quest):
+            left = story_mod.days_left(state, quest)
+            when = f", {left}d left" if left is not None else ""
+            if quest.get("kind") == "scout":
+                done = len(story_mod.scouted(state, quest))
+                rows.append((f"[~] {quest['name']} - {done}/"
+                             f"{len(quest['scout_points'])} spots{when}", False))
+            else:
+                rows.append((f"[~] {quest['name']} - "
+                             f"{self._area_label(quest.get('location'))}{when}",
+                             False))
+
+        for hero_id in sorted(state.get("roster", {})):
+            entry = state["roster"][hero_id]
+            name = self.content["characters"][hero_id]["name"]
+            lock = entry.get("training")
+            if lock:
+                left = act.training_remaining(state, lock)
+                rows.append((f"[~] {name} training "
+                             f"{lock['attribute'].title()} - "
+                             f"{clock_mod.format_duration(left)} to go", False))
+            elif entry.get("done_training"):
+                rows.append((f"[!] {name} is done on the mats - collect them",
+                             False))
+
+        for job in gear_mod.queue(state):
+            item = self.content["items"].get(job["item"], {})
+            label = item.get("name", job["item"])
+            tail = ("ready to collect" if job["days_left"] <= 0
+                    else f"{job['days_left']}d left")
+            rows.append((f"[~] Pym bench: {label} L{job['level']} - {tail}",
+                         False))
+        return rows
+
+    def _area_label(self, area):
+        zone = self.content["zones"].get(area) if area else None
+        return zone["name"] if zone else "the tower"
+
     def _draw_quest_column(self, surface, panel, state, half, pad):
         """The Tasks tab's right-hand quest list — drawn whether or not
         today's board has been read (M20)."""
@@ -427,6 +488,7 @@ class ImpelCardScene:
                                   for h in job["heroes"])
                 rows.append((f"[>] {job['name']}: {names} -{job['days_left']}d",
                             True))
+            rows += self._progress_rows(state)
             visible = max(1, (panel.bottom - list_top) // row_h)
             first, more_above, more_below = self._scroll_window(
                 "Tasks", len(rows), visible)
@@ -446,6 +508,8 @@ class ImpelCardScene:
         elif tab == "Map":
             btext(surface, "WORLD MAP - coming in a later issue", 15, GREY,
                   center=panel.center)
+        # (progress rows for everything in flight are built by
+        #  _progress_rows and appended to the Tasks list above)
         elif tab == "Options":
             btext(surface, f"The day autosaves when you sleep - "
                            f"slot {app.SAVE_SLOT}", 14, INK,

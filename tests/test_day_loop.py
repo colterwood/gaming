@@ -161,14 +161,18 @@ def test_mission_collapse_makes_no_contact():
     assert activities.should_pass_out(state)
 
 
-def test_mission_started_too_late_makes_no_contact():
-    # The other way to collapse: three hours that run past 2 AM.
+def test_a_mission_started_late_still_happens(content=None):
+    """M36: running past 2 AM on the approach used to cancel the fight and
+    roll the day over, so a mission taken at 11 PM simply evaporated. The
+    clock refuses nobody now — you engage, you fight, and the hub passes
+    the team out on the other side of it."""
     state = fresh_state()
     state["time_minutes"] = config.DAY_END_MINUTES - config.MISSION_MINUTES + 10
     result = activities.launch_mission(state)
-    assert result["ok"] and result["passed_out"]
-    assert "launch_battle" not in result
-    assert state["time_minutes"] == config.DAY_END_MINUTES
+    assert result["ok"] and not result.get("passed_out")
+    assert result["launch_battle"]                  # the fight goes ahead
+    assert state["time_minutes"] == config.DAY_END_MINUTES   # clock clamps
+    assert activities.should_pass_out(state)        # ...and then they drop
 
 
 def test_training_still_blocked_without_energy():

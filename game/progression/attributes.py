@@ -136,18 +136,44 @@ def award_attribute_xp(boosts, roster_entry, amount, attributes=None):
 
 
 def pending_perk_tier(roster_entry, attribute):
-    """The lowest §6.3 perk tier (trained rank 3 or 6) reached but not yet
-    chosen for this attribute, or None."""
-    trained = roster_entry.get("trained_ranks", {}).get(attribute, 0)
+    """The lowest perk tier reached but not yet chosen for this attribute,
+    or None.
+
+    M36: tiers are the rank SHOWN ON THE CARD (config.PERK_CHOICE_RANKS,
+    1..RANK_MAX), not the trained rank underneath. They used to be trained
+    ranks, so the modal announced a "rank 3 perk!" to a hero whose card
+    read rank 4 — the same off-by-one in two places, cancelling out
+    nowhere.
+    """
+    level = rank(roster_entry, attribute)
     chosen = roster_entry.setdefault("perk_choices", {})
     for tier in config.PERK_CHOICE_RANKS:
-        if trained >= tier and f"{attribute}:{tier}" not in chosen:
+        if level >= tier and f"{attribute}:{tier}" not in chosen:
             return tier
     return None
 
 
+# M36: the tiers moved from trained ranks (3, 6) to card ranks (5, 10).
+# An old save's keys read "strength:3"; left alone they would match no
+# current tier, so the hero would keep the perk AND be offered the same
+# list again at rank 5 — perk_effects sums by value, so picking the same
+# one twice would count it twice. Rewrite the key instead.
+_LEGACY_PERK_TIERS = {"3": "5", "6": "10"}
+
+
+def migrate_perk_tiers(roster_entry):
+    """Carry a pre-M36 perk choice onto the tier that now owns it."""
+    chosen = roster_entry.get("perk_choices", {})
+    for key in list(chosen):
+        attribute, _, tier = key.rpartition(":")
+        if attribute and tier in _LEGACY_PERK_TIERS:
+            new_key = f"{attribute}:{_LEGACY_PERK_TIERS[tier]}"
+            chosen.setdefault(new_key, chosen.pop(key))
+
+
 def sanitize_perk_choices(roster_entry, perks_data):
     """Drop perk ids that no longer exist in perks.json (content updates)."""
+    migrate_perk_tiers(roster_entry)
     valid = {p["id"] for attr in perks_data.values() for tier in attr.values() for p in tier}
     chosen = roster_entry.get("perk_choices", {})
     for key in [k for k, pid in chosen.items() if pid not in valid]:

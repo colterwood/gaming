@@ -25,6 +25,7 @@ def app():
             "perk_choices": {}, "gear": {}, "ult_charge": 0,
             "energy": 70}
     a.game_state["party"] = ["iron_man", "captain_america"]
+    a.game_state["credits"] = 10000     # M36: the rack bills at the door
     for to in (GameState.TITLE, GameState.PATH_SELECT, GameState.HUB,
                GameState.BATTLE):
         a.machine.transition(to)
@@ -37,7 +38,7 @@ def lost_engine():
 
 def won_engine():
     hero = SimpleNamespace(id="iron_man", alive=True, data={"id": "iron_man"},
-                           ult_charge=40)
+                           ult_charge=40, hp=90, max_hp=100)   # M36
     return SimpleNamespace(outcome="win", heroes=[hero],
                            rewards=lambda: {"credits": 10, "xp": 5})
 
@@ -74,7 +75,7 @@ def test_ambush_win_costs_an_hour(app):
     app.finish_battle(won_engine())
     assert state["time_minutes"] == \
         config.DAY_START_MINUTES + config.BATTLE_MINUTES
-    assert state["credits"] == 10
+    assert state["credits"] == 10010            # the fixture's purse + 10
     assert app.machine.state is GameState.HUB
 
 
@@ -98,4 +99,6 @@ def test_training_completes_at_sleep(app):
     cap = state["roster"]["captain_america"]
     assert "training" not in cap
     assert cap["attribute_xp"]["strength"] == config.TRAINING_XP_BY_LEVEL[1]
-    assert "captain_america" in state["party"]      # rejoined by morning
+    # M36: no auto-rejoin. The session finished overnight and Cap is
+    # standing on the mats waiting to be collected in person.
+    assert "captain_america" not in state["party"]

@@ -102,8 +102,15 @@ class App:
                     entry, owed)
         self.game_state.pop("unspent_xp", None)     # top-level copy: never read
         if not self.game_state.get("party"):
-            self.game_state["party"] = sorted(self.game_state["roster"],
-                                              reverse=True)[:config.PARTY_SIZE_MAX]
+            # M36: an empty party is now a real state — training your last
+            # hero (solo_ok) empties it deliberately. This fallback predates
+            # that and would refill the team with heroes who are LOCKED on
+            # the mats or away on a job, which skips the lockout the player
+            # just paid for and drags them into battles. Only free heroes.
+            free = [h for h, e in sorted(self.game_state["roster"].items())
+                    if not e.get("training") and not e.get("dispatch")]
+            self.game_state["party"] = sorted(
+                free, reverse=True)[:config.PARTY_SIZE_MAX]
         energy.sync(self.game_state)
         self.hub = HubScene(self.content)
         return True
@@ -115,11 +122,16 @@ class App:
         from game.core import energy
         from game.hub import activities, dispatch, passive, story, unlocks
         from game.progression import gear as gear_mod
+        # M36: going down INDOORS is not the same as going down in the
+        # HYDRA District. The hub knows which, and it is the only thing
+        # that does.
+        sheltered = bool(self.hub is None or self.hub.area == "tower")
         messages = passive.process_day(self.content, self.game_state)
         messages += dispatch.process_day(self.content, self.game_state)
         messages += gear_mod.process_day(self.game_state,
                                          self.content["items"])
-        result = activities.go_to_sleep(self.game_state, passed_out=passed_out)
+        result = activities.go_to_sleep(self.game_state, passed_out=passed_out,
+                                        sheltered=sheltered)
         # M16: rack sessions are measured in WAKING hours and may span days.
         # Settle them after the calendar advances, so the night banks the
         # rest of the day the hero spent on the mats.
@@ -135,12 +147,12 @@ class App:
             self.hub.log(result["message"])
             for msg in messages:
                 self.hub.log(msg)
-            self.hub.return_to_tower()  # never wake up mid-menu or in the field
+            self.hub.wake_up()          # M36: always beside your own bed
         self.machine.transition(GameState.SLEEP)
 
     def start_battle(self, enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
                      quest=None, ambush=False):
-        from game.core import energy
+        from game.core import energy, health
         from game.hub import party as party_mod
         from game.progression import attributes as attrs
         from game.progression import gear as gear_mod
@@ -149,7 +161,7 @@ class App:
         self.battle_quest = quest
         self.battle_ambush = ambush
         trained = perk_fx = synergy_crit = energy_frac = ult_charge = None
-        gear_ranks = None
+        gear_ranks = hp_frac = None
         hero_ids = ("iron_man", "captain_america")
         if self.game_state:
             roster = self.game_state["roster"]
@@ -179,24 +191,55 @@ class App:
                 synergy_crit[hid] = total
             # M15: ultimate charge carries over from the last fight.
             ult_charge = {hid: roster[hid].get("ult_charge", 0) for hid in hero_ids}
+            # M36: so does HP.
+            hp_frac = {hid: health.hero_hp_fraction(self.game_state, hid)
+                       for hid in hero_ids}
         self.battle = BattleScene(
             self.content, hero_ids=hero_ids, enemy_ids=enemy_ids, trained=trained,
             perk_fx=perk_fx, synergy_crit=synergy_crit, energy_frac=energy_frac,
-            ult_charge=ult_charge, gear_ranks=gear_ranks,
+            ult_charge=ult_charge, gear_ranks=gear_ranks, hp_frac=hp_frac,
+            on_resolve=self.battle_salvage,
             inventory=self.game_state["inventory"] if self.game_state else None)
         self.machine.transition(GameState.BATTLE)
 
+    def battle_salvage(self, engine):
+        """Roll what a won fight coughs up beyond XP and credits (M35), the
+        moment the fight settles rather than when the panel is dismissed.
+
+        M36: the return value is printed ON the victory panel. These drops
+        are the only way some repair parts exist — a Stark toolhead at 33%
+        a fight — and announcing them in the hub message log, after the
+        player had already walked away, made them read as noise."""
+        if self.game_state is None:
+            return []
+        from game.hub import repairs as repairs_mod
+        messages = repairs_mod.battle_drop(
+            self.content, self.game_state, [h.id for h in engine.heroes],
+            random.Random())
+        for message in messages:
+            if self.hub:
+                self.hub.log(message)
+        return messages
+
     def finish_battle(self, engine):
-        from game.core import clock, energy
+        from game.core import clock, energy, health
         quest = getattr(self, "battle_quest", None)
         ambush = getattr(self, "battle_ambush", False)
         state = self.game_state
         if state:
             # M15: bank each hero's ultimate charge for the next fight.
+            # M36: and the state of them — HP is carried, not reset, so a
+            # bruising win is felt in the next fight.
             for hero in engine.heroes:
                 entry = state["roster"].get(hero.id)
                 if entry is not None:
                     entry["ult_charge"] = hero.ult_charge
+                    fraction = hero.hp / hero.max_hp
+                    if engine.outcome == "win" and not hero.alive:
+                        # Won the fight, but this one went down doing it:
+                        # they come round rather than staying at zero.
+                        fraction = config.KO_REVIVE_HP_FRACTION
+                    health.set_hero_hp_fraction(state, hero.id, fraction)
         if state and engine.outcome == "win":
             from game.hub import activities, story
             from game.progression import attributes as attrs
@@ -225,15 +268,6 @@ class App:
                     ups = ", ".join(f"{a.title()} {r + config.RANK_START}"
                                     for a, r in gain["ranks_gained"])
                     self.hub.log(f"{name} ranks up from the field: {ups}!")
-            # M35: some repair parts only turn up in the wreckage of a
-            # fight — a dice roll for the Tech Lab's, a certainty the first
-            # time Scott is along for the Pym Lab's.
-            from game.hub import repairs as repairs_mod
-            for message in repairs_mod.battle_drop(
-                    self.content, state, [h.id for h in engine.heroes],
-                    random.Random()):
-                if self.hub:
-                    self.hub.log(message)
             bonds.mission_bond(state,
                                [h.id for h in engine.heroes
                                 if bonds.bondable(self.content["characters"][h.data["id"]])])
@@ -265,6 +299,10 @@ class App:
                 energy.set_hero_energy(state, hero_id, min(
                     energy.hero_energy(state, hero_id), config.DEFEAT_ENERGY))
             energy.sync(state)
+            # M36: patched up enough to stand, and no more. A FLOOR, like
+            # DEFEAT_ENERGY is a cap — a team that wins on 5% must not be
+            # better off for having lost instead.
+            health.floor_party(state, config.DEFEAT_HP_FRACTION)
             if self.hub:
                 self.hub.log("Beaten. The team limps back to the Tower to regroup.")
                 self.hub.return_to_tower()

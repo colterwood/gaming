@@ -38,5 +38,27 @@
       "HULK: ...Hulk likes the quiet floor. Don't tell metal man.",
       "Your bond with Hulk has deepened."
     ]
+  },
+  {
+    "id": "hulk_bond_4",
+    "character": "hulk",
+    "level": 4,
+    "title": "The Quiet Floor",
+    "speakers": [
+      null,
+      "hulk",
+      "hulk",
+      null,
+      "hulk",
+      null
+    ],
+    "lines": [
+      "He is waiting by the lift when you come up, which he has never done. Somebody has folded a jacket over one arm. It is enormous, and it is the only thing he brought.",
+      "HULK: \"Banner packed. Banner packs when he thinks we are leaving.\"",
+      "HULK: \"Hulk told him we are not leaving. Hulk told him this is the quiet floor now.\"",
+      "He looks at the jacket for a while, the way you look at an argument you have already won.",
+      "HULK: \"You go out. Things hit you. Then you come back and you are smaller.\" A pause. \"Hulk comes too. Hulk is not smaller.\"",
+      "Hulk joins the team."
+    ]
   }
 ]

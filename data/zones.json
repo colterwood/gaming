@@ -3,6 +3,7 @@
     "id": "docks",
     "name": "Hudson Docks",
     "danger": 1,
+    "ambush_rate": 1.0,
     "spawn": [
       3,
       16
@@ -48,13 +49,14 @@
       "########################################"
     ],
     "mining": {
-      "iso8": 0.55
+      "iso8": 0.78
     }
   },
   {
     "id": "midtown",
     "name": "Midtown",
     "danger": 2,
+    "ambush_rate": 0.5,
     "spawn": [
       3,
       16
@@ -101,13 +103,14 @@
       "########################################"
     ],
     "mining": {
-      "iso8": 0.65
+      "iso8": 0.8
     }
   },
   {
     "id": "hydra_district",
     "name": "HYDRA District",
     "danger": 3,
+    "ambush_rate": 2.0,
     "spawn": [
       3,
       16
@@ -153,7 +156,7 @@
       "########################################"
     ],
     "mining": {
-      "iso8": 0.75
+      "iso8": 0.84
     }
   }
 ]

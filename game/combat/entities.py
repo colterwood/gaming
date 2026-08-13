@@ -8,7 +8,7 @@ from game.combat import formulas
 class Combatant:
     def __init__(self, data, trained_ranks=None, is_hero=False, instance_id=None,
                  name=None, perk_effects=None, synergy_crit=0, energy_frac=1.0,
-                 ult_charge=0, gear_ranks=None):
+                 ult_charge=0, gear_ranks=None, hp_frac=1.0):
         self.energy_frac = energy_frac      # daily energy %, M9 initiative penalty
         self.id = instance_id or data["id"]
         self.name = name or data["name"]
@@ -24,7 +24,12 @@ class Combatant:
         self.boosts = data.get("boosts") or {}
         hp_mult = 1 + self.perk_effects.get("max_hp_pct", 0) / 100
         self.max_hp = int(formulas.max_hp(self.rank("stamina"), self.rank("durability")) * hp_mult)
-        self.hp = self.max_hp
+        # M36: heroes carry their HP between fights, as a fraction of max —
+        # walk out of an ambush on 20% and that is what you take into the
+        # next one. Enemies are always built whole. A living hero can never
+        # start a fight at 0: `hp_frac` is clamped to at least 1 HP, because
+        # a Combatant at 0 is dead and the battle would end on turn one.
+        self.hp = max(1, int(round(self.max_hp * max(0.0, min(1.0, hp_frac)))))
         self.max_energy = (formulas.battle_energy(self.rank("intelligence"))
                            + self.perk_effects.get("battle_energy_flat", 0))
         self.energy = self.max_energy

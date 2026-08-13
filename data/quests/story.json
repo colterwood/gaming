@@ -20,12 +20,26 @@
     "kind": "scout",
     "location": "midtown",
     "scout_points": [
-      [8, 3],
-      [26, 6],
-      [18, 14]
+      [
+        8,
+        3
+      ],
+      [
+        26,
+        6
+      ],
+      [
+        18,
+        14
+      ]
     ],
     "action_label": "Scout",
-    "desc": "Walk Lang's block and map the patrols."
+    "desc": "Walk Lang's block and map the patrols.",
+    "point_lines": [
+      "\"Corner's covered. Two cameras, both pointed at the ATM and not the door.\"",
+      "\"Patrol comes past here every eleven minutes. Same two, same route, same cigarette break.\"",
+      "\"Back of the building. One fire door, no handle on the outside, and somebody has been propping it open with a brick.\""
+    ]
   },
   {
     "id": "ch1_spoof_monitor",
@@ -34,12 +48,26 @@
     "kind": "scout",
     "location": "midtown",
     "scout_points": [
-      [5, 6],
-      [33, 3],
-      [30, 13]
+      [
+        5,
+        6
+      ],
+      [
+        33,
+        3
+      ],
+      [
+        30,
+        13
+      ]
     ],
     "action_label": "Plant relay",
-    "desc": "Plant 3 relays to blind Lang's monitor."
+    "desc": "Plant 3 relays to blind Lang's monitor.",
+    "point_lines": [
+      "\"Relay one, on the transformer box. It'll tell the monitor Lang has been sitting on his couch since Tuesday.\"",
+      "\"Two of three. This one goes on the lamppost, and it thinks it's a parking sensor. It is not a parking sensor.\"",
+      "\"Three. Lang's ankle now reports from an apartment he isn't in, and it will keep reporting until somebody physically climbs up there.\""
+    ]
   },
   {
     "id": "ch1_break_out_lang",
@@ -47,8 +75,12 @@
     "name": "Break Out Scott Lang",
     "kind": "battle",
     "enemies": [
+      "hydra_grunt@1",
       "hydra_grunt",
-      "hydra_enforcer"
+      "hydra_enforcer@1",
+      "hydra_enforcer@2",
+      "hydra_medic@1",
+      "hydra_medic@1"
     ],
     "recruit": "ant_man",
     "flags": {
@@ -87,7 +119,9 @@
     "kind": "battle",
     "enemies": [
       "hydra_enforcer",
+      "hydra_enforcer",
       "hydra_medic",
+      "hydra_grunt",
       "hydra_grunt"
     ],
     "desc": "Chase the surviving splinter cell through the docks.",

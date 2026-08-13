@@ -47,7 +47,7 @@
     "part_label": "Salvage parts",
     "part_message": "A coil of cable and one very tired capacitor.",
     "repair_label": "Repair the elevator",
-    "credits": 80,
+    "credits": 0,
     "xp": 30,
     "flag": "elevator_repaired",
     "done_message": "The elevator grinds, thinks about it, and opens. The tower is yours again."
@@ -107,7 +107,7 @@
     "part_label": "Recover the part",
     "part_message": "Another piece of the nacelle, exactly where nobody would put it on purpose.",
     "repair_label": "Repair the Quinjet",
-    "credits": 120,
+    "credits": 0,
     "xp": 36,
     "flag": "quinjet_repaired",
     "flags": {
@@ -160,7 +160,7 @@
     "part_label": "Haul equipment",
     "part_message": "Mat sections, bolts, and a frame that has seen better decades.",
     "repair_label": "Rebuild the rack and mats",
-    "credits": 100,
+    "credits": 0,
     "xp": 30,
     "flag": "training_repaired",
     "done_message": "Mats down, rack straight, bag hung. The training floor is open."
@@ -205,7 +205,7 @@
     "part_label": "Salvage the ward",
     "part_message": "Sterile packs, a diagnostic head, and a chair that mostly reclines.",
     "repair_label": "Bring the treatment station online",
-    "credits": 150,
+    "credits": 0,
     "xp": 48,
     "flag": "med_bay_repaired",
     "done_message": "The Med Bay comes up green. Sit in the chair and it will do the rest."
@@ -272,7 +272,7 @@
     "part_label": "Restock the bench",
     "part_message": "Fabricator feedstock and a toolhead that hasn't been dropped.",
     "repair_label": "Warm up the fabricators",
-    "credits": 180,
+    "credits": 0,
     "xp": 48,
     "flag": "tech_lab_repaired",
     "done_message": "The bench lights up. The Tech Lab can outfit the team."
@@ -292,10 +292,10 @@
     },
     "parts": [
       {
-        "area": "docks",
-        "x": 8,
-        "y": 11,
-        "hidden": true
+        "mine": {
+          "chance": 0.33,
+          "message": "A Pym-tech regulator housing, fused into the seam"
+        }
       },
       {
         "from": "pepper_potts",
@@ -324,7 +324,7 @@
     "part_label": "Clear the bench",
     "part_message": "Shrunken crates the size of sugar cubes, and one that isn't.",
     "repair_label": "Power up the Pym bench",
-    "credits": 200,
+    "credits": 0,
     "xp": 60,
     "flag": "pym_lab_repaired",
     "done_message": "The Pym bench hums awake. Whatever Hank was doing down here, you can finish it."

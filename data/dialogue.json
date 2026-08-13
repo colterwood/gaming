@@ -149,5 +149,29 @@
       "Cassie has an Avengers lunchbox now. I'm on it. Tiny. In the corner. STILL ON IT.",
       "From ex-con to this. Thanks for not making it weird. Okay, Tony makes it weird. Once a day."
     ]
+  },
+  "hank_pym": {
+    "0": [
+      "\"You got the bench running. Good. Don't touch the red dial - the red dial is not for you, it is not for Scott, it is arguably not for me.\"",
+      "\"Everything down here can be made smaller. The trick nobody writes down is making it big again in the same shape.\"",
+      "\"Leave the piece and the materials. Come back when I say. This is not a shop counter and I am not a shop.\""
+    ],
+    "2": [
+      "\"Scott says you listen. That is a low bar and you have cleared it, which puts you ahead of most people who have stood where you are.\"",
+      "\"Janet used to run this bench better than I did. I have never once said that out loud before, so let's both pretend I didn't.\"",
+      "\"Pym particles don't add mass, they move it. Whatever you're picturing right now is wrong, and I'm too tired to fix it today.\""
+    ],
+    "4": [
+      "\"I built a door to somewhere very small and I did not think hard enough about coming back. Ask Scott what that costs. He'll tell you it was fine. It was not fine.\"",
+      "\"You keep bringing me things worth improving. Do you know how long it has been since anyone did that?\""
+    ]
+  },
+  "medbay_unit": {
+    "0": [
+      "The unit swivels, scans you, and produces a soft chime. \"TRIAGE COMPLETE. NO INTERVENTION REQUIRED. HAVE A PRODUCTIVE DAY.\"",
+      "\"THIS UNIT IS RATED FOR FOURTEEN CONCURRENT PATIENTS. THIS UNIT HAS NEVER HAD FOURTEEN CONCURRENT PATIENTS. THIS UNIT IS READY.\"",
+      "\"PLEASE DO NOT BLEED ON THE DIAGNOSTIC PLATE. IT IS CALIBRATED. IT IS ALSO CARPETED, WHICH WAS NOT THIS UNIT'S DECISION.\"",
+      "A second unit rolls past, stops, reverses, and says nothing at all. The first one sighs, which it should not be able to do."
+    ]
   }
 }

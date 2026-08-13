@@ -11,6 +11,8 @@ from game.ui import pixelkit, sprites, widgets
 
 ENEMY_TURN_DELAY = 0.55     # seconds before an enemy acts (readability)
 POPUP_LIFETIME = 0.9
+RESULT_NOTE_LINE_H = 14     # px per salvage line under the victory panel
+RESULT_NOTE_MAX_ROWS = 4    # a fight can drop more than one thing
 
 
 class BattleScene:
@@ -18,7 +20,8 @@ class BattleScene:
                  enemy_ids=("hydra_grunt", "hydra_grunt", "hydra_grunt"),
                  inventory=None, trained=None, rng=None,
                  perk_fx=None, synergy_crit=None, energy_frac=None,
-                 ult_charge=None, gear_ranks=None):
+                 ult_charge=None, gear_ranks=None, hp_frac=None,
+                 on_resolve=None):
         self.content = content
         heroes = [Combatant(content["characters"][h],
                             trained_ranks=(trained or {}).get(h),
@@ -27,6 +30,7 @@ class BattleScene:
                             energy_frac=(energy_frac or {}).get(h, 1.0),
                             ult_charge=(ult_charge or {}).get(h, 0),
                             gear_ranks=(gear_ranks or {}).get(h),
+                            hp_frac=(hp_frac or {}).get(h, 1.0),   # M36
                             is_hero=True) for h in hero_ids]
         enemies = make_enemy_group([content["enemies"][e] for e in enemy_ids])
         self.engine = BattleEngine(
@@ -40,6 +44,10 @@ class BattleScene:
         self.pending_action = None
         self.popups = []            # {text, x, y, age, color}
         self.timer = 0.0
+        # M36: called once when a WON fight settles; whatever it returns is
+        # printed on the victory panel next to the XP.
+        self.on_resolve = on_resolve
+        self.result_notes = []
 
     # --- helpers ---
 
@@ -129,9 +137,18 @@ class BattleScene:
                                 "age": 0.0, "color": color})
 
     def _enemy_rect(self, i):
-        """Up to 4 enemies: one column. Ambushes up to 8: two columns (M9)."""
-        if len(self.engine.enemies) <= 4:
+        """Up to 4 enemies: one column. Ambushes up to 8: two columns (M9).
+
+        M36 adds a tighter six-row column in between, because Unibeam's
+        `adjacent` spread means "the panels either side of the target" — and
+        that only reads as a rule if the six bodies of a scripted fight sit
+        in ONE line. Six at 52px pitch run y = 46..356, clear of the
+        turn-order strip above (which ends at 48) and the screen edge."""
+        count = len(self.engine.enemies)
+        if count <= 4:
             return pygame.Rect(config.WIDTH - 218, 74 + i * 60, 188, 52)
+        if count <= 6:
+            return pygame.Rect(config.WIDTH - 218, 46 + i * 52, 188, 50)
         col, row = divmod(i, 4)
         return pygame.Rect(config.WIDTH - 348 + col * 174, 60 + row * 58, 166, 50)
 
@@ -154,7 +171,7 @@ class BattleScene:
         self.popups = [p for p in self.popups if p["age"] < POPUP_LIFETIME]
 
         if self.engine.outcome:
-            self.phase = "result"
+            self._enter_result()
             return
 
         if self.phase == "turn_start":
@@ -162,7 +179,7 @@ class BattleScene:
             events = self.engine.begin_turn()
             self._emit(events)
             if self.engine.outcome:
-                self.phase = "result"
+                self._enter_result()
             elif self.engine.turn_counter != turn_before:   # stun/burn consumed the turn
                 self.phase = "turn_start"
             elif self._actor().is_hero:
@@ -175,7 +192,25 @@ class BattleScene:
             self.timer += dt
             if self.timer >= ENEMY_TURN_DELAY:
                 self._emit(self.engine.take_turn(self.engine.enemy_action()))
-                self.phase = "result" if self.engine.outcome else "turn_start"
+                if self.engine.outcome:
+                    self._enter_result()
+                else:
+                    self.phase = "turn_start"
+
+    def _enter_result(self):
+        """Settle the fight once, on the way into the result panel.
+
+        M36: anything the battle produced beyond XP and credits — a repair
+        part out of the wreckage — is resolved HERE and shown on the same
+        panel. It used to be rolled after the panel was dismissed and
+        written only to the hub log, three screens later, so the player
+        found out they had been looking for that part all week by scrolling
+        back through messages."""
+        if self.phase == "result":
+            return                          # already settled
+        self.phase = "result"
+        if self.engine.outcome == "win" and self.on_resolve:
+            self.result_notes = list(self.on_resolve(self.engine) or [])
 
     def handle_key(self, app, key):
         if self.phase == "menu":
@@ -246,7 +281,10 @@ class BattleScene:
         action["target_id"] = target_id
         self._emit(self.engine.take_turn(action))
         self.pending_action = None
-        self.phase = "result" if self.engine.outcome else "turn_start"
+        if self.engine.outcome:
+            self._enter_result()
+        else:
+            self.phase = "turn_start"
 
     # --- drawing ---
 
@@ -290,6 +328,13 @@ class BattleScene:
                 r = self.engine.rewards()
                 pixelkit.text(surface, f"+{r['xp']} XP   +{r['credits']} credits", 16,
                               "white", center=(box.centerx, box.y + 52))
+            # M36: salvage out of the wreckage reads here, beside the XP,
+            # not in the hub log two screens later.
+            for i, note in enumerate(self.result_notes[:RESULT_NOTE_MAX_ROWS]):
+                pixelkit.text(surface, note, 11, "mint",
+                              center=(box.centerx,
+                                      box.bottom + 6 + i * RESULT_NOTE_LINE_H),
+                              shadow="ink")
             pixelkit.text(surface, "Enter: return to Tower", 13, "cream",
                           center=(box.centerx, box.bottom - 16))
 

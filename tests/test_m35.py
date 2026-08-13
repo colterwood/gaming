@@ -62,13 +62,15 @@ class Never:
 # --- the shape of each hunt (1) ------------------------------------------
 
 EXPECTED = {
-    # id: (parts, plain, hidden, npc, battle, heavy)
-    "repair_elevator": (3, 1, 1, 1, 0, 0),
-    "repair_quinjet": (4, 2, 2, 0, 0, 3),
-    "repair_training": (3, 1, 2, 0, 0, 1),
-    "repair_med_bay": (4, 1, 3, 0, 0, 0),
-    "repair_tech_lab": (6, 1, 2, 1, 2, 0),
-    "repair_pym_lab": (4, 0, 2, 1, 1, 0),
+    # id: (parts, plain, hidden, npc, battle, mine, heavy)
+    "repair_elevator": (3, 1, 1, 1, 0, 0, 0),
+    "repair_quinjet": (4, 2, 2, 0, 0, 0, 3),
+    "repair_training": (3, 1, 2, 0, 0, 0, 1),
+    "repair_med_bay": (4, 1, 3, 0, 0, 0, 0),
+    "repair_tech_lab": (6, 1, 2, 1, 2, 0, 0),
+    # M36: the regulator moved off its fixed docks seam onto a roll against
+    # every seam in the world, so the hidden count drops by one.
+    "repair_pym_lab": (4, 0, 1, 1, 1, 1, 0),
 }
 
 
@@ -78,7 +80,7 @@ def test_each_repair_has_the_hunt_it_was_designed_with(content, job_id,
     parts = job(content, job_id)["parts"]
     kinds = [repairs.part_kind(p) for p in parts]
     actual = (len(parts), kinds.count("plain"), kinds.count("hidden"),
-              kinds.count("npc"), kinds.count("battle"),
+              kinds.count("npc"), kinds.count("battle"), kinds.count("mine"),
               sum(1 for p in parts if p.get("heavy")))
     assert actual == expected
 
@@ -145,13 +147,43 @@ def test_a_hidden_part_gets_no_marker(hunting):
         assert (part["x"], part["y"]) not in marked
 
 
-def test_furniture_is_only_worth_searching_during_a_hunt(content):
+def test_furniture_is_searchable_whether_or_not_a_hunt_is_on(content):
+    """M35 made furniture live only during a repair hunt, which taught the
+    player that a couch is scenery and then expected them to start turning
+    couches over. M36: always searchable, almost always empty."""
     scene, app = HubScene(content), FakeApp(content)
     state = app.game_state
     state["repairs"] = {}
-    assert scene._furniture_here(state) == []       # nothing in hand
+    idle = scene._furniture_here(state)
+    assert len(idle) > 3                            # couches, tables, plants
     repairs.accept(content, state, job(content, "repair_elevator"))
-    assert len(scene._furniture_here(state)) > 3    # couches, tables, plants
+    assert scene._furniture_here(state) == idle     # the same things, always
+
+
+def test_a_searched_thing_can_be_searched_again_for_a_new_job(content):
+    """M36 bug fix (notes 8 and 23). Furniture dims for the day once
+    searched, and a hidden part is only findable while its own job is in
+    hand — so turning over the Ops planter during the elevator hunt made
+    the Training Floor part inside it unreachable until tomorrow, silently."""
+    scene, app = HubScene(content), FakeApp(content)
+    state = app.game_state
+    state["repairs"] = {}
+    state["story_flags"] = {"board_unlocked": True}
+    training = job(content, "repair_training")
+    planter = next(p for p in training["parts"]
+                   if repairs.part_kind(p) == "hidden" and p["area"] == "ops")
+
+    # rummage it today, for no reason, before the job exists
+    activities.mark_spot_searched(state, "ops", planter["x"], planter["y"])
+    assert activities.spot_searched(state, "ops", planter["x"], planter["y"])
+
+    repairs.accept(content, state, training)
+
+    assert not activities.spot_searched(state, "ops",
+                                        planter["x"], planter["y"])
+    scene.floor = "ops"
+    assert any((tx, ty) == (planter["x"], planter["y"])
+               for tx, ty, *_ in scene._furniture_here(state))
 
 
 def test_searching_the_wrong_thing_costs_minutes_and_finds_nothing(hunting):
@@ -224,20 +256,22 @@ def test_a_part_in_a_dock_box_comes_out_of_the_box(content):
     assert repairs.parts_left(state, job(content, "repair_med_bay")) == 3
 
 
-def test_a_part_in_a_seam_comes_out_of_the_seam(content):
-    scene, app = HubScene(content), FakeApp(content)
-    state = app.game_state
-    state["repairs"] = {}
+def test_a_part_in_a_seam_comes_out_of_any_seam(content):
+    """M36: the Pym regulator is no longer pinned to one named tile in the
+    docks — it rolls out of whatever seam the player happens to crack."""
+    pym = job(content, "repair_pym_lab")
+    state = save.new_game_state()
     state["story_flags"] = {"board_unlocked": True, "pym_lab_unlocked": True}
-    repairs.accept(content, state, job(content, "repair_pym_lab"))
-    scene.area = "docks"
-    scene.rng = Never()
-    part = next(p for p in job(content, "repair_pym_lab")["parts"]
-                if p.get("area") == "docks")
+    repairs.accept(content, state, pym)
 
-    scene._mine_node(app, part["x"], part["y"])
+    assert repairs.mine_drop(content, state, Never()) == []     # unlucky swing
+    assert repairs.parts_left(state, pym) == 4
 
-    assert repairs.parts_left(state, job(content, "repair_pym_lab")) == 3
+    messages = repairs.mine_drop(content, state, Always())
+    assert len(messages) == 1
+    assert repairs.parts_left(state, pym) == 3
+    # ...and it only comes out of the rock once, however much you mine.
+    assert repairs.mine_drop(content, state, Always()) == []
 
 
 # --- pieces that come out of a fight (3) ---------------------------------
